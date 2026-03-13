@@ -1,0 +1,77 @@
+  CDC Pension Transition Simulator
+
+  Live demo: https://alles-delenda-est.github.io/cdc-pension-simulator/
+
+  What it does
+
+  An interactive browser-based simulator modelling France's transition from pay-as-you-go (PAYG/répartition) pensions to
+   full capitalisation, financed by CDC assets, HLM social housing sales, and employer contributions. The model
+  implements 34 coupled equations over a 70-year horizon (2026–2096), tracking the legacy fund balance, sovereign debt
+  trajectory, and individual capitalisation pot accumulation.
+
+  Reform mechanism
+
+  - Employee contributions (11.3% of gross wages) flow 100% to individual capitalisation accounts from Day 1
+  - Employer contributions (16.5%) cover legacy pension deficits first; any surplus flows to capitalisation
+  - CDC assets (€220bn) seed the legacy fund
+  - HLM housing sales (5%/year of 5.3M units) generate capital gains for the legacy fund
+  - Pension reductions (Equinoxe progressive curve) reduce legacy expenditure by ~26 Md€/year
+  - Transition levy (30% of capitalisation flows from Year 15) accelerates debt repayment
+  - Residual annual deficits are covered by sovereign borrowing (OAT issuance)
+
+  Key features
+
+  - 4 preset scenarios: Hypothèses de base, Original v5, Optimiste, Stress Test
+  - ~25 adjustable parameters with tooltip explanations, including macro assumptions, return rates, contribution rates,
+  HLM liquidation parameters, and pension reduction settings
+  - Endogenous borrowing rate: sovereign risk premium rises with debt/GDP ratio (piecewise linear, calibrated to
+  France/US/Italy precedent — no premium below 150% debt/GDP)
+  - HLM volume-dependent price discount: accounts for market absorption constraints when selling large volumes of social
+   housing
+  - Equinoxe progressive pension reductions: continuous curve applied to pensions above €1,800/month, replacing the
+  original step-function design
+  - Monte Carlo simulation (100–1,000 runs): correlated stochastic shocks to returns, inflation, wages, and borrowing
+  rates via Web Worker, producing fan charts with confidence intervals
+  - 7 charts: legacy fund balance, pension split (PAYG vs capitalisation), sovereign debt trajectory, capitalisation
+  pot, spread σ, contribution flows, cumulative NPV of legacy liabilities vs capitalisation payouts
+  - Full data table with CSV export
+  - URL parameter sharing: all settings encoded in the URL for reproducibility
+
+  Default scenario results (Hypothèses de base)
+
+  ┌──────────────────────────────────────────┬──────────────────┐
+  │                   KPI                    │      Value       │
+  ├──────────────────────────────────────────┼──────────────────┤
+  │ Peak sovereign debt                      │ ~1.8 Tn€ (2042)  │
+  ├──────────────────────────────────────────┼──────────────────┤
+  │ Debt-free year                           │ ~2060            │
+  ├──────────────────────────────────────────┼──────────────────┤
+  │ Cumulative interest cost                 │ ~1.2 Tn€         │
+  ├──────────────────────────────────────────┼──────────────────┤
+  │ Capitalisation pot (real 2026€, Year 70) │ ~27 Tn€          │
+  ├──────────────────────────────────────────┼──────────────────┤
+  │ Spread σ minimum                         │ +1.50% (healthy) │
+  ├──────────────────────────────────────────┼──────────────────┤
+  │ Pension savings (Equinoxe)               │ ~26 Md€/year     │
+  └──────────────────────────────────────────┴──────────────────┘
+
+  Technical stack
+
+  React 19 + Vite + Recharts. Single-page application, no backend. The dist/ folder is fully self-contained and can be
+  served from any static host or opened directly from the filesystem.
+
+  Key assumptions and limitations
+
+  - Cohort index is parametric, not actuarial — uses an 18-year half-life exponential decay with hard extinction at Year
+   70, rather than INSEE mortality tables
+  - Capitalisation payouts are stylised — ramp linearly from 0% to 100% over a 43-year career length, rather than
+  modelling individual cohort vintages
+  - No behavioural responses — retirement timing, labour supply, and precautionary savings effects are excluded
+  - Wage bill grows uniformly — no cyclical or unemployment shocks
+  - Single national HLM price — no Île-de-France vs province differentiation
+
+  Source documents
+
+  - cdc_legacy_fund_model.md — Full model specification (34 equations, notation, assumptions)
+  - critique.md — Structured critique identifying weaknesses and recommended fixes, all of which are implemented in the
+  simulator
