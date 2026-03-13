@@ -391,13 +391,6 @@ export function runSimulation(params) {
     // Net capitalisation flow (eq 32)
     const netCapiFlow = emplC_s + emplrToCap - levy
 
-    // Capitalisation accumulation (eqs 33-34)
-    capi = capi * (1 + r_c_n) + netCapiFlow          // eq 33
-    const capiReal = capi / Math.pow(1 + pi, t + 1)  // eq 34
-
-    // Spread (eq 3)
-    const spread = r_f - (r_d - pi)
-
     // --- Capitalisation pension payouts ---
     // Each retiring cohort's capi share = (post-reform career years) / (total career).
     // A worker retiring at t has min(t, career) years of capi contributions out of
@@ -414,6 +407,14 @@ export function runSimulation(params) {
     const capiPayout = capiPayoutShare * fullSystemExp
     // Total pension expenditure = legacy (PAYG) + capi-funded
     const totalPensionExp = legacyExp + capiPayout
+
+    // Capitalisation accumulation (eqs 33-34) — net of payouts
+    capi = capi * (1 + r_c_n) + netCapiFlow - capiPayout  // eq 33, adjusted
+    capi = Math.max(0, capi)
+    const capiReal = capi / Math.pow(1 + pi, t + 1)  // eq 34
+
+    // Spread (eq 3)
+    const spread = r_f - (r_d - pi)
 
     // Cumulative interest (for KPI)
     const prevCumInterest = t > 0 ? results[t - 1].cumInterest : 0
