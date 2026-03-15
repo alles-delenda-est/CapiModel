@@ -5,6 +5,10 @@ import {
   ResponsiveContainer, ReferenceLine, ComposedChart,
 } from 'recharts'
 import { runSimulation, extractKPIs, PRESETS } from './simulation-engine.js'
+import useHashNavigation from './hooks/useHashNavigation.js'
+import Navigation from './components/Navigation.jsx'
+import IntroPage from './pages/IntroPage.jsx'
+import HypothesesPage from './pages/HypothesesPage.jsx'
 
 // --- Tooltip descriptions for each parameter (layman-friendly) ---
 const TIPS = {
@@ -99,6 +103,7 @@ function paramsFromURL() {
 
 // --- Main App ---
 export default function App() {
+  const { currentPage, navigateTo } = useHashNavigation('simulateur')
   const initialParams = paramsFromURL() || PRESETS.default.params
   const [params, setParams] = useState(initialParams)
   const [activePreset, setActivePreset] = useState(paramsFromURL() ? null : 'default')
@@ -120,7 +125,7 @@ export default function App() {
     setParams({ ...PRESETS[key].params })
     setActivePreset(key)
     setMcBands(null)
-    window.history.replaceState(null, '', window.location.pathname)
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash)
   }, [])
 
   const { results, kpis } = useMemo(() => {
@@ -131,7 +136,8 @@ export default function App() {
 
   useMemo(() => {
     const url = paramsToURL(params)
-    window.history.replaceState(null, '', url || window.location.pathname)
+    const hash = window.location.hash
+    window.history.replaceState(null, '', (url || window.location.pathname) + hash)
   }, [params])
 
   const runMC = useCallback(() => {
@@ -202,6 +208,12 @@ export default function App() {
         <h1>Simulateur CDC — Transition Retraites PAYG → Capitalisation</h1>
         <p className="subtitle">Proof of concept</p>
       </header>
+
+      <Navigation currentPage={currentPage} navigateTo={navigateTo} />
+
+      {currentPage === 'intro' && <IntroPage navigateTo={navigateTo} />}
+      {currentPage === 'hypotheses' && <HypothesesPage />}
+      {currentPage === 'simulateur' && <>
 
       {/* PRESETS */}
       <section className="section preset-section">
@@ -571,6 +583,8 @@ export default function App() {
           </>
         )}
       </section>
+
+      </>}
 
       <footer className="footer">
         &Eacute;quations 1–34 &middot; cdc_legacy_fund_model.md v5 &middot;
