@@ -198,7 +198,12 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="header">
+      <header className="header" style={{ position: 'relative' }}>
+        <div style={{ position: 'absolute', top: '0.75rem', right: '1rem' }}>
+          <a href="#simple" style={{ color: 'rgba(255,255,255,0.75)', fontSize: '0.8rem', textDecoration: 'none', padding: '4px 12px', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '4px' }}>
+            Version simplifi&eacute;e
+          </a>
+        </div>
         <h1>Simulateur CDC — Transition Retraites PAYG → Capitalisation</h1>
         <p className="subtitle">Proof of concept</p>
       </header>

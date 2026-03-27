@@ -1,0 +1,539 @@
+/* ============================================================
+   SimplifiedView — approachable, larger text, card-based layout
+   All classes prefixed sv- to avoid conflicts with App.css
+   ============================================================ */
+
+.sv-app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #1e293b;
+  line-height: 1.6;
+  font-size: 16px;
+}
+
+/* ---- Header ---- */
+.sv-header {
+  background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+  color: white;
+  padding: 2rem 2rem 1.75rem;
+  border-radius: 12px;
+  margin-bottom: 1.25rem;
+  text-align: center;
+  position: relative;
+}
+
+.sv-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  line-height: 1.3;
+}
+
+.sv-subtitle {
+  font-size: 1.05rem;
+  opacity: 0.85;
+  font-style: italic;
+}
+
+.sv-header-nav {
+  position: absolute;
+  top: 1rem;
+  right: 1.5rem;
+}
+
+.sv-nav-link {
+  color: rgba(255, 255, 255, 0.75);
+  text-decoration: none;
+  font-size: 0.82rem;
+  padding: 5px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 5px;
+  transition: all 0.2s;
+}
+
+.sv-nav-link:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* ---- Sections ---- */
+.sv-section {
+  background: #ffffff;
+  padding: 1.5rem 2rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
+}
+
+.sv-section h2 {
+  font-size: 1.25rem;
+  color: #1e293b;
+  margin-bottom: 0.75rem;
+  display: inline;
+}
+
+.sv-section-intro {
+  color: #64748b;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+}
+
+/* ---- Collapsible ---- */
+.sv-collapsible {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sv-arrow {
+  transition: transform 0.2s;
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.sv-arrow.open {
+  transform: rotate(90deg);
+}
+
+.sv-optional-badge {
+  font-size: 0.68rem;
+  background: #e2e8f0;
+  color: #64748b;
+  padding: 2px 10px;
+  border-radius: 10px;
+  margin-left: 8px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+/* ---- How it works — 4 steps ---- */
+.sv-steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.sv-step {
+  background: #f8fafc;
+  padding: 1.25rem 1rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.sv-step-number {
+  width: 34px;
+  height: 34px;
+  background: #1e40af;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+}
+
+.sv-step h3 {
+  font-size: 0.95rem;
+  margin-bottom: 0.4rem;
+  color: #1e293b;
+}
+
+.sv-step p {
+  font-size: 0.88rem;
+  color: #475569;
+  line-height: 1.5;
+}
+
+/* ---- Scenario buttons ---- */
+.sv-scenarios-section {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border: 1px solid #93c5fd;
+}
+
+.sv-scenario-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+.sv-scenario-btn {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-family: inherit;
+}
+
+.sv-scenario-btn:hover {
+  border-color: var(--accent, #3b82f6);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.sv-scenario-btn.active {
+  border-color: var(--accent, #1e40af);
+  background: #f8fafc;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.sv-scenario-btn strong {
+  font-size: 1.1rem;
+  color: var(--accent, #1e40af);
+}
+
+.sv-scenario-tagline {
+  font-size: 0.82rem;
+  color: #64748b;
+  font-style: italic;
+}
+
+.sv-scenario-desc {
+  font-size: 0.85rem;
+  color: #475569;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* ---- Sliders ---- */
+.sv-sliders {
+  margin-top: 1.25rem;
+}
+
+.sv-sliders-intro {
+  color: #64748b;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.sv-slider-card {
+  background: #f8fafc;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  border: 1px solid #e2e8f0;
+}
+
+.sv-slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.sv-slider-header label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #1e293b;
+}
+
+.sv-slider-value {
+  font-weight: 700;
+  color: #1e40af;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.sv-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  -webkit-appearance: none;
+  background: #cbd5e1;
+  outline: none;
+  margin-bottom: 8px;
+}
+
+.sv-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #1e40af;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.sv-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #1e40af;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.sv-slider-desc {
+  font-size: 0.82rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* ---- Narrative ---- */
+.sv-narrative {
+  border-left: 5px solid #94a3b8;
+  font-size: 1rem;
+}
+
+.sv-narrative h2 {
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.sv-narrative p {
+  margin-bottom: 0.75rem;
+}
+
+.sv-narrative-positive {
+  border-left-color: #059669;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+}
+
+.sv-narrative-cautious {
+  border-left-color: #d97706;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+}
+
+.sv-narrative-warning {
+  border-left-color: #ea580c;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+}
+
+.sv-narrative-negative {
+  border-left-color: #dc2626;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+}
+
+.sv-verdict {
+  font-size: 1.05rem;
+  margin-top: 0.25rem;
+}
+
+.sv-spread-warning {
+  color: #dc2626;
+  font-style: italic;
+}
+
+/* ---- KPI Cards ---- */
+.sv-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.sv-kpi-card {
+  background: #f8fafc;
+  padding: 1.25rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.sv-kpi-card h3 {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sv-kpi-value {
+  font-size: 1.7rem;
+  font-weight: 700;
+  margin-bottom: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sv-kpi-year {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.sv-kpi-explain {
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.45;
+  text-align: left;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.sv-ok { color: #059669; }
+.sv-warn { color: #d97706; }
+.sv-bad { color: #dc2626; }
+
+/* ---- Charts ---- */
+.sv-chart-block {
+  margin-bottom: 2.5rem;
+}
+
+.sv-chart-block:last-child {
+  margin-bottom: 0;
+}
+
+.sv-chart-block h3 {
+  font-size: 1.1rem;
+  color: #1e293b;
+  margin-bottom: 0.4rem;
+}
+
+.sv-chart-explain {
+  font-size: 0.9rem;
+  color: #64748b;
+  margin-bottom: 0.75rem;
+  line-height: 1.5;
+}
+
+/* ---- Timeline ---- */
+.sv-timeline {
+  position: relative;
+  padding-left: 0;
+}
+
+.sv-timeline-item {
+  display: flex;
+  gap: 1rem;
+}
+
+.sv-timeline-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 20px;
+}
+
+.sv-timeline-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #1e40af;
+  border: 3px solid #bfdbfe;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.sv-timeline-line {
+  width: 2px;
+  flex: 1;
+  background: #cbd5e1;
+  min-height: 30px;
+}
+
+.sv-timeline-content {
+  padding-bottom: 1.25rem;
+}
+
+.sv-timeline-year {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #1e40af;
+}
+
+.sv-timeline-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #1e293b;
+  margin-top: 1px;
+}
+
+.sv-timeline-detail {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* ---- Footer ---- */
+.sv-footer {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.sv-footer p {
+  margin-bottom: 0.4rem;
+}
+
+.sv-footer a {
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.sv-footer a:hover {
+  text-decoration: underline;
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 768px) {
+  .sv-app {
+    padding: 0.5rem;
+    font-size: 15px;
+  }
+
+  .sv-header {
+    padding: 1.25rem;
+    border-radius: 8px;
+  }
+
+  .sv-header h1 {
+    font-size: 1.25rem;
+  }
+
+  .sv-subtitle {
+    font-size: 0.9rem;
+  }
+
+  .sv-header-nav {
+    position: static;
+    text-align: right;
+    margin-bottom: 0.75rem;
+  }
+
+  .sv-section {
+    padding: 1rem 1.25rem;
+    border-radius: 8px;
+  }
+
+  .sv-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .sv-scenario-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sv-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .sv-kpi-value {
+    font-size: 1.3rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .sv-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
