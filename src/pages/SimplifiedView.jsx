@@ -3,7 +3,7 @@ import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
-import { runSimulation, extractKPIs, PRESETS } from './simulation-engine.js'
+import { runSimulation, extractKPIs, PRESETS } from '../simulation-engine.js'
 import './SimplifiedView.css'
 
 // === Simplified scenario definitions — same engine params, friendly labels ===
@@ -79,7 +79,7 @@ const fmtMd = (v) => {
 }
 
 // === Main component ===
-export default function SimplifiedView() {
+export default function SimplifiedView({ navigateTo }) {
   const [scenario, setScenario] = useState('central')
   const [overrides, setOverrides] = useState({})
   const [showHowItWorks, setShowHowItWorks] = useState(true)
@@ -212,17 +212,6 @@ export default function SimplifiedView() {
   // ================================================================
   return (
     <div className="sv-app">
-
-      {/* ---- HEADER ---- */}
-      <header className="sv-header">
-        <div className="sv-header-nav">
-          <a href="#" className="sv-nav-link">Version experte</a>
-        </div>
-        <h1>R\u00E9forme des retraites\u00A0: de la r\u00E9partition \u00E0 la capitalisation</h1>
-        <p className="sv-subtitle">
-          Un simulateur interactif pour comprendre les enjeux financiers de la transition
-        </p>
-      </header>
 
       {/* ---- HOW IT WORKS ---- */}
       <section className="sv-section">
@@ -522,13 +511,15 @@ export default function SimplifiedView() {
       {/* ---- FOOTER ---- */}
       <footer className="sv-footer">
         <p>
-          Ce simulateur utilise le m\u00EAme moteur de calcul (34 \u00E9quations
-          financi\u00E8res) que la{' '}
-          <a href="#">version experte</a>.
+          Ce simulateur utilise le m&ecirc;me moteur de calcul (34 &eacute;quations
+          financi&egrave;res) que la{' '}
+          <a href="#/simulateur" onClick={(e) => { e.preventDefault(); navigateTo('simulateur') }}>
+            version experte
+          </a>.
         </p>
         <p>
-          Les r\u00E9sultats d\u00E9pendent fortement des hypoth\u00E8ses choisies.
-          Ce n'est pas une pr\u00E9diction, c'est un outil d'exploration.
+          Les r&eacute;sultats d&eacute;pendent fortement des hypoth&egrave;ses choisies.
+          Ce n'est pas une pr&eacute;diction, c'est un outil d'exploration.
         </p>
         <p>
           <a href="https://github.com/alles-delenda-est/CapiModel">

@@ -2,6 +2,7 @@ import './Navigation.css'
 
 const TABS = [
   { id: 'intro', label: 'Introduction' },
+  { id: 'simple', label: 'Version simple' },
   { id: 'simulateur', label: 'Simulateur' },
   { id: 'hypotheses', label: 'Hypotheses & Sources' },
 ]

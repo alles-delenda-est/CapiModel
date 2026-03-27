@@ -8,6 +8,7 @@ import { runSimulation, extractKPIs, PRESETS } from './simulation-engine.js'
 import useHashNavigation from './hooks/useHashNavigation.js'
 import Navigation from './components/Navigation.jsx'
 import IntroPage from './pages/IntroPage.jsx'
+import SimplifiedView from './pages/SimplifiedView.jsx'
 import HypothesesPage from './pages/HypothesesPage.jsx'
 
 // --- Tooltip descriptions for each parameter (layman-friendly) ---
@@ -212,6 +213,7 @@ export default function App() {
       <Navigation currentPage={currentPage} navigateTo={navigateTo} />
 
       {currentPage === 'intro' && <IntroPage navigateTo={navigateTo} />}
+      {currentPage === 'simple' && <SimplifiedView navigateTo={navigateTo} />}
       {currentPage === 'hypotheses' && <HypothesesPage />}
       {currentPage === 'simulateur' && <>
 
