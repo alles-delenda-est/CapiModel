@@ -73,9 +73,9 @@ const ADJUSTABLE_PARAMS = [
 // === Format helpers ===
 const fmtMd = (v) => {
   const abs = Math.abs(v)
-  if (abs >= 10000) return `${(v / 1000).toFixed(1)} Tn\u20AC`
-  if (abs >= 1000) return `${(v / 1000).toFixed(2)} Tn\u20AC`
-  return `${v.toFixed(0)} Md\u20AC`
+  if (abs >= 10000) return `${(v / 1000).toFixed(1)} Tn€`
+  if (abs >= 1000) return `${(v / 1000).toFixed(2)} Tn€`
+  return `${v.toFixed(0)} Md€`
 }
 
 // === Main component ===
@@ -112,8 +112,8 @@ export default function SimplifiedView({ navigateTo }) {
     const items = [
       {
         year: 2026,
-        label: 'D\u00E9but de la r\u00E9forme',
-        detail: 'Les cotisations salari\u00E9es commencent \u00E0 alimenter l\'\u00E9pargne retraite individuelle',
+        label: 'Début de la réforme',
+        detail: 'Les cotisations salariées commencent à alimenter l\'épargne retraite individuelle',
       },
     ]
 
@@ -131,15 +131,15 @@ export default function SimplifiedView({ navigateTo }) {
       items.push({
         year: crossover.year,
         label: 'Bascule des pensions',
-        detail: 'Les pensions du nouveau syst\u00E8me d\u00E9passent celles de l\'ancien',
+        detail: 'Les pensions du nouveau système dépassent celles de l\'ancien',
       })
     }
 
     if (kpis.debtFreeYear) {
       items.push({
         year: kpis.debtFreeYear,
-        label: 'Dette rembours\u00E9e',
-        detail: 'La dette de transition est enti\u00E8rement sold\u00E9e',
+        label: 'Dette remboursée',
+        detail: 'La dette de transition est entièrement soldée',
       })
     }
 
@@ -147,7 +147,7 @@ export default function SimplifiedView({ navigateTo }) {
     items.push({
       year: lastYear,
       label: 'Fin de simulation',
-      detail: `\u00C9pargne retraite accumul\u00E9e : ${fmtMd(kpis.finalCapiReal)} (en euros 2026)`,
+      detail: `Épargne retraite accumulée : ${fmtMd(kpis.finalCapiReal)} (en euros 2026)`,
     })
 
     return items.sort((a, b) => a.year - b.year)
@@ -174,34 +174,34 @@ export default function SimplifiedView({ navigateTo }) {
     if (debtFreeYear) {
       const duration = debtFreeYear - 2026
       if (debtFreeYear <= 2060) {
-        debtSentence = `L'\u00C9tat devrait emprunter jusqu'\u00E0 ${fmtMd(peakDebt)} (pic atteint en ${peakDebtYear}), mais cette dette serait enti\u00E8rement rembours\u00E9e d'ici ${debtFreeYear}\u00A0\u2014\u00A0soit en ${duration}\u00A0ans.`
+        debtSentence = `L'État devrait emprunter jusqu'à ${fmtMd(peakDebt)} (pic atteint en ${peakDebtYear}), mais cette dette serait entièrement remboursée d'ici ${debtFreeYear}—soit en ${duration}ans.`
       } else {
-        debtSentence = `L'\u00C9tat devrait emprunter jusqu'\u00E0 ${fmtMd(peakDebt)} (pic en ${peakDebtYear}). La dette serait rembours\u00E9e d'ici ${debtFreeYear}, soit ${duration}\u00A0ans apr\u00E8s le d\u00E9but de la r\u00E9forme. C'est un d\u00E9lai long qui suppose une stabilit\u00E9 \u00E9conomique durable.`
+        debtSentence = `L'État devrait emprunter jusqu'à ${fmtMd(peakDebt)} (pic en ${peakDebtYear}). La dette serait remboursée d'ici ${debtFreeYear}, soit ${duration}ans après le début de la réforme. C'est un délai long qui suppose une stabilité économique durable.`
       }
     } else {
-      debtSentence = `L'\u00C9tat devrait emprunter jusqu'\u00E0 ${fmtMd(peakDebt)} (pic en ${peakDebtYear}). Attention\u00A0: la dette ne serait pas enti\u00E8rement rembours\u00E9e dans l'horizon de ${params.N}\u00A0ans simul\u00E9.`
+      debtSentence = `L'État devrait emprunter jusqu'à ${fmtMd(peakDebt)} (pic en ${peakDebtYear}). Attention: la dette ne serait pas entièrement remboursée dans l'horizon de ${params.N}ans simulé.`
     }
 
-    const capiSentence = `\u00C0 terme, l'\u00E9pargne retraite collective atteindrait ${fmtMd(finalCapiReal)} en euros d'aujourd'hui (corrig\u00E9s de l'inflation).`
+    const capiSentence = `À terme, l'épargne retraite collective atteindrait ${fmtMd(finalCapiReal)} en euros d'aujourd'hui (corrigés de l'inflation).`
 
     let verdict, verdictType
     if (netPosition > 0 && debtFreeYear && debtFreeYear <= 2065) {
-      verdict = 'Sous ces hypoth\u00E8ses, la transition est financi\u00E8rement viable\u00A0: elle cr\u00E9e nettement plus de richesse qu\'elle n\'en emprunte, et la dette est rembours\u00E9e dans un d\u00E9lai raisonnable.'
+      verdict = 'Sous ces hypothèses, la transition est financièrement viable: elle crée nettement plus de richesse qu\'elle n\'en emprunte, et la dette est remboursée dans un délai raisonnable.'
       verdictType = 'positive'
     } else if (netPosition > 0 && debtFreeYear) {
-      verdict = 'Le bilan net est positif, mais la dette prend du temps \u00E0 se r\u00E9sorber. Le succ\u00E8s d\u00E9pend de la capacit\u00E9 \u00E0 maintenir des rendements financiers stables sur une longue p\u00E9riode.'
+      verdict = 'Le bilan net est positif, mais la dette prend du temps à se résorber. Le succès dépend de la capacité à maintenir des rendements financiers stables sur une longue période.'
       verdictType = 'cautious'
     } else if (netPosition > 0) {
-      verdict = 'Le bilan net est positif, mais la dette n\'est pas enti\u00E8rement rembours\u00E9e dans l\'horizon simul\u00E9. Des ajustements seraient n\u00E9cessaires pour acc\u00E9l\u00E9rer le remboursement.'
+      verdict = 'Le bilan net est positif, mais la dette n\'est pas entièrement remboursée dans l\'horizon simulé. Des ajustements seraient nécessaires pour accélérer le remboursement.'
       verdictType = 'warning'
     } else {
-      verdict = 'Attention\u00A0: sous ces hypoth\u00E8ses, la transition ne s\'autofinance pas. La dette de transition d\u00E9passe la richesse cr\u00E9\u00E9e. Ce sc\u00E9nario n\u00E9cessiterait des ajustements importants.'
+      verdict = 'Attention: sous ces hypothèses, la transition ne s\'autofinance pas. La dette de transition dépasse la richesse créée. Ce scénario nécessiterait des ajustements importants.'
       verdictType = 'negative'
     }
 
     let spreadWarning = ''
     if (minSpread < 0) {
-      spreadWarning = 'Le fonds de transition rapporte moins que le co\u00FBt de l\'emprunt\u00A0\u2014\u00A0c\'est une zone de danger o\u00F9 la dette s\'alimente elle-m\u00EAme.'
+      spreadWarning = 'Le fonds de transition rapporte moins que le coût de l\'emprunt—c\'est une zone de danger où la dette s\'alimente elle-même.'
     }
 
     return { debtSentence, capiSentence, verdict, verdictType, spreadWarning }
@@ -217,7 +217,7 @@ export default function SimplifiedView({ navigateTo }) {
       <section className="sv-section">
         <div className="sv-collapsible" onClick={() => setShowHowItWorks(!showHowItWorks)}>
           <span className={`sv-arrow ${showHowItWorks ? 'open' : ''}`}>{'\u25B6'}</span>
-          <h2>Comment \u00E7a marche\u00A0?</h2>
+          <h2>Comment ça marche?</h2>
         </div>
         {showHowItWorks && (
           <div className="sv-steps">
@@ -226,39 +226,39 @@ export default function SimplifiedView({ navigateTo }) {
               <h3>Aujourd'hui</h3>
               <p>
                 Les actifs cotisent pour payer directement les retraites
-                des retrait\u00E9s actuels. C'est le syst\u00E8me
-                par <strong>r\u00E9partition</strong>\u00A0: l'argent ne fait
-                que transiter, il n'est pas \u00E9pargn\u00E9.
+                des retraités actuels. C'est le système
+                par <strong>répartition</strong>: l'argent ne fait
+                que transiter, il n'est pas épargné.
               </p>
             </div>
             <div className="sv-step">
               <div className="sv-step-number">2</div>
-              <h3>La r\u00E9forme</h3>
+              <h3>La réforme</h3>
               <p>
-                Les cotisations des salari\u00E9s sont redirig\u00E9es
-                vers des <strong>comptes d'\u00E9pargne individuels</strong>.
-                Cet argent est investi et fructifie au fil des ann\u00E9es.
+                Les cotisations des salariés sont redirigées
+                vers des <strong>comptes d'épargne individuels</strong>.
+                Cet argent est investi et fructifie au fil des années.
               </p>
             </div>
             <div className="sv-step">
               <div className="sv-step-number">3</div>
-              <h3>Le d\u00E9fi de la transition</h3>
+              <h3>Le défi de la transition</h3>
               <p>
-                Pendant la transition, il faut continuer \u00E0 payer les
-                retrait\u00E9s actuels alors que les cotisations sont
-                redirig\u00E9es. <strong>L'\u00C9tat emprunte</strong> pour
-                combler cet \u00E9cart\u00A0\u2014\u00A0c'est la
-                \u00AB\u00A0dette de transition\u00A0\u00BB.
+                Pendant la transition, il faut continuer à payer les
+                retraités actuels alors que les cotisations sont
+                redirigées. <strong>L'État emprunte</strong> pour
+                combler cet écart—c'est la
+                «dette de transition».
               </p>
             </div>
             <div className="sv-step">
               <div className="sv-step-number">4</div>
-              <h3>\u00C0 terme</h3>
+              <h3>À terme</h3>
               <p>
-                Les anciens retrait\u00E9s sont progressivement remplac\u00E9s
-                par des retrait\u00E9s qui vivent de <strong>leur propre
-                \u00E9pargne</strong>. La dette est rembours\u00E9e. Le nouveau
-                syst\u00E8me est autonome.
+                Les anciens retraités sont progressivement remplacés
+                par des retraités qui vivent de <strong>leur propre
+                épargne</strong>. La dette est remboursée. Le nouveau
+                système est autonome.
               </p>
             </div>
           </div>
@@ -267,10 +267,10 @@ export default function SimplifiedView({ navigateTo }) {
 
       {/* ---- SCENARIO PICKER ---- */}
       <section className="sv-section sv-scenarios-section">
-        <h2>Choisissez un sc\u00E9nario</h2>
+        <h2>Choisissez un scénario</h2>
         <p className="sv-section-intro">
-          Comment l'\u00E9conomie se comporte-t-elle pendant la transition ?
-          Trois visions possibles\u00A0:
+          Comment l'économie se comporte-t-elle pendant la transition ?
+          Trois visions possibles:
         </p>
         <div className="sv-scenario-grid">
           {Object.entries(SCENARIOS).map(([key, s]) => (
@@ -292,15 +292,15 @@ export default function SimplifiedView({ navigateTo }) {
       <section className="sv-section">
         <div className="sv-collapsible" onClick={() => setShowAdjust(!showAdjust)}>
           <span className={`sv-arrow ${showAdjust ? 'open' : ''}`}>{'\u25B6'}</span>
-          <h2>Ajuster les hypoth\u00E8ses</h2>
+          <h2>Ajuster les hypothèses</h2>
           <span className="sv-optional-badge">Optionnel</span>
         </div>
         {showAdjust && (
           <div className="sv-sliders">
             <p className="sv-sliders-intro">
-              Vous pouvez modifier les hypoth\u00E8ses cl\u00E9s pour voir leur
-              impact. Le mod\u00E8le complet utilise plus de 25 param\u00E8tres
-              \u2014 voici les 5 les plus importants.
+              Vous pouvez modifier les hypothèses clés pour voir leur
+              impact. Le modèle complet utilise plus de 25 paramètres
+              — voici les 5 les plus importants.
             </p>
             {ADJUSTABLE_PARAMS.map(cfg => (
               <div key={cfg.key} className="sv-slider-card">
@@ -326,7 +326,7 @@ export default function SimplifiedView({ navigateTo }) {
 
       {/* ---- NARRATIVE SUMMARY ---- */}
       <section className={`sv-section sv-narrative sv-narrative-${narrative.verdictType}`}>
-        <h2>Que se passe-t-il\u00A0?</h2>
+        <h2>Que se passe-t-il?</h2>
         <p>{narrative.debtSentence}</p>
         <p>{narrative.capiSentence}</p>
         {narrative.spreadWarning && (
@@ -337,7 +337,7 @@ export default function SimplifiedView({ navigateTo }) {
 
       {/* ---- KPI CARDS ---- */}
       <section className="sv-section">
-        <h2>Les chiffres cl\u00E9s</h2>
+        <h2>Les chiffres clés</h2>
         <div className="sv-kpi-grid">
           <div className="sv-kpi-card">
             <h3>Pic d'emprunt</h3>
@@ -348,9 +348,9 @@ export default function SimplifiedView({ navigateTo }) {
             </div>
             <div className="sv-kpi-year">atteint en {kpis.peakDebtYear}</div>
             <p className="sv-kpi-explain">
-              Le montant maximum que l'\u00C9tat devrait emprunter pour
+              Le montant maximum que l'État devrait emprunter pour
               financer la transition. Pour comparaison, la dette publique
-              fran\u00E7aise actuelle est d'environ 3\u00A0200\u00A0Md\u20AC.
+              française actuelle est d'environ 3200Md€.
             </p>
           </div>
 
@@ -363,23 +363,23 @@ export default function SimplifiedView({ navigateTo }) {
             </div>
             {kpis.debtFreeYear && (
               <div className="sv-kpi-year">
-                soit {kpis.debtFreeYear - 2026} ans apr\u00E8s la r\u00E9forme
+                soit {kpis.debtFreeYear - 2026} ans après la réforme
               </div>
             )}
             <p className="sv-kpi-explain">
-              L'ann\u00E9e o\u00F9 la dette de transition serait enti\u00E8rement
-              rembours\u00E9e. Plus c'est t\u00F4t, moins la r\u00E9forme
-              co\u00FBte en int\u00E9r\u00EAts.
+              L'année où la dette de transition serait entièrement
+              remboursée. Plus c'est tôt, moins la réforme
+              coûte en intérêts.
             </p>
           </div>
 
           <div className="sv-kpi-card">
-            <h3>\u00C9pargne accumul\u00E9e</h3>
+            <h3>Épargne accumulée</h3>
             <div className="sv-kpi-value sv-ok">{fmtMd(kpis.finalCapiReal)}</div>
             <div className="sv-kpi-year">en euros 2026</div>
             <p className="sv-kpi-explain">
-              La valeur totale de l'\u00E9pargne retraite en fin de simulation,
-              en pouvoir d'achat d'aujourd'hui (corrig\u00E9e de l'inflation).
+              La valeur totale de l'épargne retraite en fin de simulation,
+              en pouvoir d'achat d'aujourd'hui (corrigée de l'inflation).
             </p>
           </div>
 
@@ -388,10 +388,10 @@ export default function SimplifiedView({ navigateTo }) {
             <div className={`sv-kpi-value ${kpis.netPosition > 0 ? 'sv-ok' : 'sv-bad'}`}>
               {kpis.netPosition > 0 ? '+' : ''}{fmtMd(kpis.netPosition)}
             </div>
-            <div className="sv-kpi-year">\u00E9pargne \u2212 dette</div>
+            <div className="sv-kpi-year">épargne − dette</div>
             <p className="sv-kpi-explain">
-              \u00C9pargne accumul\u00E9e moins dette restante. Un chiffre positif
-              signifie que la r\u00E9forme cr\u00E9e plus de richesse qu'elle
+              Épargne accumulée moins dette restante. Un chiffre positif
+              signifie que la réforme crée plus de richesse qu'elle
               n'en emprunte.
             </p>
           </div>
@@ -404,27 +404,27 @@ export default function SimplifiedView({ navigateTo }) {
 
         {/* Chart 1: Pension split */}
         <div className="sv-chart-block">
-          <h3>Comment les pensions \u00E9voluent au fil du temps</h3>
+          <h3>Comment les pensions évoluent au fil du temps</h3>
           <p className="sv-chart-explain">
-            Les pensions de l'ancien syst\u00E8me (en rouge) diminuent \u00E0 mesure
-            que les retrait\u00E9s actuels partent, tandis que le nouveau syst\u00E8me
-            par capitalisation (en vert) prend le relais. La ligne pointill\u00E9e
-            montre le total des pensions vers\u00E9es.
+            Les pensions de l'ancien système (en rouge) diminuent à mesure
+            que les retraités actuels partent, tandis que le nouveau système
+            par capitalisation (en vert) prend le relais. La ligne pointillée
+            montre le total des pensions versées.
           </p>
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="year" tick={{ fontSize: 12 }} />
               <YAxis
-                label={{ value: 'Md\u20AC/an', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
+                label={{ value: 'Md€/an', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
                 tick={{ fontSize: 12 }}
               />
-              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} Md\u20AC`} />
+              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Area type="monotone" dataKey="legacyExp" stackId="pensions"
-                fill="#fca5a5" stroke="#ef4444" name="Ancien syst\u00E8me (r\u00E9partition)" />
+                fill="#fca5a5" stroke="#ef4444" name="Ancien système (répartition)" />
               <Area type="monotone" dataKey="capiPayout" stackId="pensions"
-                fill="#86efac" stroke="#059669" name="Nouveau syst\u00E8me (capitalisation)" />
+                fill="#86efac" stroke="#059669" name="Nouveau système (capitalisation)" />
               <Line type="monotone" dataKey="totalPensionExp"
                 stroke="#1e293b" strokeWidth={2} strokeDasharray="5 5"
                 name="Total des pensions" dot={false} />
@@ -436,8 +436,8 @@ export default function SimplifiedView({ navigateTo }) {
         <div className="sv-chart-block">
           <h3>La dette temporaire de transition</h3>
           <p className="sv-chart-explain">
-            L'\u00C9tat emprunte pour financer la transition. Cette dette est
-            temporaire\u00A0: elle est rembours\u00E9e progressivement gr\u00E2ce
+            L'État emprunte pour financer la transition. Cette dette est
+            temporaire: elle est remboursée progressivement grâce
             aux revenus du fonds, aux ventes de logements sociaux et aux cotisations
             employeur.
           </p>
@@ -446,43 +446,43 @@ export default function SimplifiedView({ navigateTo }) {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="year" tick={{ fontSize: 12 }} />
               <YAxis
-                label={{ value: 'Md\u20AC', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
+                label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
                 tick={{ fontSize: 12 }}
               />
-              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(0) : v} Md\u20AC`} />
+              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(0) : v} Md€`} />
               <ReferenceLine y={0} stroke="#94a3b8" />
               <Area type="monotone" dataKey="debt"
                 fill="#fecaca" stroke="#dc2626" strokeWidth={2}
-                name="Dette de transition (Md\u20AC)" />
+                name="Dette de transition (Md€)" />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
 
         {/* Chart 3: Capitalisation pot */}
         <div className="sv-chart-block">
-          <h3>L'\u00E9pargne retraite collective</h3>
+          <h3>L'épargne retraite collective</h3>
           <p className="sv-chart-explain">
-            Le pot d'\u00E9pargne retraite grandit au fil du temps gr\u00E2ce aux
+            Le pot d'épargne retraite grandit au fil du temps grâce aux
             cotisations et aux rendements financiers. La ligne bleue montre la
-            valeur en euros d'aujourd'hui (corrig\u00E9e de l'inflation)\u00A0\u2014\u00A0c'est
-            la mesure la plus honn\u00EAte du pouvoir d'achat r\u00E9el.
+            valeur en euros d'aujourd'hui (corrigée de l'inflation)—c'est
+            la mesure la plus honnête du pouvoir d'achat réel.
           </p>
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="year" tick={{ fontSize: 12 }} />
               <YAxis
-                label={{ value: 'Tn\u20AC', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
+                label={{ value: 'Tn€', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
                 tick={{ fontSize: 12 }}
               />
-              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(2) : v} Tn\u20AC`} />
+              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(2) : v} Tn€`} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Line type="monotone" dataKey="capi"
                 stroke="#86efac" strokeWidth={2}
                 name="Valeur nominale (euros courants)" dot={false} />
               <Line type="monotone" dataKey="capiReal"
                 stroke="#2563eb" strokeWidth={3}
-                name="Valeur r\u00E9elle (euros 2026)" dot={false} />
+                name="Valeur réelle (euros 2026)" dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -490,7 +490,7 @@ export default function SimplifiedView({ navigateTo }) {
 
       {/* ---- MILESTONES TIMELINE ---- */}
       <section className="sv-section">
-        <h2>Les \u00E9tapes cl\u00E9s de la transition</h2>
+        <h2>Les étapes clés de la transition</h2>
         <div className="sv-timeline">
           {milestones.map((m, i) => (
             <div key={i} className="sv-timeline-item">
