@@ -56,7 +56,8 @@ function Toggle({ label, checked, onChange, tip }) {
 }
 
 // --- Format helpers ---
-const fmtMd = v => `${v.toFixed(0)} Md`
+const fmtN = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '\u2019')
+const fmtMd = v => `${fmtN(v)} Md`
 const fmtPct = v => `${(v * 100).toFixed(2)}%`
 const fmtYear = v => v ? `${v}` : 'Jamais'
 
@@ -387,6 +388,7 @@ export default function App() {
             <h3>Spread σ min</h3>
             <div className={`kpi-value ${kpis.minSpread <= 0 ? 'kpi-bad' : kpis.minSpread < 0.01 ? 'kpi-warn' : 'kpi-ok'}`}>
               {fmtPct(kpis.minSpread)}</div>
+            <div className="kpi-sub">Rendement placements − coût de la dette</div>
           </div>
           <div className="kpi-card">
             <h3>Économies pension S₀</h3>
@@ -440,11 +442,11 @@ export default function App() {
                       <td>{r.borrowed.toFixed(1)}</td>
                       <td>{r.repaid.toFixed(1)}</td>
                       <td>{r.levy.toFixed(1)}</td>
-                      <td>{r.debt.toFixed(0)}</td>
+                      <td>{fmtN(r.debt)}</td>
                       <td>{(r.r_d * 100).toFixed(2)}</td>
                       <td>{r.debtRatio.toFixed(1)}%</td>
-                      <td>{r.capi.toFixed(0)}</td>
-                      <td>{r.capiReal.toFixed(0)}</td>
+                      <td>{fmtN(r.capi)}</td>
+                      <td>{fmtN(r.capiReal)}</td>
                       <td>{(r.spread * 100).toFixed(2)}%</td>
                     </tr>
                   ))}
@@ -531,8 +533,8 @@ export default function App() {
               <XAxis dataKey="year" tick={{ fontSize: 13 }} />
               <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
               <Tooltip formatter={(v) => {
-                if (Array.isArray(v)) return `[${v[0].toFixed(0)}, ${v[1].toFixed(0)}] Md€`
-                return `${typeof v === 'number' ? v.toFixed(0) : v} Md€`
+                if (Array.isArray(v)) return `[${fmtN(v[0])}, ${fmtN(v[1])}] Md€`
+                return `${typeof v === 'number' ? fmtN(v) : v} Md€`
               }} />
               <Legend wrapperStyle={{ fontSize: 13 }} />
               {mcBands && (
@@ -588,7 +590,7 @@ export default function App() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="year" tick={{ fontSize: 13 }} />
               <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
-              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(0) : v} Md€`} />
+              <Tooltip formatter={(v) => `${typeof v === 'number' ? fmtN(v) : v} Md€`} />
               <Legend wrapperStyle={{ fontSize: 13 }} />
               <Line type="monotone" dataKey="pvLegacyCum" stroke="#ef4444" strokeWidth={3} name="VAN engagements legacy" dot={false} />
               <Line type="monotone" dataKey="pvCapiPayoutCum" stroke="#059669" strokeWidth={3} name="VAN pensions capi" dot={false} />
