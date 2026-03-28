@@ -47,7 +47,7 @@ export default function IntroPage({ navigateTo }) {
         <div className="baseline-grid">
           <div className="baseline-card">
             <div className="baseline-label">Dette pic</div>
-            <div className="baseline-value">{(k.peakDebt / 1000).toFixed(1)} Tn€</div>
+            <div className="baseline-value">{k.peakDebt.toFixed(0)} Md€</div>
             <div className="baseline-sub">Atteinte en {k.peakDebtYear}</div>
           </div>
           <div className="baseline-card">
@@ -57,12 +57,12 @@ export default function IntroPage({ navigateTo }) {
           </div>
           <div className="baseline-card">
             <div className="baseline-label">Interets cumules</div>
-            <div className="baseline-value">{(k.totalInterest / 1000).toFixed(1)} Tn€</div>
+            <div className="baseline-value">{k.totalInterest.toFixed(0)} Md€</div>
             <div className="baseline-sub">Le cout total de la transition</div>
           </div>
           <div className="baseline-card">
             <div className="baseline-label">Pot capitalisation (reel)</div>
-            <div className="baseline-value">{(k.finalCapiReal / 1000).toFixed(0)} Tn€</div>
+            <div className="baseline-value">{k.finalCapiReal.toFixed(0)} Md€</div>
             <div className="baseline-sub">En euros constants 2026</div>
           </div>
           <div className="baseline-card">
@@ -318,7 +318,7 @@ export default function IntroPage({ navigateTo }) {
           <div className="limitation-item limitation-fatal">
             <h4>2. Le taux d'emprunt reagit a la politique</h4>
             <p>
-              Le modele ajoute ~1,5 Tn€ de dette supplementaire. A ce niveau, le taux
+              Le modele ajoute ~1 500 Md€ de dette supplementaire. A ce niveau, le taux
               d'emprunt francais monterait probablement bien au-dessus de l'hypothese
               de base — potentiellement dans la zone ou le spread devient negatif
               et la dette s'auto-alimente.
@@ -328,7 +328,7 @@ export default function IntroPage({ navigateTo }) {
             <h4>3. Le rendement de la capitalisation est incertain</h4>
             <p>
               L'hypothese de base de 3% reel est dans la fourchette historique, mais un
-              fonds de cette taille (~2,8 Tn€ apres 20 ans) serait sans precedent.
+              fonds de cette taille (~2 800 Md€ apres 20 ans) serait sans precedent.
               Les rendements passes ne garantissent pas les rendements futurs, surtout
               a une echelle qui affecterait les marches mondiaux.
             </p>

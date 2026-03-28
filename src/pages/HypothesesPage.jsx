@@ -245,7 +245,7 @@ export default function HypothesesPage() {
           </tbody>
         </table>
         <div className="hyp-warning">
-          <strong>Point de vigilance :</strong> Un fonds de capitalisation de ~2,8 Tn€
+          <strong>Point de vigilance :</strong> Un fonds de capitalisation de ~2 800 Md€
           (apres 20 ans) serait sans precedent historique. A cette echelle, les effets
           d'equilibre general deprimeraient les primes de risque actions. Les rendements
           passes ne sont pas extrapolables a cette echelle.

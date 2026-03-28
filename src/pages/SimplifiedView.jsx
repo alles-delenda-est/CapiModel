@@ -73,12 +73,7 @@ const ADJUSTABLE_PARAMS = [
 const MILESTONE_YEARS = [2026, 2030, 2035, 2040, 2050, 2060, 2070, 2080, 2096]
 
 // === Format helpers ===
-const fmtMd = (v) => {
-  const abs = Math.abs(v)
-  if (abs >= 10000) return `${(v / 1000).toFixed(1)} Tn€`
-  if (abs >= 1000) return `${(v / 1000).toFixed(2)} Tn€`
-  return `${v.toFixed(0)} Md€`
-}
+const fmtMd = (v) => `${v.toFixed(0)} Md€`
 
 // === Main component ===
 export default function SimplifiedView({ navigateTo }) {
@@ -163,8 +158,8 @@ export default function SimplifiedView({ navigateTo }) {
       capiPayout: r.capiPayout,
       totalPensionExp: r.totalPensionExp,
       debt: r.debt,
-      capi: r.capi / 1000,
-      capiReal: r.capiReal / 1000,
+      capi: r.capi,
+      capiReal: r.capiReal,
     }))
   }, [results])
 
@@ -414,7 +409,7 @@ export default function SimplifiedView({ navigateTo }) {
                 <th>Pensions ancien système (Md€)</th>
                 <th>Pensions nouveau système (Md€)</th>
                 <th>Dette de transition (Md€)</th>
-                <th>Épargne retraite réelle (Tn€)</th>
+                <th>Épargne retraite réelle (Md€)</th>
               </tr>
             </thead>
             <tbody>
@@ -426,7 +421,7 @@ export default function SimplifiedView({ navigateTo }) {
                     <td>{r.legacyExp.toFixed(1)}</td>
                     <td>{r.capiPayout.toFixed(1)}</td>
                     <td>{r.debt.toFixed(0)}</td>
-                    <td>{(r.capiReal / 1000).toFixed(2)}</td>
+                    <td>{r.capiReal.toFixed(0)}</td>
                   </tr>
                 ))}
             </tbody>
@@ -508,10 +503,10 @@ export default function SimplifiedView({ navigateTo }) {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="year" tick={{ fontSize: 13 }} />
               <YAxis
-                label={{ value: 'Tn€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }}
+                label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }}
                 tick={{ fontSize: 13 }}
               />
-              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(2) : v} Tn€`} />
+              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(0) : v} Md€`} />
               <Legend wrapperStyle={{ fontSize: 13 }} />
               <Line type="monotone" dataKey="capi"
                 stroke="#86efac" strokeWidth={2}

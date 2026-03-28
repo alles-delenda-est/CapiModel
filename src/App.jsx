@@ -56,7 +56,7 @@ function Toggle({ label, checked, onChange, tip }) {
 }
 
 // --- Format helpers ---
-const fmtTn = v => `${(v / 1000).toFixed(2)} Tn`
+const fmtMd = v => `${v.toFixed(0)} Md`
 const fmtPct = v => `${(v * 100).toFixed(2)}%`
 const fmtYear = v => v ? `${v}` : 'Jamais'
 
@@ -173,19 +173,19 @@ export default function App() {
         legacyExp: r.legacyExp, fundReturn: r.fundReturn, hlmProceeds: r.hlmProceeds,
         abatement: r.abatement, emplrToLeg: r.emplrToLeg,
         debt: r.debt, r_d: r.r_d * 100,
-        capi: r.capi / 1000, capiReal: r.capiReal / 1000,
+        capi: r.capi, capiReal: r.capiReal,
         spread: r.spread * 100,
         emplC_s: r.emplC_s, emplrToLeg_bar: r.emplrToLeg, emplrToCap_bar: r.emplrToCap, levy: r.levy,
-        capi_p5_p95: mc.capi_p5 !== undefined ? [mc.capi_p5 / 1000, mc.capi_p95 / 1000] : undefined,
-        capi_p25_p75: mc.capi_p25 !== undefined ? [mc.capi_p25 / 1000, mc.capi_p75 / 1000] : undefined,
-        capi_p50: mc.capi_p50 !== undefined ? mc.capi_p50 / 1000 : undefined,
-        capiReal_p5_p95: mc.capiReal_p5 !== undefined ? [mc.capiReal_p5 / 1000, mc.capiReal_p95 / 1000] : undefined,
-        capiReal_p25_p75: mc.capiReal_p25 !== undefined ? [mc.capiReal_p25 / 1000, mc.capiReal_p75 / 1000] : undefined,
+        capi_p5_p95: mc.capi_p5 !== undefined ? [mc.capi_p5, mc.capi_p95] : undefined,
+        capi_p25_p75: mc.capi_p25 !== undefined ? [mc.capi_p25, mc.capi_p75] : undefined,
+        capi_p50: mc.capi_p50 !== undefined ? mc.capi_p50 : undefined,
+        capiReal_p5_p95: mc.capiReal_p5 !== undefined ? [mc.capiReal_p5, mc.capiReal_p95] : undefined,
+        capiReal_p25_p75: mc.capiReal_p25 !== undefined ? [mc.capiReal_p25, mc.capiReal_p75] : undefined,
         debt_p5_p95: mc.debt_p5 !== undefined ? [mc.debt_p5, mc.debt_p95] : undefined,
         debt_p25_p75: mc.debt_p25 !== undefined ? [mc.debt_p25, mc.debt_p75] : undefined,
         debt_p50: mc.debt_p50,
         capiPayout: r.capiPayout, totalPensionExp: r.totalPensionExp,
-        pvLegacyCum: r.pvLegacyCum / 1000, pvCapiPayoutCum: r.pvCapiPayoutCum / 1000,
+        pvLegacyCum: r.pvLegacyCum, pvCapiPayoutCum: r.pvCapiPayoutCum,
       }
     })
   }, [results, mcBands])
@@ -363,7 +363,7 @@ export default function App() {
           <div className="kpi-card">
             <h3>Dette pic</h3>
             <div className={`kpi-value ${kpis.peakDebt > 2000 ? 'kpi-bad' : kpis.peakDebt > 1500 ? 'kpi-warn' : 'kpi-ok'}`}>
-              {fmtTn(kpis.peakDebt)} €</div>
+              {fmtMd(kpis.peakDebt)} €</div>
             <div className="kpi-sub">Année {kpis.peakDebtYear}</div>
           </div>
           <div className="kpi-card">
@@ -373,15 +373,15 @@ export default function App() {
           </div>
           <div className="kpi-card">
             <h3>Intérêts cumulés</h3>
-            <div className="kpi-value">{fmtTn(kpis.totalInterest)} €</div>
+            <div className="kpi-value">{fmtMd(kpis.totalInterest)} €</div>
           </div>
           <div className="kpi-card">
             <h3>Pot capi (nominal)</h3>
-            <div className="kpi-value">{fmtTn(kpis.finalCapi)} €</div>
+            <div className="kpi-value">{fmtMd(kpis.finalCapi)} €</div>
           </div>
           <div className="kpi-card">
             <h3>Pot capi (réel 2026€)</h3>
-            <div className="kpi-value">{fmtTn(kpis.finalCapiReal)} €</div>
+            <div className="kpi-value">{fmtMd(kpis.finalCapiReal)} €</div>
           </div>
           <div className="kpi-card">
             <h3>Spread σ min</h3>
@@ -396,7 +396,7 @@ export default function App() {
           <div className="kpi-card">
             <h3>Position nette</h3>
             <div className={`kpi-value ${kpis.netPosition > 0 ? 'kpi-ok' : 'kpi-bad'}`}>
-              {fmtTn(kpis.netPosition)} €</div>
+              {fmtMd(kpis.netPosition)} €</div>
           </div>
         </div>
       </section>
@@ -443,8 +443,8 @@ export default function App() {
                       <td>{r.debt.toFixed(0)}</td>
                       <td>{(r.r_d * 100).toFixed(2)}</td>
                       <td>{r.debtRatio.toFixed(1)}%</td>
-                      <td>{(r.capi / 1000).toFixed(2)} Tn</td>
-                      <td>{(r.capiReal / 1000).toFixed(2)} Tn</td>
+                      <td>{r.capi.toFixed(0)}</td>
+                      <td>{r.capiReal.toFixed(0)}</td>
                       <td>{(r.spread * 100).toFixed(2)}%</td>
                     </tr>
                   ))}
@@ -524,15 +524,15 @@ export default function App() {
         </div>
 
         <div className="chart-container">
-          <h3>Pot de capitalisation (Tn€)</h3>
+          <h3>Pot de capitalisation (Md€)</h3>
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="year" tick={{ fontSize: 13 }} />
-              <YAxis label={{ value: 'Tn€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
+              <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
               <Tooltip formatter={(v) => {
-                if (Array.isArray(v)) return `[${v[0].toFixed(1)}, ${v[1].toFixed(1)}] Tn€`
-                return `${typeof v === 'number' ? v.toFixed(2) : v} Tn€`
+                if (Array.isArray(v)) return `[${v[0].toFixed(0)}, ${v[1].toFixed(0)}] Md€`
+                return `${typeof v === 'number' ? v.toFixed(0) : v} Md€`
               }} />
               <Legend wrapperStyle={{ fontSize: 13 }} />
               {mcBands && (
@@ -582,13 +582,13 @@ export default function App() {
         </div>
 
         <div className="chart-container">
-          <h3>VAN cumulée — Engagements legacy vs. paiements capitalisation (Tn€, actualisés à r_d)</h3>
+          <h3>VAN cumulée — Engagements legacy vs. paiements capitalisation (Md€, actualisés à r_d)</h3>
           <ResponsiveContainer width="100%" height={300}>
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="year" tick={{ fontSize: 13 }} />
-              <YAxis label={{ value: 'Tn€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
-              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(2) : v} Tn€`} />
+              <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
+              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(0) : v} Md€`} />
               <Legend wrapperStyle={{ fontSize: 13 }} />
               <Line type="monotone" dataKey="pvLegacyCum" stroke="#ef4444" strokeWidth={3} name="VAN engagements legacy" dot={false} />
               <Line type="monotone" dataKey="pvCapiPayoutCum" stroke="#059669" strokeWidth={3} name="VAN pensions capi" dot={false} />
