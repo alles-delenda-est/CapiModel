@@ -511,15 +511,15 @@ export default function SimplifiedView({ navigateTo }) {
       {/* ---- FOOTER ---- */}
       <footer className="sv-footer">
         <p>
-          Ce simulateur utilise le m&ecirc;me moteur de calcul (34 &eacute;quations
-          financi&egrave;res) que la{' '}
+          Ce simulateur utilise le même moteur de calcul (34 équations
+          financières) que la{' '}
           <a href="#/simulateur" onClick={(e) => { e.preventDefault(); navigateTo('simulateur') }}>
             version experte
           </a>.
         </p>
         <p>
-          Les r&eacute;sultats d&eacute;pendent fortement des hypoth&egrave;ses choisies.
-          Ce n'est pas une pr&eacute;diction, c'est un outil d'exploration.
+          Les résultats dépendent fortement des hypothèses choisies.
+          Ce n'est pas une prédiction, c'est un outil d'exploration.
         </p>
         <p>
           <a href="https://github.com/alles-delenda-est/CapiModel">

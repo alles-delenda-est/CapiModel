@@ -35,7 +35,7 @@ export default function HypothesesPage() {
           </thead>
           <tbody>
             <tr>
-              <td>Inflation &#960;</td>
+              <td>Inflation π</td>
               <td>{(defaults.pi * 100).toFixed(1)}%</td>
               <td>
                 Taux d'inflation annuel. La BCE vise 2% a moyen terme. Hypothese
@@ -66,7 +66,7 @@ export default function HypothesesPage() {
             </tr>
             <tr>
               <td>PIB initial</td>
-              <td>{defaults.baseGDP.toLocaleString()} Md&#8364;</td>
+              <td>{defaults.baseGDP.toLocaleString()} Md€</td>
               <td>
                 PIB nominal de la France en 2025. Le PIB croit au taux de croissance
                 nominal des salaires (simplification — suppose une part salariale constante).
@@ -75,7 +75,7 @@ export default function HypothesesPage() {
             </tr>
             <tr>
               <td>Dette existante</td>
-              <td>{defaults.existingDebt.toLocaleString()} Md&#8364;</td>
+              <td>{defaults.existingDebt.toLocaleString()} Md€</td>
               <td>
                 Stock de dette souveraine francaise hors dette de transition.
                 114% du PIB en 2025, 3e ratio le plus eleve de la zone euro.
@@ -101,7 +101,7 @@ export default function HypothesesPage() {
           <tbody>
             <tr>
               <td>Depenses initiales E<sub>0</sub></td>
-              <td>{defaults.E0} Md&#8364;</td>
+              <td>{defaults.E0} Md€</td>
               <td>
                 Total des pensions versees en 2025, toutes caisses confondues
                 (base, complementaire, reversion). Environ 14% du PIB.
@@ -151,7 +151,7 @@ export default function HypothesesPage() {
         <h2>Distribution des pensions — DREES 2022</h2>
         <p>
           Le modele utilise la distribution reelle des pensions par deciles pour calculer
-          les economies de la courbe Equinoxe. Le decile 10 (pensions &gt;2 900&#8364;/mois)
+          les economies de la courbe Equinoxe. Le decile 10 (pensions &gt;2 900€/mois)
           concentre la plus grande partie des economies.
         </p>
         <table className="hyp-table hyp-table-compact">
@@ -165,9 +165,9 @@ export default function HypothesesPage() {
             {DREES_DECILES.map((d, i) => (
               <tr key={i}>
                 <td>D{i + 1}</td>
-                <td>{d.lo.toLocaleString()} &#8364;</td>
-                <td>{d.hi.toLocaleString()} &#8364;</td>
-                <td>{d.mid.toLocaleString()} &#8364;</td>
+                <td>{d.lo.toLocaleString()} €</td>
+                <td>{d.hi.toLocaleString()} €</td>
+                <td>{d.mid.toLocaleString()} €</td>
               </tr>
             ))}
           </tbody>
@@ -180,13 +180,13 @@ export default function HypothesesPage() {
         <p>
           Au lieu d'une reduction brutale au-dessus d'un seuil fixe (step function),
           la courbe Equinoxe applique un <strong>taux de reduction progressif</strong> qui
-          augmente avec le niveau de pension. Aucune reduction en dessous de 1 800&#8364;/mois.
+          augmente avec le niveau de pension. Aucune reduction en dessous de 1 800€/mois.
           Les pensions les plus elevees subissent un taux plus fort.
         </p>
         <table className="hyp-table hyp-table-compact">
           <thead>
             <tr>
-              <th>Pension brute (&#8364;/mois)</th>
+              <th>Pension brute (€/mois)</th>
               <th>Taux de reduction</th>
               <th>Perte mensuelle</th>
             </tr>
@@ -196,9 +196,9 @@ export default function HypothesesPage() {
               const rate = equinoxeReductionRate(p)
               return (
                 <tr key={p}>
-                  <td>{p.toLocaleString()} &#8364;</td>
+                  <td>{p.toLocaleString()} €</td>
                   <td>{(rate * 100).toFixed(1)}%</td>
-                  <td>{(p * rate).toFixed(0)} &#8364;</td>
+                  <td>{(p * rate).toFixed(0)} €</td>
                 </tr>
               )
             })}
@@ -207,7 +207,7 @@ export default function HypothesesPage() {
         <div className="hyp-note">
           Cette structure progressive evite l'effet de seuil (notch) de la step function
           et est juridiquement plus robuste vis-a-vis du principe d'egalite. Le total
-          des economies est ~26 Md&#8364;/an (vs. 13-16 Md&#8364; pour la step function).
+          des economies est ~26 Md€/an (vs. 13-16 Md€ pour la step function).
         </div>
       </section>
 
@@ -245,7 +245,7 @@ export default function HypothesesPage() {
           </tbody>
         </table>
         <div className="hyp-warning">
-          <strong>Point de vigilance :</strong> Un fonds de capitalisation de ~2,8 Tn&#8364;
+          <strong>Point de vigilance :</strong> Un fonds de capitalisation de ~2,8 Tn€
           (apres 20 ans) serait sans precedent historique. A cette echelle, les effets
           d'equilibre general deprimeraient les primes de risque actions. Les rendements
           passes ne sont pas extrapolables a cette echelle.
@@ -321,10 +321,10 @@ export default function HypothesesPage() {
           </tbody>
         </table>
         <div className="hyp-note">
-          <strong>Seuil critique :</strong> Lorsque le taux d'emprunt reel (r<sub>d</sub> - &#960;)
-          depasse le rendement du fonds legacy (r<sub>f</sub>), le spread &#963; devient negatif.
+          <strong>Seuil critique :</strong> Lorsque le taux d'emprunt reel (r<sub>d</sub> - π)
+          depasse le rendement du fonds legacy (r<sub>f</sub>), le spread σ devient negatif.
           A ce stade, la dette s'auto-alimente et ne peut plus etre remboursee.
-          Avec les valeurs par defaut : &#963; = 0 quand r<sub>d</sub> = 5%.
+          Avec les valeurs par defaut : σ = 0 quand r<sub>d</sub> = 5%.
         </div>
       </section>
 
@@ -341,12 +341,12 @@ export default function HypothesesPage() {
               <td>{defaults.U0} millions</td>
               <td>
                 Nombre de logements sociaux en France. Le parc decline geometriquement
-                au taux &#961;.
+                au taux ρ.
               </td>
               <td>INSEE, Housing Europe 2025</td>
             </tr>
             <tr>
-              <td>Taux de liquidation &#961;</td>
+              <td>Taux de liquidation ρ</td>
               <td>{(defaults.rho * 100).toFixed(0)}%/an</td>
               <td>
                 5% = ~265 000 logements vendus par an. Cela represente 28-34% du volume
@@ -357,10 +357,10 @@ export default function HypothesesPage() {
             </tr>
             <tr>
               <td>Prix marche P<sub>0</sub></td>
-              <td>{defaults.P0} k&#8364;</td>
+              <td>{defaults.P0} k€</td>
               <td>
                 Prix moyen de marche d'un logement social. Moyenne nationale ;
-                varie fortement entre IDF (~250k&#8364;) et province (~120k&#8364;).
+                varie fortement entre IDF (~250k€) et province (~120k€).
               </td>
               <td>INSEE, notaires</td>
             </tr>
@@ -370,7 +370,7 @@ export default function HypothesesPage() {
               <td>
                 Lorsqu'activee, le prix de vente est reduit en fonction du volume vendu.
                 Plus on vend, plus les prix baissent (loi de l'offre). Elasticite
-                &#948; = {defaults.delta}, plafonnee a 30% de decote maximum.
+                δ = {defaults.delta}, plafonnee a 30% de decote maximum.
               </td>
               <td>critique.md (recommandation)</td>
             </tr>
@@ -397,7 +397,7 @@ export default function HypothesesPage() {
           <tbody>
             <tr>
               <td>Masse salariale W<sub>0</sub></td>
-              <td>{defaults.W0.toLocaleString()} Md&#8364;</td>
+              <td>{defaults.W0.toLocaleString()} Md€</td>
               <td>
                 Masse salariale brute totale en France. Croit au taux nominal
                 des salaires (inflation + croissance reelle).
@@ -405,7 +405,7 @@ export default function HypothesesPage() {
               <td>INSEE, ACOSS</td>
             </tr>
             <tr>
-              <td>Taux salarie &#964;<sup>s</sup></td>
+              <td>Taux salarie τ<sup>s</sup></td>
               <td>{(defaults.tauS * 100).toFixed(1)}%</td>
               <td>
                 Cotisation retraite prelevee sur le salaire brut. Dans cette reforme,
@@ -414,7 +414,7 @@ export default function HypothesesPage() {
               <td>URSSAF</td>
             </tr>
             <tr>
-              <td>Taux employeur &#964;<sup>e</sup></td>
+              <td>Taux employeur τ<sup>e</sup></td>
               <td>{(defaults.tauE * 100).toFixed(1)}%</td>
               <td>
                 Cotisation retraite payee par l'employeur. Sert d'abord a couvrir
@@ -424,7 +424,7 @@ export default function HypothesesPage() {
               <td>URSSAF</td>
             </tr>
             <tr>
-              <td>Floor employeur &#966;<sub>f</sub></td>
+              <td>Floor employeur φ<sub>f</sub></td>
               <td>{(defaults.phiF * 100).toFixed(0)}%</td>
               <td>
                 Part minimum des cotisations employeur reservee a la capitalisation,
@@ -452,17 +452,17 @@ export default function HypothesesPage() {
           <tbody>
             <tr>
               <td>Actifs CDC F<sub>0</sub></td>
-              <td>{defaults.F0} Md&#8364;</td>
+              <td>{defaults.F0} Md€</td>
               <td>
                 Valeur des actifs CDC (hors Livret A/Fonds d'Epargne) transferes au
                 fonds legacy le Jour 1. Inclut des participations illiquides
                 (66% de La Poste, infrastructures) — la valeur realisable est
-                probablement 150-170 Md&#8364;.
+                probablement 150-170 Md€.
               </td>
               <td>CDC Rapport annuel</td>
             </tr>
             <tr>
-              <td>Taux prelevement &#955;</td>
+              <td>Taux prelevement λ</td>
               <td>{(defaults.lambda * 100).toFixed(0)}%</td>
               <td>
                 Fraction des flux de capitalisation prelevee pour accelerer le
@@ -471,7 +471,7 @@ export default function HypothesesPage() {
               <td>Choix de modelisation</td>
             </tr>
             <tr>
-              <td>Activation T<sub>&#955;</sub></td>
+              <td>Activation T<sub>λ</sub></td>
               <td>Annee +{defaults.Tlambda}</td>
               <td>
                 Le prelevement ne s'active qu'apres {defaults.Tlambda} ans
@@ -482,7 +482,7 @@ export default function HypothesesPage() {
             </tr>
             <tr>
               <td>Abattement fiscal A<sub>0</sub></td>
-              <td>{defaults.A0} Md&#8364;/an</td>
+              <td>{defaults.A0} Md€/an</td>
               <td>
                 Economies liees a la suppression de l'abattement fiscal de 10%
                 sur les revenus de retraite. Croit avec la masse salariale.
@@ -495,30 +495,30 @@ export default function HypothesesPage() {
 
       {/* --- Spread --- */}
       <section className="hyp-section">
-        <h2>Le spread &#963; — indicateur cle de viabilite</h2>
+        <h2>Le spread σ — indicateur cle de viabilite</h2>
         <div className="hyp-formula">
-          &#963; = r<sub>f</sub> - (r<sub>d</sub> - &#960;)
+          σ = r<sub>f</sub> - (r<sub>d</sub> - π)
         </div>
         <p>
           Le spread mesure la difference entre ce que le fonds legacy rapporte (r<sub>f</sub>)
-          et ce que la dette coute en termes reels (r<sub>d</sub> - &#960;).
+          et ce que la dette coute en termes reels (r<sub>d</sub> - π).
         </p>
         <ul className="hyp-spread-list">
           <li>
-            <strong>&#963; &gt; 0 :</strong> Le fonds gagne plus que le cout de la dette.
+            <strong>σ &gt; 0 :</strong> Le fonds gagne plus que le cout de la dette.
             La transition est financierement viable a long terme.
           </li>
           <li>
-            <strong>&#963; = 0 :</strong> Le fonds gagne exactement le cout de la dette.
+            <strong>σ = 0 :</strong> Le fonds gagne exactement le cout de la dette.
             Zone de fragilite — aucune marge de securite.
           </li>
           <li>
-            <strong>&#963; &lt; 0 :</strong> La dette coute plus que le fonds ne rapporte.
+            <strong>σ &lt; 0 :</strong> La dette coute plus que le fonds ne rapporte.
             <strong> Spirale de dette auto-alimentee</strong> — la transition echoue.
           </li>
         </ul>
         <p>
-          Avec les valeurs par defaut : &#963; = {defaults.r_f * 100}% -
+          Avec les valeurs par defaut : σ = {defaults.r_f * 100}% -
           ({defaults.r_d_base * 100}% - {defaults.pi * 100}%) = {((defaults.r_f - (defaults.r_d_base - defaults.pi)) * 100).toFixed(1)}%.
           Le spread passe a zero si r<sub>d</sub> atteint {((defaults.r_f + defaults.pi) * 100).toFixed(0)}%.
         </p>
@@ -536,8 +536,8 @@ export default function HypothesesPage() {
                 <span>r<sub>c</sub>: {(preset.params.r_c * 100).toFixed(1)}%</span>
                 <span>w<sub>r</sub>: {(preset.params.w_r * 100).toFixed(1)}%</span>
                 <span>r<sub>d</sub>: {preset.params.endogenousRd ? 'endogene' : (preset.params.r_d_base * 100).toFixed(1) + '% fixe'}</span>
-                <span>&#961;: {(preset.params.rho * 100).toFixed(0)}%</span>
-                <span>E<sub>0</sub>: {preset.params.E0} Md&#8364;</span>
+                <span>ρ: {(preset.params.rho * 100).toFixed(0)}%</span>
+                <span>E<sub>0</sub>: {preset.params.E0} Md€</span>
                 <span>Equinoxe: {preset.params.useEquinoxe ? 'oui' : 'non'}</span>
               </div>
             </div>
@@ -558,26 +558,26 @@ export default function HypothesesPage() {
           </thead>
           <tbody>
             <tr>
-              <td>Rendement surestime (4,5% &#8594; 3%) + emprunt sous-estime (3,5% &#8594; 5%+)</td>
+              <td>Rendement surestime (4,5% → 3%) + emprunt sous-estime (3,5% → 5%+)</td>
               <td>Le spread s'effondre de +3pp a ~0</td>
             </tr>
             <tr>
-              <td>Salaires surestimes (1,5% &#8594; 0,7%) + charges employeur maintenues</td>
+              <td>Salaires surestimes (1,5% → 0,7%) + charges employeur maintenues</td>
               <td>Cotisations ~30-50% plus faibles, marche du travail stagne</td>
             </tr>
             <tr>
-              <td>Plus de dette &#8594; taux plus eleves &#8594; plus de dette</td>
-              <td>Spirale auto-renforcante (regime &#963; &lt; 0)</td>
+              <td>Plus de dette → taux plus eleves → plus de dette</td>
+              <td>Spirale auto-renforcante (regime σ &lt; 0)</td>
             </tr>
             <tr>
-              <td>Depenses sous-estimees de ~11% (E<sub>0</sub>: 307 vs 345 Md&#8364;)</td>
+              <td>Depenses sous-estimees de ~11% (E<sub>0</sub>: 307 vs 345 Md€)</td>
               <td>Obligations legacy plus elevees des le Jour 1</td>
             </tr>
           </tbody>
         </table>
         <div className="hyp-warning">
           C'est pourquoi le scenario de base utilise des hypotheses prudentes (3% reel,
-          0,7% salaires, taux endogene, E<sub>0</sub>=345 Md&#8364;). Testez le scenario
+          0,7% salaires, taux endogene, E<sub>0</sub>=345 Md€). Testez le scenario
           « Stress Test » pour voir ce qui se passe quand plusieurs hypotheses se degradent
           simultanement.
         </div>
@@ -588,7 +588,7 @@ export default function HypothesesPage() {
         <h2>Simulation Monte Carlo</h2>
         <p>
           Le simulateur propose un mode stochastique qui applique des chocs annuels
-          correles a quatre parametres cles : r<sub>c</sub>, r<sub>d</sub>, &#960;, w<sub>r</sub>.
+          correles a quatre parametres cles : r<sub>c</sub>, r<sub>d</sub>, π, w<sub>r</sub>.
           Les correlations sont calibrees sur les donnees empiriques :
         </p>
         <table className="hyp-table hyp-table-compact">
@@ -597,17 +597,17 @@ export default function HypothesesPage() {
           </thead>
           <tbody>
             <tr>
-              <td>r<sub>c</sub> &#8596; &#960;</td>
+              <td>r<sub>c</sub> ↔ π</td>
               <td>-0,2</td>
               <td>Les rendements reels baissent quand l'inflation monte</td>
             </tr>
             <tr>
-              <td>r<sub>d</sub> &#8596; &#960;</td>
+              <td>r<sub>d</sub> ↔ π</td>
               <td>+0,6</td>
               <td>Les taux d'emprunt montent avec l'inflation</td>
             </tr>
             <tr>
-              <td>r<sub>c</sub> &#8596; w<sub>r</sub></td>
+              <td>r<sub>c</sub> ↔ w<sub>r</sub></td>
               <td>+0,3</td>
               <td>La croissance beneficie a la fois aux salaires et aux marches</td>
             </tr>
@@ -632,7 +632,7 @@ export default function HypothesesPage() {
           <li><strong>UBS/DMS</strong> — Global Investment Returns Yearbook 2025 (rendements historiques)</li>
           <li><strong>BCE/ECB</strong> — Working papers sur l'impact des fonds souverains sur les marches</li>
           <li><strong>CNAV, AGIRC-ARRCO</strong> — Donnees de cotisants et de retraites</li>
-          <li><strong>Breyer (1989)</strong> — Impossibilite d'une transition Pareto-ameliorante PAYG &#8594; capitalisation</li>
+          <li><strong>Breyer (1989)</strong> — Impossibilite d'une transition Pareto-ameliorante PAYG → capitalisation</li>
           <li><strong>Fitch, KBRA</strong> — Notation souveraine francaise (A+)</li>
           <li><strong>CDC</strong> — Rapport annuel, portefeuille d'actifs</li>
           <li><strong>Housing Europe 2025</strong> — Donnees sur le parc social francais</li>

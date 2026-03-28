@@ -7,6 +7,8 @@ import {
 import { runSimulation, extractKPIs, PRESETS } from './simulation-engine.js'
 import useHashNavigation from './hooks/useHashNavigation.js'
 import Navigation from './components/Navigation.jsx'
+import EnhancedSlider from './components/EnhancedSlider.jsx'
+import CollapsibleSection from './components/CollapsibleSection.jsx'
 import IntroPage from './pages/IntroPage.jsx'
 import SimplifiedView from './pages/SimplifiedView.jsx'
 import HypothesesPage from './pages/HypothesesPage.jsx'
@@ -42,20 +44,6 @@ const TIPS = {
   F0: "Valeur des actifs CDC (hors Livret A) transférés au fonds legacy le jour de la réforme.",
   Tpk: "Nombre d'années avant que les dépenses legacy atteignent leur pic. Reflète l'arrivée à la retraite de travailleurs ayant des droits PAYG partiels.",
   Thl: "Vitesse à laquelle les dépenses legacy déclinent après le pic. Plus court = transition plus rapide.",
-}
-
-// --- Slider with tooltip ---
-function Slider({ label, value, onChange, min, max, step, unit, decimals = 1, tip }) {
-  return (
-    <div className="control" title={tip}>
-      <div className="control-header">
-        <label>{label} {tip && <span className="tip-icon">?</span>}</label>
-        <span className="control-value">{value.toFixed(decimals)} {unit}</span>
-      </div>
-      <input type="range" className="slider" min={min} max={max} step={step}
-        value={value} onChange={e => onChange(parseFloat(e.target.value))} />
-    </div>
-  )
 }
 
 function Toggle({ label, checked, onChange, tip }) {
@@ -239,99 +227,117 @@ export default function App() {
         </div>
         {showParams && (
           <div className="controls-row" style={{ marginTop: '0.75rem' }}>
-            <div className="control-group">
-              <h3>Macro</h3>
-              <Slider label="Inflation π" value={p.pi} onChange={v => setParam('pi', v)}
-                min={0} max={0.06} step={0.001} unit="" decimals={3} tip={TIPS.pi} />
-              <Slider label="Croissance salariale réelle w_r" value={p.w_r}
-                onChange={v => setParam('w_r', v)} min={0} max={0.03} step={0.001} unit="" decimals={3} tip={TIPS.w_r} />
-              <Slider label="Horizon N" value={p.N} onChange={v => setParam('N', v)}
-                min={20} max={80} step={1} unit="ans" decimals={0} tip={TIPS.N} />
-              <Slider label="Dépenses initiales E₀" value={p.E0}
-                onChange={v => setParam('E0', v)} min={280} max={400} step={5} unit="Md€" decimals={0} tip={TIPS.E0} />
-            </div>
+            <CollapsibleSection title="Macro" level="critical" defaultOpen={true}>
+              <EnhancedSlider id="pi" label="Inflation π" value={p.pi} onChange={v => setParam('pi', v)}
+                min={0} max={0.06} step={0.001} unit="" decimals={3} tip={TIPS.pi}
+                defaultValue={PRESETS.default.params.pi} warningAbove={0.04} dangerAbove={0.05} />
+              <EnhancedSlider id="w_r" label="Croissance salariale réelle w_r" value={p.w_r}
+                onChange={v => setParam('w_r', v)} min={0} max={0.03} step={0.001} unit="" decimals={3} tip={TIPS.w_r}
+                defaultValue={PRESETS.default.params.w_r} />
+              <EnhancedSlider id="N" label="Horizon N" value={p.N} onChange={v => setParam('N', v)}
+                min={20} max={80} step={1} unit="ans" decimals={0} tip={TIPS.N}
+                defaultValue={PRESETS.default.params.N} />
+              <EnhancedSlider id="E0" label="Dépenses initiales E₀" value={p.E0}
+                onChange={v => setParam('E0', v)} min={280} max={400} step={5} unit="Md€" decimals={0} tip={TIPS.E0}
+                defaultValue={PRESETS.default.params.E0} />
+            </CollapsibleSection>
 
-            <div className="control-group">
-              <h3>Rendements</h3>
-              <Slider label="Rendement capitalisation r_c" value={p.r_c}
-                onChange={v => setParam('r_c', v)} min={0.01} max={0.07} step={0.005} unit="" decimals={3} tip={TIPS.r_c} />
-              <Slider label="Rendement fonds legacy r_f" value={p.r_f}
-                onChange={v => setParam('r_f', v)} min={0.01} max={0.06} step={0.005} unit="" decimals={3} tip={TIPS.r_f} />
-            </div>
+            <CollapsibleSection title="Rendements" level="critical" defaultOpen={true}>
+              <EnhancedSlider id="r_c" label="Rendement capitalisation r_c" value={p.r_c}
+                onChange={v => setParam('r_c', v)} min={0.01} max={0.07} step={0.005} unit="" decimals={3} tip={TIPS.r_c}
+                defaultValue={PRESETS.default.params.r_c} warningBelow={0.02} dangerBelow={0.01} />
+              <EnhancedSlider id="r_f" label="Rendement fonds legacy r_f" value={p.r_f}
+                onChange={v => setParam('r_f', v)} min={0.01} max={0.06} step={0.005} unit="" decimals={3} tip={TIPS.r_f}
+                defaultValue={PRESETS.default.params.r_f} warningBelow={0.02} dangerBelow={0.01} />
+            </CollapsibleSection>
 
-            <div className="control-group">
-              <h3>Emprunt souverain</h3>
-              <Slider label="Taux de base r_d" value={p.r_d_base}
-                onChange={v => setParam('r_d_base', v)} min={0.01} max={0.07} step={0.001} unit="" decimals={3} tip={TIPS.r_d_base} />
+            <CollapsibleSection title="Emprunt souverain" level="normal">
+              <EnhancedSlider id="r_d_base" label="Taux de base r_d" value={p.r_d_base}
+                onChange={v => setParam('r_d_base', v)} min={0.01} max={0.07} step={0.001} unit="" decimals={3} tip={TIPS.r_d_base}
+                defaultValue={PRESETS.default.params.r_d_base} warningAbove={0.05} dangerAbove={0.06} />
               <Toggle label="Taux endogène (prime de risque)" checked={p.endogenousRd}
                 onChange={v => setParam('endogenousRd', v)} tip={TIPS.endogenousRd} />
-              <Slider label="Spread additionnel" value={p.extraSpread}
-                onChange={v => setParam('extraSpread', v)} min={0} max={0.02} step={0.001} unit="" decimals={3} tip={TIPS.extraSpread} />
-              <Slider label="Seuil 1 — pas de prime (% PIB)" value={p.rpThreshold1}
-                onChange={v => setParam('rpThreshold1', v)} min={100} max={250} step={10} unit="%" decimals={0} tip={TIPS.rpThreshold1} />
-              <Slider label="Pente 1 (bps/pp)" value={p.rpSlope1 * 10000}
-                onChange={v => setParam('rpSlope1', v / 10000)} min={0} max={10} step={0.5} unit="bps" decimals={1} tip={TIPS.rpSlope1} />
-              <Slider label="Seuil 3 — crise (% PIB)" value={p.rpThreshold3}
-                onChange={v => setParam('rpThreshold3', v)} min={200} max={500} step={10} unit="%" decimals={0} tip={TIPS.rpThreshold3} />
-              <Slider label="Pente 3 (bps/pp)" value={p.rpSlope3 * 10000}
-                onChange={v => setParam('rpSlope3', v / 10000)} min={5} max={30} step={1} unit="bps" decimals={0} tip={TIPS.rpSlope3} />
-            </div>
+              <EnhancedSlider id="extraSpread" label="Spread additionnel" value={p.extraSpread}
+                onChange={v => setParam('extraSpread', v)} min={0} max={0.02} step={0.001} unit="" decimals={3} tip={TIPS.extraSpread}
+                defaultValue={PRESETS.default.params.extraSpread} />
+              <EnhancedSlider id="rpThreshold1" label="Seuil 1 — pas de prime (% PIB)" value={p.rpThreshold1}
+                onChange={v => setParam('rpThreshold1', v)} min={100} max={250} step={10} unit="%" decimals={0} tip={TIPS.rpThreshold1}
+                defaultValue={PRESETS.default.params.rpThreshold1} />
+              <EnhancedSlider id="rpSlope1" label="Pente 1 (bps/pp)" value={p.rpSlope1 * 10000}
+                onChange={v => setParam('rpSlope1', v / 10000)} min={0} max={10} step={0.5} unit="bps" decimals={1} tip={TIPS.rpSlope1}
+                defaultValue={PRESETS.default.params.rpSlope1 * 10000} />
+              <EnhancedSlider id="rpThreshold3" label="Seuil 3 — crise (% PIB)" value={p.rpThreshold3}
+                onChange={v => setParam('rpThreshold3', v)} min={200} max={500} step={10} unit="%" decimals={0} tip={TIPS.rpThreshold3}
+                defaultValue={PRESETS.default.params.rpThreshold3} />
+              <EnhancedSlider id="rpSlope3" label="Pente 3 (bps/pp)" value={p.rpSlope3 * 10000}
+                onChange={v => setParam('rpSlope3', v / 10000)} min={5} max={30} step={1} unit="bps" decimals={0} tip={TIPS.rpSlope3}
+                defaultValue={PRESETS.default.params.rpSlope3 * 10000} />
+            </CollapsibleSection>
 
-            <div className="control-group">
-              <h3>HLM</h3>
-              <Slider label="Taux de liquidation ρ" value={p.rho}
-                onChange={v => setParam('rho', v)} min={0.01} max={0.15} step={0.01} unit="" decimals={2} tip={TIPS.rho} />
+            <CollapsibleSection title="HLM" level="normal">
+              <EnhancedSlider id="rho" label="Taux de liquidation ρ" value={p.rho}
+                onChange={v => setParam('rho', v)} min={0.01} max={0.15} step={0.01} unit="" decimals={2} tip={TIPS.rho}
+                defaultValue={PRESETS.default.params.rho} warningAbove={0.10} />
               <Toggle label="Décote volume HLM" checked={p.hlmDiscount}
                 onChange={v => setParam('hlmDiscount', v)} tip={TIPS.hlmDiscount} />
-              <Slider label="Élasticité prix δ" value={p.delta}
-                onChange={v => setParam('delta', v)} min={0} max={0.5} step={0.05} unit="" decimals={2} tip={TIPS.delta} />
-              <Slider label="Prix marché P₀" value={p.P0}
-                onChange={v => setParam('P0', v)} min={100} max={250} step={5} unit="k€" decimals={0} tip={TIPS.P0} />
-              <Slider label="Croissance prix g_h" value={p.g_h}
-                onChange={v => setParam('g_h', v)} min={0} max={0.03} step={0.005} unit="" decimals={3} tip={TIPS.g_h} />
-            </div>
+              <EnhancedSlider id="delta" label="Élasticité prix δ" value={p.delta}
+                onChange={v => setParam('delta', v)} min={0} max={0.5} step={0.05} unit="" decimals={2} tip={TIPS.delta}
+                defaultValue={PRESETS.default.params.delta} />
+              <EnhancedSlider id="P0" label="Prix marché P₀" value={p.P0}
+                onChange={v => setParam('P0', v)} min={100} max={250} step={5} unit="k€" decimals={0} tip={TIPS.P0}
+                defaultValue={PRESETS.default.params.P0} />
+              <EnhancedSlider id="g_h" label="Croissance prix g_h" value={p.g_h}
+                onChange={v => setParam('g_h', v)} min={0} max={0.03} step={0.005} unit="" decimals={3} tip={TIPS.g_h}
+                defaultValue={PRESETS.default.params.g_h} />
+            </CollapsibleSection>
 
-            <div className="control-group">
-              <h3>Cotisations</h3>
-              <Slider label="Taux salarié τˢ" value={p.tauS}
-                onChange={v => setParam('tauS', v)} min={0.05} max={0.20} step={0.005} unit="" decimals={3} tip={TIPS.tauS} />
-              <Slider label="Taux employeur τᵉ" value={p.tauE}
-                onChange={v => setParam('tauE', v)} min={0.05} max={0.25} step={0.005} unit="" decimals={3} tip={TIPS.tauE} />
-              <Slider label="Floor employeur φ_f" value={p.phiF}
-                onChange={v => setParam('phiF', v)} min={0} max={0.5} step={0.05} unit="" decimals={2} tip={TIPS.phiF} />
-            </div>
+            <CollapsibleSection title="Cotisations" level="normal">
+              <EnhancedSlider id="tauS" label="Taux salarié τˢ" value={p.tauS}
+                onChange={v => setParam('tauS', v)} min={0.05} max={0.20} step={0.005} unit="" decimals={3} tip={TIPS.tauS}
+                defaultValue={PRESETS.default.params.tauS} />
+              <EnhancedSlider id="tauE" label="Taux employeur τᵉ" value={p.tauE}
+                onChange={v => setParam('tauE', v)} min={0.05} max={0.25} step={0.005} unit="" decimals={3} tip={TIPS.tauE}
+                defaultValue={PRESETS.default.params.tauE} />
+              <EnhancedSlider id="phiF" label="Floor employeur φ_f" value={p.phiF}
+                onChange={v => setParam('phiF', v)} min={0} max={0.5} step={0.05} unit="" decimals={2} tip={TIPS.phiF}
+                defaultValue={PRESETS.default.params.phiF} />
+            </CollapsibleSection>
 
-            <div className="control-group">
-              <h3>Prélèvement transition</h3>
-              <Slider label="Taux prélèvement λ" value={p.lambda}
-                onChange={v => setParam('lambda', v)} min={0} max={0.50} step={0.05} unit="" decimals={2} tip={TIPS.lambda} />
-              <Slider label="Activation T_λ" value={p.Tlambda}
-                onChange={v => setParam('Tlambda', v)} min={0} max={30} step={1} unit="ans" decimals={0} tip={TIPS.Tlambda} />
-            </div>
+            <CollapsibleSection title="Prélèvement transition" level="advanced">
+              <EnhancedSlider id="lambda" label="Taux prélèvement λ" value={p.lambda}
+                onChange={v => setParam('lambda', v)} min={0} max={0.50} step={0.05} unit="" decimals={2} tip={TIPS.lambda}
+                defaultValue={PRESETS.default.params.lambda} warningAbove={0.30} />
+              <EnhancedSlider id="Tlambda" label="Activation T_λ" value={p.Tlambda}
+                onChange={v => setParam('Tlambda', v)} min={0} max={30} step={1} unit="ans" decimals={0} tip={TIPS.Tlambda}
+                defaultValue={PRESETS.default.params.Tlambda} />
+            </CollapsibleSection>
 
-            <div className="control-group">
-              <h3>Réductions pensions</h3>
+            <CollapsibleSection title="Réductions pensions" level="advanced">
               <Toggle label="Courbe Equinoxe (vs. step function)"
                 checked={p.useEquinoxe} onChange={v => setParam('useEquinoxe', v)} tip={TIPS.useEquinoxe} />
               {!p.useEquinoxe && (
                 <>
-                  <Slider label="Taux réduction κ" value={p.kappa}
-                    onChange={v => setParam('kappa', v)} min={0} max={0.25} step={0.01} unit="" decimals={2} tip={TIPS.kappa} />
-                  <Slider label="Seuil (€/mois)" value={p.threshold}
-                    onChange={v => setParam('threshold', v)} min={1500} max={3000} step={50} unit="€" decimals={0} tip={TIPS.threshold} />
+                  <EnhancedSlider id="kappa" label="Taux réduction κ" value={p.kappa}
+                    onChange={v => setParam('kappa', v)} min={0} max={0.25} step={0.01} unit="" decimals={2} tip={TIPS.kappa}
+                    defaultValue={PRESETS.default.params.kappa} />
+                  <EnhancedSlider id="threshold" label="Seuil (€/mois)" value={p.threshold}
+                    onChange={v => setParam('threshold', v)} min={1500} max={3000} step={50} unit="€" decimals={0} tip={TIPS.threshold}
+                    defaultValue={PRESETS.default.params.threshold} />
                 </>
               )}
-            </div>
+            </CollapsibleSection>
 
-            <div className="control-group">
-              <h3>CDC / Fonds</h3>
-              <Slider label="Actifs CDC F₀" value={p.F0}
-                onChange={v => setParam('F0', v)} min={100} max={300} step={10} unit="Md€" decimals={0} tip={TIPS.F0} />
-              <Slider label="Pic cohorte T_pk" value={p.Tpk}
-                onChange={v => setParam('Tpk', v)} min={3} max={15} step={1} unit="ans" decimals={0} tip={TIPS.Tpk} />
-              <Slider label="Demi-vie cohorte T_hl" value={p.Thl}
-                onChange={v => setParam('Thl', v)} min={10} max={40} step={1} unit="ans" decimals={0} tip={TIPS.Thl} />
-            </div>
+            <CollapsibleSection title="CDC / Fonds" level="advanced">
+              <EnhancedSlider id="F0" label="Actifs CDC F₀" value={p.F0}
+                onChange={v => setParam('F0', v)} min={100} max={300} step={10} unit="Md€" decimals={0} tip={TIPS.F0}
+                defaultValue={PRESETS.default.params.F0} />
+              <EnhancedSlider id="Tpk" label="Pic cohorte T_pk" value={p.Tpk}
+                onChange={v => setParam('Tpk', v)} min={3} max={15} step={1} unit="ans" decimals={0} tip={TIPS.Tpk}
+                defaultValue={PRESETS.default.params.Tpk} />
+              <EnhancedSlider id="Thl" label="Demi-vie cohorte T_hl" value={p.Thl}
+                onChange={v => setParam('Thl', v)} min={10} max={40} step={1} unit="ans" decimals={0} tip={TIPS.Thl}
+                defaultValue={PRESETS.default.params.Thl} />
+            </CollapsibleSection>
           </div>
         )}
 
@@ -345,51 +351,51 @@ export default function App() {
             <option value={1000}>1 000 runs</option>
           </select>
           {mcProgress && <span className="mc-progress">{mcProgress}</span>}
-          {mcBands && <span className="mc-progress" style={{ color: 'var(--color-success)' }}>Monte Carlo affich&eacute;</span>}
+          {mcBands && <span className="mc-progress" style={{ color: 'var(--color-success)' }}>Monte Carlo affiché</span>}
         </div>
       </section>
 
       {/* KPIs */}
       <section className="section">
-        <h2>Indicateurs cl&eacute;s</h2>
+        <h2>Indicateurs clés</h2>
         <div className="kpi-grid">
           <div className="kpi-card">
             <h3>Dette pic</h3>
             <div className={`kpi-value ${kpis.peakDebt > 2000 ? 'kpi-bad' : kpis.peakDebt > 1500 ? 'kpi-warn' : 'kpi-ok'}`}>
-              {fmtTn(kpis.peakDebt)} &euro;</div>
-            <div className="kpi-sub">Ann&eacute;e {kpis.peakDebtYear}</div>
+              {fmtTn(kpis.peakDebt)} €</div>
+            <div className="kpi-sub">Année {kpis.peakDebtYear}</div>
           </div>
           <div className="kpi-card">
-            <h3>Ann&eacute;e sans dette</h3>
+            <h3>Année sans dette</h3>
             <div className={`kpi-value ${!kpis.debtFreeYear ? 'kpi-bad' : kpis.debtFreeYear > 2070 ? 'kpi-warn' : 'kpi-ok'}`}>
               {fmtYear(kpis.debtFreeYear)}</div>
           </div>
           <div className="kpi-card">
-            <h3>Int&eacute;r&ecirc;ts cumul&eacute;s</h3>
-            <div className="kpi-value">{fmtTn(kpis.totalInterest)} &euro;</div>
+            <h3>Intérêts cumulés</h3>
+            <div className="kpi-value">{fmtTn(kpis.totalInterest)} €</div>
           </div>
           <div className="kpi-card">
             <h3>Pot capi (nominal)</h3>
-            <div className="kpi-value">{fmtTn(kpis.finalCapi)} &euro;</div>
+            <div className="kpi-value">{fmtTn(kpis.finalCapi)} €</div>
           </div>
           <div className="kpi-card">
-            <h3>Pot capi (r&eacute;el 2026&euro;)</h3>
-            <div className="kpi-value">{fmtTn(kpis.finalCapiReal)} &euro;</div>
+            <h3>Pot capi (réel 2026€)</h3>
+            <div className="kpi-value">{fmtTn(kpis.finalCapiReal)} €</div>
           </div>
           <div className="kpi-card">
-            <h3>Spread &sigma; min</h3>
+            <h3>Spread σ min</h3>
             <div className={`kpi-value ${kpis.minSpread <= 0 ? 'kpi-bad' : kpis.minSpread < 0.01 ? 'kpi-warn' : 'kpi-ok'}`}>
               {fmtPct(kpis.minSpread)}</div>
           </div>
           <div className="kpi-card">
-            <h3>&Eacute;conomies pension S&sub;0</h3>
-            <div className="kpi-value">{kpis.S0.toFixed(1)} Md&euro;/an</div>
+            <h3>Économies pension S₀</h3>
+            <div className="kpi-value">{kpis.S0.toFixed(1)} Md€/an</div>
             <div className="kpi-sub">{p.useEquinoxe ? 'Equinoxe' : 'Step function'}</div>
           </div>
           <div className="kpi-card">
             <h3>Position nette</h3>
             <div className={`kpi-value ${kpis.netPosition > 0 ? 'kpi-ok' : 'kpi-bad'}`}>
-              {fmtTn(kpis.netPosition)} &euro;</div>
+              {fmtTn(kpis.netPosition)} €</div>
           </div>
         </div>
       </section>
@@ -399,8 +405,8 @@ export default function App() {
         <h2>Graphiques</h2>
 
         <div className="chart-container">
-          <h3>Bilan du fonds legacy — D&eacute;penses vs. Revenus (Md&euro;)</h3>
-          <p className="chart-note">Aire empil&eacute;e = revenus du fonds. Au-dessus de la ligne rouge = exc&eacute;dent (remboursement dette).</p>
+          <h3>Bilan du fonds legacy — Dépenses vs. Revenus (Md€)</h3>
+          <p className="chart-note">Aire empilée = revenus du fonds. Au-dessus de la ligne rouge = excédent (remboursement dette).</p>
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -418,7 +424,7 @@ export default function App() {
         </div>
 
         <div className="chart-container">
-          <h3>D&eacute;penses retraites — Legacy (PAYG) vs. Capitalisation (Md&euro;)</h3>
+          <h3>Dépenses retraites — Legacy (PAYG) vs. Capitalisation (Md€)</h3>
           <ResponsiveContainer width="100%" height={300}>
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -434,7 +440,7 @@ export default function App() {
         </div>
 
         <div className="chart-container">
-          <h3>Trajectoire dette souveraine (Md&euro;) + taux d'emprunt effectif</h3>
+          <h3>Trajectoire dette souveraine (Md€) + taux d'emprunt effectif</h3>
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -457,7 +463,7 @@ export default function App() {
         </div>
 
         <div className="chart-container">
-          <h3>Pot de capitalisation (Tn&euro;)</h3>
+          <h3>Pot de capitalisation (Tn€)</h3>
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -484,7 +490,7 @@ export default function App() {
         </div>
 
         <div className="chart-container">
-          <h3>Spread &sigma; = r_f − (r_d − &pi;) en points de %</h3>
+          <h3>Spread σ = r_f − (r_d − π) en points de %</h3>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -498,7 +504,7 @@ export default function App() {
         </div>
 
         <div className="chart-container">
-          <h3>Flux de cotisations (Md&euro;/an)</h3>
+          <h3>Flux de cotisations (Md€/an)</h3>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={chartData.filter((_, i) => i % 2 === 0)}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -515,7 +521,7 @@ export default function App() {
         </div>
 
         <div className="chart-container">
-          <h3>VAN cumul&eacute;e — Engagements legacy vs. paiements capitalisation (Tn&euro;, actualis&eacute;s &agrave; r_d)</h3>
+          <h3>VAN cumulée — Engagements legacy vs. paiements capitalisation (Tn€, actualisés à r_d)</h3>
           <ResponsiveContainer width="100%" height={300}>
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -535,7 +541,7 @@ export default function App() {
       <section className="section">
         <div className="collapsible-header" onClick={() => setShowTable(!showTable)}>
           <span className={`arrow ${showTable ? 'open' : ''}`}>▶</span>
-          <h2 style={{ border: 'none', margin: 0, padding: 0 }}>Tableau de donn&eacute;es</h2>
+          <h2 style={{ border: 'none', margin: 0, padding: 0 }}>Tableau de données</h2>
         </div>
         {showTable && (
           <>
@@ -543,12 +549,12 @@ export default function App() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Ann&eacute;e</th><th>&phi;_t</th><th>D&eacute;p. legacy</th><th>D&eacute;p. capi</th>
+                    <th>Année</th><th>φ_t</th><th>Dép. legacy</th><th>Dép. capi</th>
                     <th>Total pens.</th><th>Rend. fonds</th><th>HLM</th><th>Abatt.</th>
                     <th>Sal.→capi</th><th>Empl.→leg</th><th>Empl.→cap</th>
                     <th>Int. dette</th><th>Flux net</th><th>Emprunt</th><th>Rembours.</th>
-                    <th>Pr&eacute;l&egrave;v.</th><th>Dette</th><th>r_d (%)</th><th>Dette/PIB</th>
-                    <th>Capi nom.</th><th>Capi r&eacute;el</th><th>Spread</th>
+                    <th>Prélèv.</th><th>Dette</th><th>r_d (%)</th><th>Dette/PIB</th>
+                    <th>Capi nom.</th><th>Capi réel</th><th>Spread</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -589,7 +595,7 @@ export default function App() {
       </>}
 
       <footer className="footer">
-        &Eacute;quations 1–34 &middot; cdc_legacy_fund_model.md v5 &middot;
+        Équations 1–34 · cdc_legacy_fund_model.md v5 ·
         <a href="https://github.com/alles-delenda-est/cdc-pension-simulator" style={{ color: 'var(--color-primary-light)', marginLeft: 4 }}>Source</a>
       </footer>
     </div>

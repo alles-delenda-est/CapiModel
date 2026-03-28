@@ -1,0 +1,123 @@
+/* ============================================================
+   CollapsibleSection — priority-based parameter grouping
+   ============================================================ */
+
+.cs-section {
+  border-radius: var(--radius);
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+/* Level-specific accents */
+.cs-critical {
+  border-left: 3px solid var(--color-primary);
+  background: #f8fafc;
+}
+
+.cs-normal {
+  background: var(--bg-primary);
+}
+
+.cs-advanced {
+  background: var(--bg-primary);
+  border-left: 3px solid var(--text-secondary);
+  opacity: 0.92;
+}
+
+/* --- Header --- */
+.cs-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.cs-header:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.cs-arrow {
+  font-size: 0.6rem;
+  color: var(--text-secondary);
+  transition: transform 0.25s ease;
+  flex-shrink: 0;
+}
+
+.cs-arrow.open {
+  transform: rotate(90deg);
+}
+
+.cs-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+}
+
+.cs-critical .cs-title {
+  color: var(--color-primary);
+}
+
+.cs-normal .cs-title {
+  color: var(--text-primary);
+}
+
+.cs-advanced .cs-title {
+  color: var(--text-secondary);
+}
+
+/* --- Badges --- */
+.cs-badge {
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 8px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.cs-badge-critical {
+  background: #dbeafe;
+  color: var(--color-primary);
+}
+
+.cs-badge-advanced {
+  background: #e2e8f0;
+  color: var(--text-secondary);
+}
+
+/* --- Animated body --- */
+.cs-body {
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.25s ease;
+}
+
+.cs-closed {
+  max-height: 0;
+  opacity: 0;
+}
+
+.cs-open {
+  max-height: 800px;
+  opacity: 1;
+}
+
+.cs-content {
+  padding: 0.25rem 0.75rem 0.6rem;
+}
+
+/* --- Mobile --- */
+@media (max-width: 768px) {
+  .cs-header {
+    padding: 0.6rem 0.75rem;
+  }
+
+  .cs-title {
+    font-size: 0.85rem;
+  }
+}
