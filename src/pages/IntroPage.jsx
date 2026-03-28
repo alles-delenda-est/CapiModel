@@ -20,58 +20,85 @@ export default function IntroPage({ navigateTo }) {
         <h2>Pourquoi ce simulateur ?</h2>
         <p>
           La France consacre environ <strong>345 milliards d'euros par an</strong> aux pensions
-          de retraite — soit ~14% du PIB, le 3e ratio le plus eleve de l'OCDE. Les cotisations de 
-          retraite, même au sens large (donc intégrant les sur-cotisations du gouvernement pour la 
-          fonction publique et transferts issus du Fonds de solidarité vieillesse), ne suffit plus 
-          de le payer. Presque 7.5% est financé par les autres postes sociales, et circa 14% par 
-          le budget général, c-à-d, par de la dette. 
+          de retraite — soit ~14% du PIB, le 3e ratio le plus élevé de l'OCDE. Le système par
+          répartition fait face à une pression démographique croissante : le ratio cotisants/retraités
+          ne cesse de baisser, et le financement par la dette ne fait que s'aggraver.
         </p>
         <p>
-          Ce systeme par repartition, ou les cotisations des actifs paient les pensions des
-          retraites, doit en plus de son insolvabilité, faire face à une pression demographique croissante : 
-          le ratio cotisants/retraites ne cesse de baisser, et son financement principal avec. Cela 
-          ne fait qu'augmenter les recours à la dette et donc la charge des intérêts que les français 
-          doivent supporter.
-        </p>
-        <p>
-          Fort heureusement que cette transition démographique doloreuse s'était entamé dans une contexte 
-          d'intensification de l'industrialisiation et donc de gains immenses de productivité et de 
-          richesse, qui ont rendu possible un certain temps d'auto-financer les retraites, y compris à 
-          l'échelle d'une population. 
-        </p>
-        <p>          
-          Malheureusement, cela n'a pas duré. Nous avons empillé depuis plusieurs décennies un tel 
-          labyrinth des normes et des charges, ces derniers étant principalement pour tenter vainement 
-          de financer nos retraites, que notre pays n'a presque plus de croissance, la productivité 
-          stagne, et quant à la production de richesse, n'en parle pas. 
-        </p>
-        <p>
-          On peut appeler ces factors les quatre chévaliers de l'apocalypse financière, qui rôde autour de
-          notre système de retraite: ceux qui creuse notre fossé, 1. La pente démographique, qui condamne 
-          les systèmes par répartition, et 2. La Dette, symptome de l'échec du système actuel et héraut de 
-          notre faillite, et ceux qui nous empêche de s'en sortir: 3. Les marchés sclerosés: le travail, et
-          4. Les marchés sclerosés: l'immobilier.   
-        </p>
-        <p>
-          L'excellente site de Joan Larroumec - @larroumecj resume bien la position minable de la France 
-          par rapport à ses pairs: https://francetdb.com/, ainsi que le fait que le système de retraites 
-          actuelles va droit dans le mur (https://francetdb.com/#retraites). Cette site a vocation de 
-          demontrer que même si c'est effectivement très, très, tard, ce n'est pas trop tard. On peut 
-          toujours s'en sortir, ce n'est qu'une question d'identifier les arbitrages nécessaires et de 
-          les implementer :)
-        </p>
-        <p>
-          Ce simulateur explore un scenario radical : <strong>la transition complete
-          vers un systeme par capitalisation</strong>, ou chaque travailleur accumule
-          un capital personnel finance par ses propres cotisations. Le modele suit les
-          34 equations d'un document technique (
-          <em>cdc_legacy_fund_model.md</em>) qui decrit les mecanismes financiers
-          de cette transition sur 70 ans.
+          Ce simulateur explore un scénario radical : <strong>la transition complète
+          vers un système par capitalisation</strong>, où chaque travailleur accumule
+          un capital personnel financé par ses propres cotisations. Le modèle suit les
+          34 équations d'un document technique (<em>cdc_legacy_fund_model.md</em>)
+          qui décrit les mécanismes financiers de cette transition sur 70 ans.
         </p>
         <p className="intro-caveat">
           Ce n'est pas une prediction. C'est un outil d'exploration : il rend
           visibles les mecanismes, les tensions et les compromis d'une telle reforme.
         </p>
+      </section>
+
+      {/* --- Baseline Results (moved up for visibility) --- */}
+      <section className="intro-section">
+        <h2>Que montre le scenario de base ?</h2>
+        <p>
+          Avec les hypotheses par defaut (rendement capitalisation 3% reel,
+          croissance salariale 0,7% reel, taux d'emprunt endogene, courbe Equinoxe) :
+        </p>
+        <div className="baseline-grid">
+          <div className="baseline-card">
+            <div className="baseline-label">Dette pic</div>
+            <div className="baseline-value">{(k.peakDebt / 1000).toFixed(1)} Tn€</div>
+            <div className="baseline-sub">Atteinte en {k.peakDebtYear}</div>
+          </div>
+          <div className="baseline-card">
+            <div className="baseline-label">Annee sans dette</div>
+            <div className="baseline-value">{k.debtFreeYear || 'Jamais'}</div>
+            <div className="baseline-sub">Avec prelevement 30% des Y+15</div>
+          </div>
+          <div className="baseline-card">
+            <div className="baseline-label">Interets cumules</div>
+            <div className="baseline-value">{(k.totalInterest / 1000).toFixed(1)} Tn€</div>
+            <div className="baseline-sub">Le cout total de la transition</div>
+          </div>
+          <div className="baseline-card">
+            <div className="baseline-label">Pot capitalisation (reel)</div>
+            <div className="baseline-value">{(k.finalCapiReal / 1000).toFixed(0)} Tn€</div>
+            <div className="baseline-sub">En euros constants 2026</div>
+          </div>
+          <div className="baseline-card">
+            <div className="baseline-label">Spread minimum</div>
+            <div className={`baseline-value ${k.minSpread > 0 ? 'spread-ok' : 'spread-bad'}`}>
+              {(k.minSpread * 100).toFixed(2)}%
+            </div>
+            <div className="baseline-sub">{k.minSpread > 0 ? 'Toujours positif' : 'Passe en negatif — zone de danger'}</div>
+          </div>
+          <div className="baseline-card">
+            <div className="baseline-label">Economies Equinoxe</div>
+            <div className="baseline-value">{k.S0.toFixed(0)} Md€/an</div>
+            <div className="baseline-sub">Reductions progressives des pensions elevees</div>
+          </div>
+        </div>
+      </section>
+
+      {/* --- CTA (moved up) --- */}
+      <section className="intro-section intro-cta">
+        <h2>Explorer le simulateur</h2>
+        <p>
+          Utilisez les curseurs pour tester differentes hypotheses. Chaque parametre
+          a une infobulle explicative. Quatre scenarios pre-configures sont disponibles,
+          du scenario de base au stress test.
+        </p>
+        <div className="cta-buttons">
+          <button className="cta-btn cta-primary" onClick={() => navigateTo('simulateur')}>
+            Ouvrir le simulateur
+          </button>
+          <button className="cta-btn cta-secondary" onClick={() => navigateTo('simple')}>
+            Version simple
+          </button>
+          <button className="cta-btn cta-secondary" onClick={() => navigateTo('hypotheses')}>
+            Voir les hypotheses
+          </button>
+        </div>
       </section>
 
       {/* --- The 4 horsemen --- */}
@@ -270,49 +297,6 @@ export default function IntroPage({ navigateTo }) {
         </div>
       </section>
 
-      {/* --- Baseline Results --- */}
-      <section className="intro-section">
-        <h2>Que montre le scenario de base ?</h2>
-        <p>
-          Avec les hypotheses par defaut (rendement capitalisation 3% reel,
-          croissance salariale 0,7% reel, taux d'emprunt endogene, courbe Equinoxe) :
-        </p>
-        <div className="baseline-grid">
-          <div className="baseline-card">
-            <div className="baseline-label">Dette pic</div>
-            <div className="baseline-value">{(k.peakDebt / 1000).toFixed(1)} Tn€</div>
-            <div className="baseline-sub">Atteinte en {k.peakDebtYear}</div>
-          </div>
-          <div className="baseline-card">
-            <div className="baseline-label">Annee sans dette</div>
-            <div className="baseline-value">{k.debtFreeYear || 'Jamais'}</div>
-            <div className="baseline-sub">Avec prelevement 30% des Y+15</div>
-          </div>
-          <div className="baseline-card">
-            <div className="baseline-label">Interets cumules</div>
-            <div className="baseline-value">{(k.totalInterest / 1000).toFixed(1)} Tn€</div>
-            <div className="baseline-sub">Le cout total de la transition</div>
-          </div>
-          <div className="baseline-card">
-            <div className="baseline-label">Pot capitalisation (reel)</div>
-            <div className="baseline-value">{(k.finalCapiReal / 1000).toFixed(0)} Tn€</div>
-            <div className="baseline-sub">En euros constants 2026</div>
-          </div>
-          <div className="baseline-card">
-            <div className="baseline-label">Spread minimum</div>
-            <div className={`baseline-value ${k.minSpread > 0 ? 'spread-ok' : 'spread-bad'}`}>
-              {(k.minSpread * 100).toFixed(2)}%
-            </div>
-            <div className="baseline-sub">{k.minSpread > 0 ? 'Toujours positif' : 'Passe en negatif — zone de danger'}</div>
-          </div>
-          <div className="baseline-card">
-            <div className="baseline-label">Economies Equinoxe</div>
-            <div className="baseline-value">{k.S0.toFixed(0)} Md€/an</div>
-            <div className="baseline-sub">Reductions progressives des pensions elevees</div>
-          </div>
-        </div>
-      </section>
-
       {/* --- Limitations --- */}
       <section className="intro-section">
         <h2>Limites et mises en garde</h2>
@@ -361,23 +345,6 @@ export default function IntroPage({ navigateTo }) {
         </div>
       </section>
 
-      {/* --- CTA --- */}
-      <section className="intro-section intro-cta">
-        <h2>Explorer le simulateur</h2>
-        <p>
-          Utilisez les curseurs pour tester differentes hypotheses. Chaque parametre
-          a une infobulle explicative. Quatre scenarios pre-configures sont disponibles,
-          du scenario de base au stress test.
-        </p>
-        <div className="cta-buttons">
-          <button className="cta-btn cta-primary" onClick={() => navigateTo('simulateur')}>
-            Ouvrir le simulateur
-          </button>
-          <button className="cta-btn cta-secondary" onClick={() => navigateTo('hypotheses')}>
-            Voir les hypotheses
-          </button>
-        </div>
-      </section>
     </div>
   )
 }

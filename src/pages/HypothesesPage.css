@@ -1,5 +1,5 @@
 .hyp-page {
-  max-width: 960px;
+  max-width: 1020px;
   margin: 0 auto;
 }
 
@@ -13,21 +13,21 @@
 .hyp-section {
   background: var(--bg-card);
   border-radius: var(--radius);
-  padding: 1.1rem 1.4rem;
-  margin-bottom: 0.7rem;
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 1rem;
   box-shadow: 0 1px 2px rgba(0,0,0,0.06);
 }
 
 .hyp-section h2 {
-  font-size: 1.05rem;
+  font-size: 1.2rem;
   color: var(--text-primary);
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.75rem;
   border-bottom: 2px solid var(--border-color);
   padding-bottom: 0.3rem;
 }
 
 .hyp-section h3 {
-  font-size: 0.92rem;
+  font-size: 1rem;
   color: var(--color-primary);
   margin-top: 0.75rem;
   margin-bottom: 0.4rem;
@@ -35,7 +35,7 @@
 }
 
 .hyp-section > p {
-  font-size: 0.86rem;
+  font-size: 0.95rem;
   line-height: 1.6;
   color: var(--text-primary);
   margin-bottom: 0.6rem;
@@ -45,13 +45,13 @@
 .hyp-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   margin: 0.5rem 0;
 }
 
 .hyp-table th,
 .hyp-table td {
-  padding: 0.45rem 0.6rem;
+  padding: 0.6rem 0.85rem;
   border: 1px solid var(--border-color);
   text-align: left;
   vertical-align: top;
@@ -61,7 +61,7 @@
   background: var(--bg-primary);
   font-weight: 600;
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   white-space: nowrap;
 }
 
@@ -78,6 +78,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+.hyp-table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+.hyp-table tbody tr:hover {
+  background: #e2e8f0;
+}
+
 .hyp-table-compact td:nth-child(2),
 .hyp-table-compact td:nth-child(3),
 .hyp-table-compact td:nth-child(4) {
@@ -90,7 +97,7 @@
   background: #f0f9ff;
   border-left: 3px solid var(--color-primary-light);
   padding: 0.5rem 0.75rem;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   line-height: 1.5;
   color: var(--text-primary);
   border-radius: 0 var(--radius) var(--radius) 0;
@@ -101,7 +108,7 @@
   background: #fffbeb;
   border-left: 3px solid var(--color-warning);
   padding: 0.5rem 0.75rem;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   line-height: 1.5;
   color: var(--text-primary);
   border-radius: 0 var(--radius) var(--radius) 0;
@@ -207,7 +214,7 @@
 }
 
 .hyp-sources li {
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   line-height: 1.5;
   padding: 0.25rem 0;
   border-bottom: 1px solid var(--border-color);
@@ -226,6 +233,6 @@
 @media (max-width: 768px) {
   .hyp-page { margin: 0; }
   .preset-explain-grid { grid-template-columns: 1fr; }
-  .hyp-table { font-size: 0.75rem; }
-  .hyp-table th, .hyp-table td { padding: 0.3rem 0.4rem; }
+  .hyp-table { font-size: 0.8rem; }
+  .hyp-table th, .hyp-table td { padding: 0.4rem 0.5rem; }
 }

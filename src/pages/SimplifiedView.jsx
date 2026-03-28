@@ -70,6 +70,8 @@ const ADJUSTABLE_PARAMS = [
   },
 ]
 
+const MILESTONE_YEARS = [2026, 2030, 2035, 2040, 2050, 2060, 2070, 2080, 2096]
+
 // === Format helpers ===
 const fmtMd = (v) => {
   const abs = Math.abs(v)
@@ -398,6 +400,40 @@ export default function SimplifiedView({ navigateTo }) {
         </div>
       </section>
 
+      {/* ---- SUMMARY TABLE ---- */}
+      <section className="sv-section">
+        <h2>Résumé par décennie</h2>
+        <p className="sv-section-intro">
+          Évolution des principaux indicateurs aux dates clés de la transition.
+        </p>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="sv-summary-table">
+            <thead>
+              <tr>
+                <th>Année</th>
+                <th>Pensions ancien système (Md€)</th>
+                <th>Pensions nouveau système (Md€)</th>
+                <th>Dette de transition (Md€)</th>
+                <th>Épargne retraite réelle (Tn€)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results
+                .filter(r => MILESTONE_YEARS.includes(r.year))
+                .map(r => (
+                  <tr key={r.year}>
+                    <td>{r.year}</td>
+                    <td>{r.legacyExp.toFixed(1)}</td>
+                    <td>{r.capiPayout.toFixed(1)}</td>
+                    <td>{r.debt.toFixed(0)}</td>
+                    <td>{(r.capiReal / 1000).toFixed(2)}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       {/* ---- CHARTS ---- */}
       <section className="sv-section">
         <h2>Visualisations</h2>
@@ -414,13 +450,13 @@ export default function SimplifiedView({ navigateTo }) {
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 12 }} />
+              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
               <YAxis
-                label={{ value: 'Md€/an', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
-                tick={{ fontSize: 12 }}
+                label={{ value: 'Md€/an', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }}
+                tick={{ fontSize: 13 }}
               />
               <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 13 }} />
               <Area type="monotone" dataKey="legacyExp" stackId="pensions"
                 fill="#fca5a5" stroke="#ef4444" name="Ancien système (répartition)" />
               <Area type="monotone" dataKey="capiPayout" stackId="pensions"
@@ -444,10 +480,10 @@ export default function SimplifiedView({ navigateTo }) {
           <ResponsiveContainer width="100%" height={300}>
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 12 }} />
+              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
               <YAxis
-                label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
-                tick={{ fontSize: 12 }}
+                label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }}
+                tick={{ fontSize: 13 }}
               />
               <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(0) : v} Md€`} />
               <ReferenceLine y={0} stroke="#94a3b8" />
@@ -470,13 +506,13 @@ export default function SimplifiedView({ navigateTo }) {
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 12 }} />
+              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
               <YAxis
-                label={{ value: 'Tn€', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
-                tick={{ fontSize: 12 }}
+                label={{ value: 'Tn€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }}
+                tick={{ fontSize: 13 }}
               />
               <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(2) : v} Tn€`} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 13 }} />
               <Line type="monotone" dataKey="capi"
                 stroke="#86efac" strokeWidth={2}
                 name="Valeur nominale (euros courants)" dot={false} />

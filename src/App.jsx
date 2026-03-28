@@ -97,7 +97,8 @@ export default function App() {
   const [params, setParams] = useState(initialParams)
   const [activePreset, setActivePreset] = useState(paramsFromURL() ? null : 'default')
   const [showParams, setShowParams] = useState(true)
-  const [showTable, setShowTable] = useState(false)
+  const [showTable, setShowTable] = useState(true)
+  const [showAllRows, setShowAllRows] = useState(false)
   const [mcBands, setMcBands] = useState(null)
   const [mcRuns, setMcRuns] = useState(1000)
   const [mcRunning, setMcRunning] = useState(false)
@@ -400,143 +401,6 @@ export default function App() {
         </div>
       </section>
 
-      {/* CHARTS */}
-      <section className="section">
-        <h2>Graphiques</h2>
-
-        <div className="chart-container">
-          <h3>Bilan du fonds legacy — Dépenses vs. Revenus (Md€)</h3>
-          <p className="chart-note">Aire empilée = revenus du fonds. Au-dessus de la ligne rouge = excédent (remboursement dette).</p>
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-              <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v) => `${v.toFixed(1)} Md€`} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Area type="monotone" dataKey="fundReturn" stackId="income" fill="#60a5fa" stroke="#3b82f6" name="Rendement fonds" />
-              <Area type="monotone" dataKey="hlmProceeds" stackId="income" fill="#34d399" stroke="#10b981" name="HLM" />
-              <Area type="monotone" dataKey="abatement" stackId="income" fill="#fbbf24" stroke="#f59e0b" name="Abattement fiscal" />
-              <Area type="monotone" dataKey="emplrToLeg" stackId="income" fill="#a78bfa" stroke="#8b5cf6" name="Cotis. employeur → legacy" />
-              <Line type="monotone" dataKey="legacyExp" stroke="#ef4444" strokeWidth={3} name="Dépenses legacy" dot={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="chart-container">
-          <h3>Dépenses retraites — Legacy (PAYG) vs. Capitalisation (Md€)</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-              <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Area type="monotone" dataKey="legacyExp" stackId="pensions" fill="#fca5a5" stroke="#ef4444" name="Pensions legacy (PAYG)" />
-              <Area type="monotone" dataKey="capiPayout" stackId="pensions" fill="#86efac" stroke="#059669" name="Pensions capitalisation" />
-              <Line type="monotone" dataKey="totalPensionExp" stroke="#1e293b" strokeWidth={2} strokeDasharray="5 5" name="Total pensions" dot={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="chart-container">
-          <h3>Trajectoire dette souveraine (Md€) + taux d'emprunt effectif</h3>
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="left" label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }} tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="right" orientation="right" label={{ value: 'r_d (%)', angle: 90, position: 'insideRight', style: { fontSize: 11 } }} tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {mcBands && (
-                <>
-                  <Area yAxisId="left" type="monotone" dataKey="debt_p5_p95" fill="#fecaca" stroke="none" name="IC 90%" opacity={0.4} />
-                  <Area yAxisId="left" type="monotone" dataKey="debt_p25_p75" fill="#fca5a5" stroke="none" name="IC 50%" opacity={0.4} />
-                </>
-              )}
-              <Line yAxisId="left" type="monotone" dataKey="debt" stroke="#dc2626" strokeWidth={3} name="Dette (Md€)" dot={false} />
-              {mcBands && <Line yAxisId="left" type="monotone" dataKey="debt_p50" stroke="#dc2626" strokeWidth={1} strokeDasharray="4 4" name="Médiane MC" dot={false} />}
-              <Line yAxisId="right" type="monotone" dataKey="r_d" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" name="r_d effectif (%)" dot={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="chart-container">
-          <h3>Pot de capitalisation (Tn€)</h3>
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-              <YAxis label={{ value: 'Tn€', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v) => {
-                if (Array.isArray(v)) return `[${v[0].toFixed(1)}, ${v[1].toFixed(1)}] Tn€`
-                return `${typeof v === 'number' ? v.toFixed(2) : v} Tn€`
-              }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {mcBands && (
-                <>
-                  <Area type="monotone" dataKey="capi_p5_p95" fill="#bbf7d0" stroke="none" name="IC 90% nom." opacity={0.3} />
-                  <Area type="monotone" dataKey="capi_p25_p75" fill="#86efac" stroke="none" name="IC 50% nom." opacity={0.3} />
-                  <Area type="monotone" dataKey="capiReal_p5_p95" fill="#bfdbfe" stroke="none" name="IC 90% réel" opacity={0.3} />
-                  <Area type="monotone" dataKey="capiReal_p25_p75" fill="#93c5fd" stroke="none" name="IC 50% réel" opacity={0.3} />
-                </>
-              )}
-              <Line type="monotone" dataKey="capi" stroke="#059669" strokeWidth={3} name="Nominal" dot={false} />
-              <Line type="monotone" dataKey="capiReal" stroke="#2563eb" strokeWidth={3} name="Réel (€ 2026)" dot={false} />
-              {mcBands && <Line type="monotone" dataKey="capi_p50" stroke="#059669" strokeWidth={1} strokeDasharray="4 4" name="Médiane MC" dot={false} />}
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="chart-container">
-          <h3>Spread σ = r_f − (r_d − π) en points de %</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-              <YAxis label={{ value: '%', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v) => `${v.toFixed(2)}%`} />
-              <ReferenceLine y={0} stroke="#dc2626" strokeWidth={2} strokeDasharray="8 4" label={{ value: 'σ=0', fill: '#dc2626', fontSize: 11 }} />
-              <Line type="monotone" dataKey="spread" stroke="#7c3aed" strokeWidth={2} name="Spread σ (%)" dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="chart-container">
-          <h3>Flux de cotisations (Md€/an)</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={chartData.filter((_, i) => i % 2 === 0)}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-              <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v) => `${v.toFixed(1)} Md€`} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="emplC_s" stackId="a" fill="#3b82f6" name="Salarié → capi" />
-              <Bar dataKey="emplrToCap_bar" stackId="a" fill="#8b5cf6" name="Employeur → capi" />
-              <Bar dataKey="emplrToLeg_bar" stackId="a" fill="#f97316" name="Employeur → legacy" />
-              <Bar dataKey="levy" stackId="b" fill="#ef4444" name="Prélèvement transition" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="chart-container">
-          <h3>VAN cumulée — Engagements legacy vs. paiements capitalisation (Tn€, actualisés à r_d)</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-              <YAxis label={{ value: 'Tn€', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(2) : v} Tn€`} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line type="monotone" dataKey="pvLegacyCum" stroke="#ef4444" strokeWidth={3} name="VAN engagements legacy" dot={false} />
-              <Line type="monotone" dataKey="pvCapiPayoutCum" stroke="#059669" strokeWidth={3} name="VAN pensions capi" dot={false} />
-              <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
       {/* DATA TABLE */}
       <section className="section">
         <div className="collapsible-header" onClick={() => setShowTable(!showTable)}>
@@ -558,7 +422,7 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {results.map(r => (
+                  {(showAllRows ? results : results.slice(0, 15)).map(r => (
                     <tr key={r.year}>
                       <td>{r.year}</td>
                       <td>{r.cohIdx.toFixed(3)}</td>
@@ -587,9 +451,151 @@ export default function App() {
                 </tbody>
               </table>
             </div>
+            {!showAllRows && results.length > 15 && (
+              <button className="mc-btn" style={{ marginTop: '0.5rem', marginRight: '0.5rem' }} onClick={() => setShowAllRows(true)}>
+                Afficher les {results.length} années
+              </button>
+            )}
             <button className="export-btn" onClick={exportCSV}>Exporter CSV</button>
           </>
         )}
+      </section>
+
+      {/* CHARTS */}
+      <section className="section">
+        <h2>Graphiques</h2>
+
+        <div className="chart-container">
+          <h3>Bilan du fonds legacy — Dépenses vs. Revenus (Md€)</h3>
+          <p className="chart-note">Aire empilée = revenus du fonds. Au-dessus de la ligne rouge = excédent (remboursement dette).</p>
+          <ResponsiveContainer width="100%" height={320}>
+            <ComposedChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
+              <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
+              <Tooltip formatter={(v) => `${v.toFixed(1)} Md€`} />
+              <Legend wrapperStyle={{ fontSize: 13 }} />
+              <Area type="monotone" dataKey="fundReturn" stackId="income" fill="#60a5fa" stroke="#3b82f6" name="Rendement fonds" />
+              <Area type="monotone" dataKey="hlmProceeds" stackId="income" fill="#34d399" stroke="#10b981" name="HLM" />
+              <Area type="monotone" dataKey="abatement" stackId="income" fill="#fbbf24" stroke="#f59e0b" name="Abattement fiscal" />
+              <Area type="monotone" dataKey="emplrToLeg" stackId="income" fill="#a78bfa" stroke="#8b5cf6" name="Cotis. employeur → legacy" />
+              <Line type="monotone" dataKey="legacyExp" stroke="#ef4444" strokeWidth={3} name="Dépenses legacy" dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="chart-container">
+          <h3>Dépenses retraites — Legacy (PAYG) vs. Capitalisation (Md€)</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
+              <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
+              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} />
+              <Legend wrapperStyle={{ fontSize: 13 }} />
+              <Area type="monotone" dataKey="legacyExp" stackId="pensions" fill="#fca5a5" stroke="#ef4444" name="Pensions legacy (PAYG)" />
+              <Area type="monotone" dataKey="capiPayout" stackId="pensions" fill="#86efac" stroke="#059669" name="Pensions capitalisation" />
+              <Line type="monotone" dataKey="totalPensionExp" stroke="#1e293b" strokeWidth={2} strokeDasharray="5 5" name="Total pensions" dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="chart-container">
+          <h3>Trajectoire dette souveraine (Md€) + taux d'emprunt effectif</h3>
+          <ResponsiveContainer width="100%" height={320}>
+            <ComposedChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
+              <YAxis yAxisId="left" label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
+              <YAxis yAxisId="right" orientation="right" label={{ value: 'r_d (%)', angle: 90, position: 'insideRight', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
+              <Tooltip />
+              <Legend wrapperStyle={{ fontSize: 13 }} />
+              {mcBands && (
+                <>
+                  <Area yAxisId="left" type="monotone" dataKey="debt_p5_p95" fill="#fecaca" stroke="none" name="IC 90%" opacity={0.4} />
+                  <Area yAxisId="left" type="monotone" dataKey="debt_p25_p75" fill="#fca5a5" stroke="none" name="IC 50%" opacity={0.4} />
+                </>
+              )}
+              <Line yAxisId="left" type="monotone" dataKey="debt" stroke="#dc2626" strokeWidth={3} name="Dette (Md€)" dot={false} />
+              {mcBands && <Line yAxisId="left" type="monotone" dataKey="debt_p50" stroke="#dc2626" strokeWidth={1} strokeDasharray="4 4" name="Médiane MC" dot={false} />}
+              <Line yAxisId="right" type="monotone" dataKey="r_d" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" name="r_d effectif (%)" dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="chart-container">
+          <h3>Pot de capitalisation (Tn€)</h3>
+          <ResponsiveContainer width="100%" height={320}>
+            <ComposedChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
+              <YAxis label={{ value: 'Tn€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
+              <Tooltip formatter={(v) => {
+                if (Array.isArray(v)) return `[${v[0].toFixed(1)}, ${v[1].toFixed(1)}] Tn€`
+                return `${typeof v === 'number' ? v.toFixed(2) : v} Tn€`
+              }} />
+              <Legend wrapperStyle={{ fontSize: 13 }} />
+              {mcBands && (
+                <>
+                  <Area type="monotone" dataKey="capi_p5_p95" fill="#bbf7d0" stroke="none" name="IC 90% nom." opacity={0.3} />
+                  <Area type="monotone" dataKey="capi_p25_p75" fill="#86efac" stroke="none" name="IC 50% nom." opacity={0.3} />
+                  <Area type="monotone" dataKey="capiReal_p5_p95" fill="#bfdbfe" stroke="none" name="IC 90% réel" opacity={0.3} />
+                  <Area type="monotone" dataKey="capiReal_p25_p75" fill="#93c5fd" stroke="none" name="IC 50% réel" opacity={0.3} />
+                </>
+              )}
+              <Line type="monotone" dataKey="capi" stroke="#059669" strokeWidth={3} name="Nominal" dot={false} />
+              <Line type="monotone" dataKey="capiReal" stroke="#2563eb" strokeWidth={3} name="Réel (€ 2026)" dot={false} />
+              {mcBands && <Line type="monotone" dataKey="capi_p50" stroke="#059669" strokeWidth={1} strokeDasharray="4 4" name="Médiane MC" dot={false} />}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="chart-container">
+          <h3>Spread σ = r_f − (r_d − π) en points de %</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
+              <YAxis label={{ value: '%', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
+              <Tooltip formatter={(v) => `${v.toFixed(2)}%`} />
+              <ReferenceLine y={0} stroke="#dc2626" strokeWidth={2} strokeDasharray="8 4" label={{ value: 'σ=0', fill: '#dc2626', fontSize: 13 }} />
+              <Line type="monotone" dataKey="spread" stroke="#7c3aed" strokeWidth={2} name="Spread σ (%)" dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="chart-container">
+          <h3>Flux de cotisations (Md€/an)</h3>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={chartData.filter((_, i) => i % 2 === 0)}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
+              <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
+              <Tooltip formatter={(v) => `${v.toFixed(1)} Md€`} />
+              <Legend wrapperStyle={{ fontSize: 13 }} />
+              <Bar dataKey="emplC_s" stackId="a" fill="#3b82f6" name="Salarié → capi" />
+              <Bar dataKey="emplrToCap_bar" stackId="a" fill="#8b5cf6" name="Employeur → capi" />
+              <Bar dataKey="emplrToLeg_bar" stackId="a" fill="#f97316" name="Employeur → legacy" />
+              <Bar dataKey="levy" stackId="b" fill="#ef4444" name="Prélèvement transition" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="chart-container">
+          <h3>VAN cumulée — Engagements legacy vs. paiements capitalisation (Tn€, actualisés à r_d)</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
+              <YAxis label={{ value: 'Tn€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
+              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(2) : v} Tn€`} />
+              <Legend wrapperStyle={{ fontSize: 13 }} />
+              <Line type="monotone" dataKey="pvLegacyCum" stroke="#ef4444" strokeWidth={3} name="VAN engagements legacy" dot={false} />
+              <Line type="monotone" dataKey="pvCapiPayoutCum" stroke="#059669" strokeWidth={3} name="VAN pensions capi" dot={false} />
+              <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
       </section>
 
       </>}
