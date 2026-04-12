@@ -256,16 +256,16 @@ export default function IntroPage({ navigateTo }) {
           <div className="mechanism-card">
             <h3>2. Un fonds legacy absorbe le choc</h3>
             <p>
-              Les <strong>220 Md&#8364 d'actifs de la CDC (Caisse des dépôts et des 
+              Les <strong>220 Md&#8364; d'actifs de la CDC (Caisse des dépôts et des 
               consignations)</strong> (hors Livret A) financent un fonds charge de payer 
               les retraites des generations transitionnelles. Ce fonds recoit aussi les 
               cotisations "employeur", les ventes de logements sociaux et bénéficie des 
               economies de la courbe Equinoxe qui font baisser la note totale.
-              Les ventes du parc HLM devraient réaliser au moins <strong>30 Md&#8364; 
-              par an (partant de la liquidation de seulement 5% du parc par année), 
-              ce qui minimise le recours à la dette. En réalité, on essayerai de réaliser
-              une partie bcp plus importante dans les premières années, ce qui reduirait
-              encore plus la dette. 
+              Les ventes du parc HLM devraient réaliser au moins <strong>30 Md&#8364;
+              par an</strong> (partant de la liquidation de seulement 5% du parc par année),
+              ce qui minimise le recours à la dette. En réalité, on essaierait de réaliser
+              une partie bien plus importante dans les premières années, ce qui réduirait
+              encore plus la dette.
             </p>
           </div>
           <div className="mechanism-card">
@@ -393,15 +393,6 @@ export default function IntroPage({ navigateTo }) {
             <div className="baseline-sub">Reductions progressives des pensions elevees</div>
           </div>
         </div>
-      </section>
-
-          </div>
-          <div className="limitation-item limitation-severe">
-            <h4>3. Le rendement de la capitalisation est incertain</h4>
-            <p>
-
-            </p>
-
       </section>
 
       {/* --- CTA --- */}
