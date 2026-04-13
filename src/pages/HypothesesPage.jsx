@@ -91,6 +91,110 @@ export default function HypothesesPage() {
         </div>
       </section>
 
+      {/* --- Transition rule --- */}
+      <section className="hyp-section">
+        <h2>Règle de transition vers la capitalisation</h2>
+        <p>
+          Le modèle original fait basculer 100 % des cotisations salariales vers la
+          capitalisation dès 2026. C'est cohérent avec la logique d'un document technique,
+          mais irréaliste politiquement (demander à un actif de 62 ans d'abandonner 40
+          années de droits PAYG juste avant de partir à la retraite). Deux paramètres
+          permettent désormais de calibrer cette transition.
+        </p>
+
+        <h3>1. Règle d'éligibilité à la capitalisation (<code>cutoffAge</code>)</h3>
+        <table className="hyp-table">
+          <thead>
+            <tr><th>Valeur</th><th>Effet</th><th>Justification</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Aucun</strong> (null)</td>
+              <td>Tout le monde bascule dès 2026 (comportement original).</td>
+              <td>Référence pure, utilisée par le scénario <em>Original v5</em>.</td>
+            </tr>
+            <tr>
+              <td>60 ans</td>
+              <td>Les &lt;60 ans en 2026 basculent, les &ge;60 restent PAYG. Phase pure-compounding de 6 ans avant premiers versements capi.</td>
+              <td>Réforme minimale — protège uniquement ceux à quelques années de la retraite.</td>
+            </tr>
+            <tr>
+              <td>55 ans</td>
+              <td>Phase pure-compounding de 11 ans.</td>
+              <td>Intermédiaire.</td>
+            </tr>
+            <tr>
+              <td><strong>50 ans</strong> (défaut)</td>
+              <td>
+                ~65 % des actifs basculent en année 1, 100 % après ~15 ans.
+                Phase pure-compounding de 16 ans. Dette pic réduite de ~32-38 %
+                et intérêts cumulés de ~47 % par rapport au basculement immédiat.
+              </td>
+              <td>
+                Équilibre entre courage politique (on démarre la réforme pour la moitié
+                de la population) et protection des droits acquis de ceux proches de la retraite.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>Mécanique détaillée :</strong> la part de la masse salariale routée vers
+          la capitalisation croît linéairement chaque année avec l'entrée de nouvelles cohortes
+          jeunes dans le marché du travail et le départ à la retraite des plus âgés. La levée
+          λ (prélèvement sur la capi pour rembourser la dette de transition) ne s'active
+          qu'après les premiers versements capi — il n'y a rien à ponctionner avant.
+        </p>
+
+        <h3>2. Croissance de la dette existante (<code>existingDebtGrowth</code>)</h3>
+        <table className="hyp-table">
+          <thead>
+            <tr><th>Scénario</th><th>Valeur</th><th>Implication</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Original v5</td>
+              <td>0 %</td>
+              <td>
+                La dette française pré-réforme (3 200 Md€) est figée pendant 70 ans
+                alors que le PIB nominal croît de ~2,7 %/an. Le ratio dette/PIB baisse
+                mécaniquement et le taux d'emprunt endogène ne se déclenche jamais.
+                Rétro-compatibilité stricte uniquement.
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Hypothèses de base</strong></td>
+              <td><strong>2,7 %</strong></td>
+              <td>
+                La dette existante suit le PIB nominal (inflation 2 % + croissance
+                salariale 0,7 %). Le ratio dette/PIB pré-réforme reste constant à ~114 % ;
+                seule la dette de transition fait monter le ratio total.
+              </td>
+            </tr>
+            <tr>
+              <td>Optimiste</td>
+              <td>2,0 %</td>
+              <td>Croissance PIB supérieure à la dette existante → désendettement lent.</td>
+            </tr>
+            <tr>
+              <td>Stress</td>
+              <td>3,5 %</td>
+              <td>
+                Déficits structurels persistants, la dette existante s'aggrave plus vite
+                que le PIB. Le ratio franchit les seuils 150 % puis 200 %, déclenchant la
+                prime de risque endogène sur <em>toute</em> la dette.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div className="hyp-warning">
+          <strong>Point de vigilance :</strong> ce paramètre est une <em>politique
+          budgétaire implicite</em>, pas un choc aléatoire — il reflète la capacité de
+          l'État à stabiliser ou dégrader sa trajectoire de dette hors-réforme. À 0 %,
+          le modèle sous-estime structurellement le risque souverain ; à 3,5 % il surestime
+          la panique des marchés. La fourchette réaliste pour la France est 2-3 %.
+        </div>
+      </section>
+
       {/* --- Pension System --- */}
       <section className="hyp-section">
         <h2>Systeme de retraite — depenses legacy</h2>

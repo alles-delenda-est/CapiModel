@@ -404,3 +404,65 @@ To independently replicate this model:
 ---
 
 *All monetary values in billions of euros (Md€) unless otherwise noted (Tn€ = trillion €). Real values are in constant 2026 euros. The interactive simulator (HTML, self-contained) runs the full model in-browser and is the reference implementation against which this document should be verified.*
+
+---
+
+## Annexe — Modifications v2 (règle de transition par âge + croissance dette existante)
+
+Deux lacunes du modèle v1 ont motivé ces ajustements :
+
+1. **Basculement universel immédiat** : v1 fait passer 100 % des cotisations salariales à la capitalisation dès t=0, indépendamment de l'âge de l'actif. Politiquement irréaliste.
+2. **Dette existante figée** : v1 garde les 3 200 Md€ de dette française constants pendant 70 ans ; le ratio dette/PIB baisse mécaniquement et le taux d'emprunt endogène ne se déclenche jamais.
+
+### Nouveaux paramètres
+
+| Param | Description | Domaine | Valeur v1 équivalente |
+|---|---|---|---|
+| `cutoffAge` | Âge limite en 2026 pour intégrer le régime capi. Les actifs plus âgés restent 100 % PAYG. | `null` ou entier (50/55/60) | `null` |
+| `existingDebtGrowth` | Taux nominal de croissance de la dette française existante. | [0, 0,06] | 0 |
+
+Dérivées internes : $T_{capi,start} = \max(0, 66 - \text{cutoffAge})$ (si non nul) ; $T_{\lambda,\text{eff}} = \max(T_\lambda, T_{capi,start})$.
+
+### Équations modifiées
+
+**Éq. 13 modifiée — routage des cotisations salariés :**
+
+$$s_t = \min\!\left(1,\ \max\!\left(0,\ \frac{\text{cutoffAge} - 22 + t}{T_{\text{career}}}\right)\right)$$
+
+$$C^s_{t,\text{capi}} = W_t \tau_s \cdot s_t, \qquad C^s_{t,\text{PAYG}} = W_t \tau_s \cdot (1 - s_t)$$
+
+Si `cutoffAge = null` : $s_t \equiv 1$ (toutes les cotisations salariés vont à la capi, identique v1).
+
+**Éq. 21 modifiée — revenus non-employeur (incluent cotisations salariés dirigées vers PAYG) :**
+
+$$N_t = F_t r_f^n + H_t + A_t + C^s_{t,\text{PAYG}} - I^d_t$$
+
+**Éq. 22 — ratio dette/PIB (inchangé en forme, modifié en contenu) :**
+
+$$D^{\text{existant}}_t = D^{\text{existant}}_0 \cdot (1 + g_D)^t, \qquad \text{debtRatio}_t = \frac{D^{\text{existant}}_t + D_t}{\text{GDP}_t} \times 100$$
+
+**Éq. 30 modifiée — levée de transition :**
+
+$$\lambda_t = \begin{cases} \lambda \cdot (C^s_{t,\text{capi}} + C^e_{t,\text{cap}}) & \text{si } t \geq T_{\lambda,\text{eff}} \text{ et } D_t > 0 \\ 0 & \text{sinon} \end{cases}$$
+
+**Éq. 32 modifiée — flux net capitalisation :**
+
+$$F^{\text{capi}}_t = C^s_{t,\text{capi}} + C^e_{t,\text{cap}} - \lambda_t$$
+
+**Éq. 33 — payout capi (rampe retardée) :**
+
+$$\text{capiPayoutShare}_t = \begin{cases} 0 & \text{si } t < T_{capi,start} \\ \min\!\left(1, \left(\frac{t - T_{capi,start}}{T_{\text{career}}}\right)^{1.2}\right) & \text{sinon} \end{cases}$$
+
+### Matrice des valeurs par preset
+
+| Preset | `cutoffAge` | `existingDebtGrowth` | Motivation |
+|---|---:|---:|---|
+| `default` | 50 | 0,027 | Scénario calibré ; dette existante suit le PIB nominal. |
+| `originalV5` | null | 0 | Rétro-compatibilité bit-exact avec v1 du document. |
+| `optimiste` | 50 | 0,020 | Croissance PIB > dette existante → désendettement lent. |
+| `stress` | 50 | 0,035 | Dette existante s'aggrave ; prime de risque endogène active. |
+
+### Rétro-compatibilité
+
+Avec $\{\text{cutoffAge} = \text{null},\ g_D = 0\}$ (preset `originalV5`), toutes les équations modifiées se réduisent algébriquement à leur forme v1. Vérifié empiriquement : `extractKPIs(runSimulation(originalV5))` produit une sortie JSON bit-exact identique avant et après modification.
+

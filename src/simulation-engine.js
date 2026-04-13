@@ -142,6 +142,7 @@ export const PRESETS = {
       Tpk: 8, Thl: 18,
       alpha: 1.0, lambda: 0.30, Tlambda: 15,
       existingDebt: 3200, baseGDP: 2850,
+      cutoffAge: 50, existingDebtGrowth: 0.027,
       // Risk premium thresholds
       rpThreshold1: 150, rpSlope1: 0.0002,
       rpThreshold2: 200, rpSlope2: 0.0004,
@@ -166,6 +167,7 @@ export const PRESETS = {
       Tpk: 8, Thl: 28,
       alpha: 1.0, lambda: 0.30, Tlambda: 15,
       existingDebt: 3200, baseGDP: 2850,
+      cutoffAge: null, existingDebtGrowth: 0,
       rpThreshold1: 150, rpSlope1: 0.0002,
       rpThreshold2: 200, rpSlope2: 0.0004,
       rpThreshold3: 300, rpSlope3: 0.0010,
@@ -189,6 +191,7 @@ export const PRESETS = {
       Tpk: 8, Thl: 18,
       alpha: 1.0, lambda: 0.30, Tlambda: 15,
       existingDebt: 3200, baseGDP: 2850,
+      cutoffAge: 50, existingDebtGrowth: 0.02,
       rpThreshold1: 150, rpSlope1: 0.0002,
       rpThreshold2: 200, rpSlope2: 0.0004,
       rpThreshold3: 300, rpSlope3: 0.0010,
@@ -212,6 +215,7 @@ export const PRESETS = {
       Tpk: 8, Thl: 18,
       alpha: 1.0, lambda: 0.30, Tlambda: 15,
       existingDebt: 3200, baseGDP: 2850,
+      cutoffAge: 50, existingDebtGrowth: 0.035,
       rpThreshold1: 150, rpSlope1: 0.0002,
       rpThreshold2: 200, rpSlope2: 0.0004,
       rpThreshold3: 300, rpSlope3: 0.0010,
@@ -238,10 +242,17 @@ export function runSimulation(params) {
     Tpk, Thl,
     alpha, lambda, Tlambda,
     existingDebt, baseGDP,
+    cutoffAge = null,
+    existingDebtGrowth = 0,
     rpThreshold1, rpSlope1,
     rpThreshold2, rpSlope2,
     rpThreshold3, rpSlope3,
   } = params
+
+  // Transition rule derived values (cutoff-based cohort routing)
+  const T_career = 43
+  const T_capi_start = (cutoffAge == null) ? 0 : Math.max(0, 66 - cutoffAge)
+  const Tlambda_effective = Math.max(Tlambda, T_capi_start)
 
   // Fisher conversion (eqs 1-2)
   const w_n = pi + w_r + pi * w_r  // exact Fisher
@@ -305,6 +316,17 @@ export function runSimulation(params) {
     const emplC_s = wageBill * tauS              // eq 13
     const emplC_e = wageBill * tauE              // eq 14
 
+    // Routing worker contributions: with cutoffAge, only a progressive share of the
+    // workforce is enrolled in the capi regime. Others keep contributing to PAYG (legacy).
+    // shareWorkersCapi = fraction of the workforce whose age in 2026 was ≤ cutoffAge,
+    // increasing linearly as older cohorts retire. Bit-exact reproduces old model when
+    // cutoffAge == null (share = 1 always).
+    const shareWorkersCapi = (cutoffAge == null)
+      ? 1
+      : Math.min(1, Math.max(0, (cutoffAge - 22 + t) / T_career))
+    const emplC_s_toCapi = emplC_s * shareWorkersCapi
+    const emplC_s_toPayg = emplC_s * (1 - shareWorkersCapi)
+
     // HLM proceeds (eqs 15-17)
     const unitsRemaining = U0 * Math.pow(1 - rho, t)  // eq 15 (millions)
     const unitsSold = (t === 0 ? U0 * rho : U0 * Math.pow(1 - rho, t - 1) * rho)  // eq 16 (millions)
@@ -330,7 +352,10 @@ export function runSimulation(params) {
     // Endogenous borrowing rate (critique fix #2)
     // GDP grows at nominal wage growth rate (simplification)
     const gdp = baseGDP * wFactor
-    const totalDebtForRatio = existingDebt + debt  // existing French debt + model debt
+    // Existing French debt grows at its own nominal rate (pre-reform trajectory).
+    // Default 0 reproduces prior behaviour bit-exact.
+    const existingDebtCurrent = existingDebt * Math.pow(1 + existingDebtGrowth, t)
+    const totalDebtForRatio = existingDebtCurrent + debt
     const debtRatio = (totalDebtForRatio / gdp) * 100
 
     let r_d
@@ -350,7 +375,7 @@ export function runSimulation(params) {
     const debtInterest = debt * r_d
 
     // Employer contribution allocation (eqs 21-23)
-    const nonEmplrNet = fundReturn + hlmProceeds + abatement - debtInterest  // eq 21
+    const nonEmplrNet = fundReturn + hlmProceeds + abatement + emplC_s_toPayg - debtInterest  // eq 21
     const deficit = legacyExp - nonEmplrNet
     const emplrAvail = emplC_e * (1 - phiF)
 
@@ -381,15 +406,16 @@ export function runSimulation(params) {
       fund = fund + netFlow - repaid                 // eq 29
     }
 
-    // Transition levy (eqs 30-31)
+    // Transition levy (eqs 30-31) — only on actual capi inflows, and only after
+    // cohort capi contributions have started.
     let levy = 0
-    if (t >= Tlambda && debt > 0) {
-      levy = lambda * (emplC_s + emplrToCap)         // eq 30
+    if (t >= Tlambda_effective && debt > 0) {
+      levy = lambda * (emplC_s_toCapi + emplrToCap)  // eq 30
     }
     debt = Math.max(0, debt - levy)                  // eq 31
 
-    // Net capitalisation flow (eq 32)
-    const netCapiFlow = emplC_s + emplrToCap - levy
+    // Net capitalisation flow (eq 32) — only the share flowing to capi
+    const netCapiFlow = emplC_s_toCapi + emplrToCap - levy
 
     // --- Capitalisation pension payouts ---
     // Each retiring cohort's capi share = (post-reform career years) / (total career).
@@ -398,9 +424,17 @@ export function runSimulation(params) {
     // by t=43 new retirees are 100% capi-funded. The average capi share across all
     // retirees alive at time t is approximately t / T_career, capped at 1.
     // We use T_career ≈ 43 but weight early years lower (few retirees have capi yet,
-    // and their pots are tiny), so use a slightly convex ramp: (t/T_career)^1.2
-    const T_career = 43
-    const capiPayoutShare = Math.min(1, Math.pow(Math.min(t, T_career) / T_career, 1.2))
+    // and their pots are tiny), so use a slightly convex ramp: (t/T_career)^1.2.
+    // With cutoffAge, payouts only begin after T_capi_start (= 66 - cutoffAge) years:
+    // no cohort eligible to capi has yet reached retirement age. When cutoffAge == null,
+    // T_capi_start = 0 and the formula is bit-exact identical to the original.
+    let capiPayoutShare
+    if (t < T_capi_start) {
+      capiPayoutShare = 0
+    } else {
+      const effT = Math.min(t - T_capi_start, T_career)
+      capiPayoutShare = Math.min(1, Math.pow(effT / T_career, 1.2))
+    }
     // "Full system" expenditure = what total pensions would be with no reform
     // (indexed E0, before Equinoxe cuts — since capi pensions replace the original level)
     const fullSystemExp = E0 * idxFact
@@ -445,7 +479,11 @@ export function runSimulation(params) {
       capiPayoutShare,
       wageBill,
       emplC_s,
+      emplC_s_toCapi,
+      emplC_s_toPayg,
+      shareWorkersCapi,
       emplC_e,
+      existingDebtCurrent,
       emplrToLeg,
       emplrToCap,
       unitsRemaining: unitsRemaining * 1e6,

@@ -9,6 +9,7 @@ import useHashNavigation from './hooks/useHashNavigation.js'
 import Navigation from './components/Navigation.jsx'
 import EnhancedSlider from './components/EnhancedSlider.jsx'
 import CollapsibleSection from './components/CollapsibleSection.jsx'
+import CutoffSelector from './components/CutoffSelector.jsx'
 import IntroPage from './pages/IntroPage.jsx'
 import SimplifiedView from './pages/SimplifiedView.jsx'
 import HypothesesPage from './pages/HypothesesPage.jsx'
@@ -44,6 +45,8 @@ const TIPS = {
   F0: "Valeur des actifs CDC (hors Livret A) transférés au fonds legacy le jour de la réforme.",
   Tpk: "Nombre d'années avant que les dépenses legacy atteignent leur pic. Reflète l'arrivée à la retraite de travailleurs ayant des droits PAYG partiels.",
   Thl: "Vitesse à laquelle les dépenses legacy déclinent après le pic. Plus court = transition plus rapide.",
+  cutoffAge: "Âge limite en 2026 pour intégrer le régime de capitalisation. Les personnes au-delà conservent 100% de leurs droits en répartition. « Aucun » = tout le monde bascule (comportement original du document technique).",
+  existingDebtGrowth: "Taux nominal de croissance de la dette française existante (3 200 Md€). À 0% la dette est figée (irréaliste). À ~2,7% elle suit le PIB nominal, maintenant constant le ratio dette/PIB pré-réforme. Au-delà, le ratio augmente et peut déclencher la prime de risque endogène.",
 }
 
 function Toggle({ label, checked, onChange, tip }) {
@@ -62,11 +65,22 @@ const fmtPct = v => `${(v * 100).toFixed(2)}%`
 const fmtYear = v => v ? `${v}` : 'Jamais'
 
 // --- URL parameter encoding/decoding ---
+// Keys that may hold `null` as a meaningful value (distinct from default numeric).
+const NULLABLE_KEYS = new Set(['cutoffAge'])
+
+function decodeParamValue(k, v) {
+  if (NULLABLE_KEYS.has(k) && (v === 'null' || v === '')) return null
+  if (v === 'true') return true
+  if (v === 'false') return false
+  const n = parseFloat(v)
+  return Number.isNaN(n) ? v : n
+}
+
 function paramsToURL(params) {
   const defs = PRESETS.default.params
   const diff = {}
   for (const [k, v] of Object.entries(params)) {
-    if (v !== defs[k]) diff[k] = v
+    if (v !== defs[k]) diff[k] = v === null ? 'null' : v
   }
   if (Object.keys(diff).length === 0) return ''
   return '?' + new URLSearchParams(diff).toString()
@@ -80,13 +94,13 @@ function paramsFromURL() {
     const base = { ...PRESETS[preset].params }
     sp.delete('preset')
     for (const [k, v] of sp.entries()) {
-      if (k in base) base[k] = v === 'true' ? true : v === 'false' ? false : parseFloat(v)
+      if (k in base) base[k] = decodeParamValue(k, v)
     }
     return base
   }
   const base = { ...PRESETS.default.params }
   for (const [k, v] of sp.entries()) {
-    if (k in base) base[k] = v === 'true' ? true : v === 'false' ? false : parseFloat(v)
+    if (k in base) base[k] = decodeParamValue(k, v)
   }
   return base
 }
@@ -176,7 +190,10 @@ export default function App() {
         debt: r.debt, r_d: r.r_d * 100,
         capi: r.capi, capiReal: r.capiReal,
         spread: r.spread * 100,
-        emplC_s: r.emplC_s, emplrToLeg_bar: r.emplrToLeg, emplrToCap_bar: r.emplrToCap, levy: r.levy,
+        emplC_s: r.emplC_s,
+        emplC_s_toCapi: r.emplC_s_toCapi,
+        emplC_s_toPayg: r.emplC_s_toPayg,
+        emplrToLeg_bar: r.emplrToLeg, emplrToCap_bar: r.emplrToCap, levy: r.levy,
         capi_p5_p95: mc.capi_p5 !== undefined ? [mc.capi_p5, mc.capi_p95] : undefined,
         capi_p25_p75: mc.capi_p25 !== undefined ? [mc.capi_p25, mc.capi_p75] : undefined,
         capi_p50: mc.capi_p50 !== undefined ? mc.capi_p50 : undefined,
@@ -229,6 +246,26 @@ export default function App() {
         </div>
         {showParams && (
           <div className="controls-row" style={{ marginTop: '0.75rem' }}>
+            <CollapsibleSection title="Règle de transition" level="critical" defaultOpen={true}>
+              <CutoffSelector
+                label="Âge limite capitalisation (2026)"
+                value={p.cutoffAge}
+                onChange={v => setParam('cutoffAge', v)}
+                options={[
+                  { value: null, label: 'Aucun' },
+                  { value: 60, label: '60 ans' },
+                  { value: 55, label: '55 ans' },
+                  { value: 50, label: '50 ans' },
+                ]}
+                tip={TIPS.cutoffAge}
+              />
+              <EnhancedSlider id="existingDebtGrowth" label="Croissance dette existante"
+                value={p.existingDebtGrowth} onChange={v => setParam('existingDebtGrowth', v)}
+                min={0} max={0.06} step={0.001} unit="" decimals={3} tip={TIPS.existingDebtGrowth}
+                defaultValue={PRESETS.default.params.existingDebtGrowth}
+                warningAbove={0.035} dangerAbove={0.05} />
+            </CollapsibleSection>
+
             <CollapsibleSection title="Macro" level="critical" defaultOpen={true}>
               <EnhancedSlider id="pi" label="Inflation π" value={p.pi} onChange={v => setParam('pi', v)}
                 min={0} max={0.06} step={0.001} unit="" decimals={3} tip={TIPS.pi}
@@ -575,7 +612,8 @@ export default function App() {
               <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
               <Tooltip formatter={(v) => `${v.toFixed(1)} Md€`} />
               <Legend wrapperStyle={{ fontSize: 13 }} />
-              <Bar dataKey="emplC_s" stackId="a" fill="#3b82f6" name="Salarié → capi" />
+              <Bar dataKey="emplC_s_toCapi" stackId="a" fill="#3b82f6" name="Salarié → capi" />
+              <Bar dataKey="emplC_s_toPayg" stackId="a" fill="#fb923c" name="Salarié → legacy" />
               <Bar dataKey="emplrToCap_bar" stackId="a" fill="#8b5cf6" name="Employeur → capi" />
               <Bar dataKey="emplrToLeg_bar" stackId="a" fill="#f97316" name="Employeur → legacy" />
               <Bar dataKey="levy" stackId="b" fill="#ef4444" name="Prélèvement transition" />
