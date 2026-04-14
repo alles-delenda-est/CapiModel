@@ -337,7 +337,9 @@ export function runSimulation(params) {
     // regardless of total demographic growth. The demographic excess (retireeIdx − cohIdx)
     // consists of post-cutoff cohorts, who retire into capi once it activates.
     const capiRetirees = capiActivation * Math.max(0, retireeIdx - cohIdx)
-    const legacyRetirees = cohIdx
+    // To prevent a gap in total pension coverage during the transition, anyone not covered 
+    // by capi (due to age cutoff or incomplete ramp) falls back to the legacy PAYG system.
+    const legacyRetirees = retireeIdx - capiRetirees
     // Diagnostic share (fraction of retirees drawing capi)
     const capiRetireeShare = retireeIdx > 0 ? capiRetirees / retireeIdx : 0
 
