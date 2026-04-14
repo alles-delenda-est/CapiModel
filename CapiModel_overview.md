@@ -32,6 +32,7 @@ Setting `cutoffAge = null` and `existingDebtGrowth = 0` reproduces the v1 docume
 - **4 preset scenarios**: Hypothèses de base, Original v5, Optimiste, Stress Test
 - **~27 adjustable parameters** with tooltip explanations, grouped into collapsible sections with criticality levels (critical / normal / advanced)
 - **Endogenous borrowing rate**: sovereign risk premium rises with the combined (existing + transition) debt/GDP ratio via a piecewise-linear model (thresholds at 150 %, 200 %, 300 %, calibrated to France/US/Italy precedent)
+- **General Equilibrium Return Penalty**: the capitalization fund's real return scales down dynamically, capping at inflation as the fund reaches 2× GDP, to model equity premium compression at macroeconomic scale.
 - **HLM volume-dependent price discount**: accounts for market absorption constraints
 - **Equinoxe progressive pension reductions**: continuous curve above €1,800/month, replacing the original step-function design
 - **Monte Carlo simulation** (100–1,000 runs): correlated stochastic shocks to returns, inflation, wages, and borrowing rates via Web Worker, producing fan charts with confidence intervals

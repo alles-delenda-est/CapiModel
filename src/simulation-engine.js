@@ -448,7 +448,8 @@ export function runSimulation(params) {
     const debtToGdp = gdp > 0 ? debt / gdp : 0
     const levyPhaseOut = smoothstep(debtToGdp, 0, 0.05)  // fades over last 5% of GDP
     const levyFactor = levyActivation * levyPhaseOut
-    const levy = levyFactor * lambda * (emplC_s_toCapi + emplrToCap)  // eq 30
+    const grossLevy = levyFactor * lambda * (emplC_s_toCapi + emplrToCap)  // eq 30
+    const levy = Math.min(grossLevy, debt)
     debt = Math.max(0, debt - levy)                  // eq 31
 
     // Net capitalisation flow (eq 32) — only the share flowing to capi
@@ -463,7 +464,17 @@ export function runSimulation(params) {
     // Pot constraint (critique fix #2): cannot pay out more than the pot holds
     // after this year's returns and contributions. Shortfall is tracked explicitly
     // rather than silently masked by a Math.max(0) clamp on `capi`.
-    const capiAvailable = capi * (1 + r_c_n) + netCapiFlow
+    
+    // General Equilibrium (GE) feedback on capi return.
+    // As the fund approaches the size of the macro-economy, capital abundance
+    // suppresses the equity premium, driving real returns towards 0.
+    // Return approaches inflation as fund reaches GDP, caps at inflation (real return 0) at 2x GDP.
+    const capiToGdpRatio = gdp > 0 ? capi / gdp : 0
+    const gePenalty = Math.max(0, 1 - (capiToGdpRatio / 2))
+    const r_c_eff = r_c * gePenalty
+    const r_c_n_eff = (1 + r_c_eff) * (1 + pi) - 1
+
+    const capiAvailable = capi * (1 + r_c_n_eff) + netCapiFlow
     const capiPayout = Math.max(0, Math.min(capiPayoutDesired, capiAvailable))
     const capiShortfall = Math.max(0, capiPayoutDesired - capiPayout)
     cumCapiShortfall += capiShortfall
