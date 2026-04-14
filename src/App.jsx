@@ -437,6 +437,14 @@ export default function App() {
             <div className={`kpi-value ${kpis.netPosition > 0 ? 'kpi-ok' : 'kpi-bad'}`}>
               {fmtMd(kpis.netPosition)} €</div>
           </div>
+          <div className="kpi-card">
+            <h3>Insuffisance capi cumulée</h3>
+            <div className={`kpi-value ${kpis.totalCapiShortfall < 1 ? 'kpi-ok' : kpis.totalCapiShortfall < 100 ? 'kpi-warn' : 'kpi-bad'}`}>
+              {fmtMd(kpis.totalCapiShortfall)} €</div>
+            <div className="kpi-sub">
+              {kpis.firstShortfallYear ? `Dès ${kpis.firstShortfallYear}` : 'Pot suffisant sur tout l\'horizon'}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -452,12 +460,28 @@ export default function App() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Année</th><th>φ_t</th><th>Dép. legacy</th><th>Dép. capi</th>
-                    <th>Total pens.</th><th>Rend. fonds</th><th>HLM</th><th>Abatt.</th>
-                    <th>Sal.→capi</th><th>Empl.→leg</th><th>Empl.→cap</th>
-                    <th>Int. dette</th><th>Flux net</th><th>Emprunt</th><th>Rembours.</th>
-                    <th>Prélèv.</th><th>Dette</th><th>r_d (%)</th><th>Dette/PIB</th>
-                    <th>Capi nom.</th><th>Capi réel</th><th>Spread</th>
+                    <th title="Année calendaire (2026 = année 0 de la réforme)">Année</th>
+                    <th title="Indice de cohorte legacy : fraction du cohort pré-réforme encore en vie. 1 = population 2026, décroît vers 0 à l'extinction de la cohorte (~2096).">φ_t</th>
+                    <th title="Dépenses annuelles de pensions payées par le système legacy (répartition). Décroît à mesure que la cohorte pré-réforme s'éteint.">Dép. legacy</th>
+                    <th title="Dépenses annuelles de pensions payées depuis le pot de capitalisation. Croît à mesure que les nouvelles cohortes (capi) remplacent les legacy.">Dép. capi</th>
+                    <th title="Total des pensions versées = legacy + capi. Doit évoluer de façon continue (indexation × nombre total de retraités).">Total pens.</th>
+                    <th title="Rendement nominal annuel du fonds legacy (CDC) : fonds × r_f_nominal. Ressource pour couvrir les dépenses legacy.">Rend. fonds</th>
+                    <th title="Produit net annuel des ventes de logements HLM (plus-value × volume), déduit de 5% de frais. Ressource one-off pour le fonds legacy.">HLM</th>
+                    <th title="Récupération des abattements fiscaux existants sur cotisations salariales (A0 indexé sur salaires). Ressource pour le fonds legacy.">Abatt.</th>
+                    <th title="Cotisations salariales dirigées vers le pot de capitalisation. Les cotisations des salariés inéligibles restent au legacy.">Sal.→capi</th>
+                    <th title="Part de la cotisation employeur allouée au legacy pour couvrir le déficit annuel.">Empl.→leg</th>
+                    <th title="Part de la cotisation employeur allouée au pot de capitalisation (= total − part legacy, au minimum φF · emplC_e).">Empl.→cap</th>
+                    <th title="Intérêts payés cette année sur la dette de transition = dette × r_d. Au taux endogène si la prime de risque est activée.">Int. dette</th>
+                    <th title="Solde annuel du fonds legacy : ressources (rendement + HLM + abattement + cotisations + empl.→leg) − dépenses legacy − intérêts. Négatif = besoin d'emprunter.">Flux net</th>
+                    <th title="Emprunt souverain nouveau émis cette année pour combler un flux net négatif.">Emprunt</th>
+                    <th title="Remboursement volontaire de dette cette année : α × flux_net si surplus, plafonné par la dette restante.">Rembours.</th>
+                    <th title="Prélèvement de transition : fraction λ des flux entrant en capi, détournée pour rembourser la dette. Se désactive en douceur quand la dette → 0.">Prélèv.</th>
+                    <th title="Encours de la dette de transition en fin d'année (Md€). Dette accumulée par la réforme, distincte de la dette française pré-existante.">Dette</th>
+                    <th title="Taux souverain appliqué à la dette. Fixe (3,5%) ou endogène (base + prime de risque selon le ratio dette totale / PIB).">r_d (%)</th>
+                    <th title="Ratio dette totale (pré-existante + transition) / PIB. Déclenche la prime de risque à 150%, 200%, 300%.">Dette/PIB</th>
+                    <th title="Valeur nominale du pot de capitalisation en fin d'année, en Md€ courants. Net des versements de pensions capi.">Capi nom.</th>
+                    <th title="Valeur réelle du pot en euros 2026 (déflatée par l'inflation cumulée). Mesure le pouvoir d'achat du pot.">Capi réel</th>
+                    <th title="Écart r_f − (r_d − π) : rendement réel du fonds − coût réel de la dette. Positif = la réforme crée de la valeur ; négatif = elle en détruit.">Spread</th>
                   </tr>
                 </thead>
                 <tbody>
