@@ -4,6 +4,7 @@ import {
   ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
 import { runSimulation, extractKPIs, PRESETS } from '../simulation-engine.js'
+import ChartTooltip from '../components/ChartTooltip.jsx'
 import './SimplifiedView.css'
 
 // === Simplified scenario definitions — same engine params, friendly labels ===
@@ -443,15 +444,12 @@ export default function SimplifiedView({ navigateTo }) {
             montre le total des pensions versées.
           </p>
           <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={chartData}>
+            <ComposedChart data={chartData} margin={{ bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
-              <YAxis
-                label={{ value: 'Md€/an', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }}
-                tick={{ fontSize: 13 }}
-              />
-              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} />
-              <Legend wrapperStyle={{ fontSize: 13 }} />
+              <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
+              <YAxis width={55} tick={{ fontSize: 14 }} label={{ value: 'Md€/an', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} />
+              <Tooltip content={<ChartTooltip unit="Md€" />} />
+              <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
               <Area type="monotone" dataKey="legacyExp" stackId="pensions"
                 fill="#fca5a5" stroke="#ef4444" name="Ancien système (répartition)" />
               <Area type="monotone" dataKey="capiPayout" stackId="pensions"
@@ -473,15 +471,14 @@ export default function SimplifiedView({ navigateTo }) {
             employeur.
           </p>
           <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={chartData}>
+            <ComposedChart data={chartData} margin={{ bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
-              <YAxis
-                label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }}
-                tick={{ fontSize: 13 }}
-              />
-              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(0) : v} Md€`} />
+              <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
+              <YAxis width={55} tick={{ fontSize: 14 }} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} />
+              <Tooltip content={<ChartTooltip unit="Md€" annotations={{ [kpis.peakDebtYear]: 'Pic dette', [kpis.debtFreeYear]: 'Remboursé' }} />} />
               <ReferenceLine y={0} stroke="#94a3b8" />
+              {kpis.peakDebtYear && <ReferenceLine x={kpis.peakDebtYear} stroke="var(--color-danger)" strokeDasharray="4 4" label={{ value: 'Pic', position: 'top', fontSize: 11, fill: 'var(--color-danger)' }} />}
+              {kpis.debtFreeYear && <ReferenceLine x={kpis.debtFreeYear} stroke="var(--color-success)" strokeDasharray="4 4" label={{ value: 'Remb.', position: 'top', fontSize: 11, fill: 'var(--color-success)' }} />}
               <Area type="monotone" dataKey="debt"
                 fill="#fecaca" stroke="#dc2626" strokeWidth={2}
                 name="Dette de transition (Md€)" />
@@ -499,15 +496,12 @@ export default function SimplifiedView({ navigateTo }) {
             la mesure la plus honnête du pouvoir d'achat réel.
           </p>
           <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={chartData}>
+            <ComposedChart data={chartData} margin={{ bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
-              <YAxis
-                label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }}
-                tick={{ fontSize: 13 }}
-              />
-              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(0) : v} Md€`} />
-              <Legend wrapperStyle={{ fontSize: 13 }} />
+              <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
+              <YAxis width={55} tick={{ fontSize: 14 }} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} />
+              <Tooltip content={<ChartTooltip unit="Md€" />} />
+              <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
               <Line type="monotone" dataKey="capi"
                 stroke="#86efac" strokeWidth={2}
                 name="Valeur nominale (euros courants)" dot={false} />

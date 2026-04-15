@@ -105,6 +105,39 @@ function paramsFromURL() {
   return base
 }
 
+// --- Table column definitions (always: 8 key cols; expert-only: remaining 14) ---
+const TABLE_COLUMNS = [
+  { key: 'year',      label: 'Année',     title: 'Année calendaire (2026 = année 0 de la réforme)',                                                     always: true,  render: r => r.year },
+  { key: 'debt',      label: 'Dette',     title: 'Encours de la dette de transition en fin d\'année (Md€).',                                             always: true,  render: r => fmtN(r.debt) },
+  { key: 'debtRatio', label: 'Dette/PIB', title: 'Ratio dette totale (pré-existante + transition) / PIB.',                                               always: true,  render: r => `${r.debtRatio.toFixed(1)}%` },
+  { key: 'legacyExp', label: 'Dép. legacy', title: 'Dépenses annuelles de pensions payées par le système legacy (répartition).',                        always: true,  render: r => r.legacyExp.toFixed(1) },
+  { key: 'capiPayout',label: 'Dép. capi',  title: 'Dépenses annuelles de pensions payées depuis le pot de capitalisation.',                             always: true,  render: r => r.capiPayout.toFixed(1) },
+  { key: 'capiReal',  label: 'Capi réel',  title: 'Valeur réelle du pot en euros 2026 (déflatée par l\'inflation cumulée).',                            always: true,  render: r => fmtN(r.capiReal) },
+  { key: 'r_d',       label: 'r_d (%)',    title: 'Taux souverain appliqué à la dette. Fixe ou endogène selon le ratio dette/PIB.',                     always: true,  render: r => (r.r_d * 100).toFixed(2) },
+  { key: 'spread',    label: 'Spread',     title: 'Écart r_f − (r_d − π) : rendement réel du fonds − coût réel de la dette.',                          always: true,  render: r => `${(r.spread * 100).toFixed(2)}%` },
+  { key: 'cohIdx',    label: 'φ_t',        title: 'Indice de cohorte legacy : fraction du cohort pré-réforme encore en vie.',                          always: false, render: r => r.cohIdx.toFixed(3) },
+  { key: 'totalPensionExp', label: 'Total pens.', title: 'Total des pensions versées = legacy + capi.',                                                 always: false, render: r => r.totalPensionExp.toFixed(1) },
+  { key: 'fundReturn',label: 'Rend. fonds', title: 'Rendement nominal annuel du fonds legacy (CDC) : fonds × r_f_nominal.',                            always: false, render: r => r.fundReturn.toFixed(1) },
+  { key: 'hlmProceeds',label: 'HLM',        title: 'Produit net annuel des ventes de logements HLM.',                                                  always: false, render: r => r.hlmProceeds.toFixed(1) },
+  { key: 'abatement', label: 'Abatt.',     title: 'Récupération des abattements fiscaux existants sur cotisations salariales.',                        always: false, render: r => r.abatement.toFixed(1) },
+  { key: 'emplC_s',   label: 'Sal.→capi', title: 'Cotisations salariales dirigées vers le pot de capitalisation.',                                    always: false, render: r => r.emplC_s.toFixed(1) },
+  { key: 'emplrToLeg',label: 'Empl.→leg', title: 'Part de la cotisation employeur allouée au legacy pour couvrir le déficit annuel.',                  always: false, render: r => r.emplrToLeg.toFixed(1) },
+  { key: 'emplrToCap',label: 'Empl.→cap', title: 'Part de la cotisation employeur allouée au pot de capitalisation.',                                  always: false, render: r => r.emplrToCap.toFixed(1) },
+  { key: 'debtInterest', label: 'Int. dette', title: 'Intérêts payés cette année sur la dette de transition = dette × r_d.',                           always: false, render: r => r.debtInterest.toFixed(1) },
+  { key: 'netFlow',   label: 'Flux net',   title: 'Solde annuel du fonds legacy : ressources − dépenses legacy − intérêts.',                          always: false, render: r => r.netFlow.toFixed(1) },
+  { key: 'borrowed',  label: 'Emprunt',    title: 'Emprunt souverain nouveau émis cette année pour combler un flux net négatif.',                       always: false, render: r => r.borrowed.toFixed(1) },
+  { key: 'repaid',    label: 'Rembours.',  title: 'Remboursement volontaire de dette cette année si surplus.',                                          always: false, render: r => r.repaid.toFixed(1) },
+  { key: 'levy',      label: 'Prélèv.',   title: 'Prélèvement de transition : fraction λ des flux entrant en capi, détournée pour rembourser la dette.',always: false, render: r => r.levy.toFixed(1) },
+  { key: 'capi',      label: 'Capi nom.', title: 'Valeur nominale du pot de capitalisation en fin d\'année, en Md€ courants.',                         always: false, render: r => fmtN(r.capi) },
+]
+
+const CHART_TABS = [
+  { id: 'depenses',       label: 'Dépenses' },
+  { id: 'dette',          label: 'Dette & Taux' },
+  { id: 'capitalisation', label: 'Capitalisation' },
+  { id: 'flux',           label: 'Flux & VAN' },
+]
+
 // --- Main App ---
 export default function App() {
   const { currentPage, navigateTo } = useHashNavigation('simulateur')
@@ -118,6 +151,9 @@ export default function App() {
   const [mcRuns, setMcRuns] = useState(1000)
   const [mcRunning, setMcRunning] = useState(false)
   const [mcProgress, setMcProgress] = useState('')
+  const [expertMode, setExpertMode] = useState(false)
+  const [activeChartTab, setActiveChartTab] = useState('depenses')
+  const [showAllColumns, setShowAllColumns] = useState(false)
   const workerRef = useRef(null)
 
   const setParam = useCallback((key, value) => {
@@ -245,7 +281,14 @@ export default function App() {
           <h2 style={{ border: 'none', margin: 0, padding: 0 }}>Paramètres</h2>
         </div>
         {showParams && (
-          <div className="controls-row" style={{ marginTop: '0.75rem' }}>
+          <>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem', marginBottom: '0.5rem' }}>
+              <div className="mode-toggle">
+                <button className={`mode-toggle-btn${!expertMode ? ' active' : ''}`} onClick={() => setExpertMode(false)}>Mode simple</button>
+                <button className={`mode-toggle-btn${expertMode ? ' active' : ''}`} onClick={() => setExpertMode(true)}>Mode expert</button>
+              </div>
+            </div>
+            <div className="controls-row">
             <CollapsibleSection title="Règle de transition" level="critical" defaultOpen={true}>
               <CutoffSelector
                 label="Âge limite capitalisation (2026)"
@@ -290,7 +333,7 @@ export default function App() {
                 defaultValue={PRESETS.default.params.r_f} warningBelow={0.02} dangerBelow={0.01} />
             </CollapsibleSection>
 
-            <CollapsibleSection title="Emprunt souverain" level="normal">
+            {expertMode && (<CollapsibleSection title="Emprunt souverain" level="normal">
               <EnhancedSlider id="r_d_base" label="Taux de base r_d" value={p.r_d_base}
                 onChange={v => setParam('r_d_base', v)} min={0.01} max={0.07} step={0.001} unit="" decimals={3} tip={TIPS.r_d_base}
                 defaultValue={PRESETS.default.params.r_d_base} warningAbove={0.05} dangerAbove={0.06} />
@@ -311,9 +354,9 @@ export default function App() {
               <EnhancedSlider id="rpSlope3" label="Pente 3 (bps/pp)" value={p.rpSlope3 * 10000}
                 onChange={v => setParam('rpSlope3', v / 10000)} min={5} max={30} step={1} unit="bps" decimals={0} tip={TIPS.rpSlope3}
                 defaultValue={PRESETS.default.params.rpSlope3 * 10000} />
-            </CollapsibleSection>
+            </CollapsibleSection>)}
 
-            <CollapsibleSection title="HLM" level="normal">
+            {expertMode && (<CollapsibleSection title="HLM" level="normal">
               <EnhancedSlider id="rho" label="Taux de liquidation ρ" value={p.rho}
                 onChange={v => setParam('rho', v)} min={0.01} max={0.15} step={0.01} unit="" decimals={2} tip={TIPS.rho}
                 defaultValue={PRESETS.default.params.rho} warningAbove={0.10} />
@@ -328,9 +371,9 @@ export default function App() {
               <EnhancedSlider id="g_h" label="Croissance prix g_h" value={p.g_h}
                 onChange={v => setParam('g_h', v)} min={0} max={0.03} step={0.005} unit="" decimals={3} tip={TIPS.g_h}
                 defaultValue={PRESETS.default.params.g_h} />
-            </CollapsibleSection>
+            </CollapsibleSection>)}
 
-            <CollapsibleSection title="Cotisations" level="normal">
+            {expertMode && (<CollapsibleSection title="Cotisations" level="normal">
               <EnhancedSlider id="tauS" label="Taux salarié τˢ" value={p.tauS}
                 onChange={v => setParam('tauS', v)} min={0.05} max={0.20} step={0.005} unit="" decimals={3} tip={TIPS.tauS}
                 defaultValue={PRESETS.default.params.tauS} />
@@ -340,18 +383,18 @@ export default function App() {
               <EnhancedSlider id="phiF" label="Floor employeur φ_f" value={p.phiF}
                 onChange={v => setParam('phiF', v)} min={0} max={0.5} step={0.05} unit="" decimals={2} tip={TIPS.phiF}
                 defaultValue={PRESETS.default.params.phiF} />
-            </CollapsibleSection>
+            </CollapsibleSection>)}
 
-            <CollapsibleSection title="Prélèvement transition" level="advanced">
+            {expertMode && (<CollapsibleSection title="Prélèvement transition" level="advanced">
               <EnhancedSlider id="lambda" label="Taux prélèvement λ" value={p.lambda}
                 onChange={v => setParam('lambda', v)} min={0} max={0.50} step={0.05} unit="" decimals={2} tip={TIPS.lambda}
                 defaultValue={PRESETS.default.params.lambda} warningAbove={0.30} />
               <EnhancedSlider id="Tlambda" label="Activation T_λ" value={p.Tlambda}
                 onChange={v => setParam('Tlambda', v)} min={0} max={30} step={1} unit="ans" decimals={0} tip={TIPS.Tlambda}
                 defaultValue={PRESETS.default.params.Tlambda} />
-            </CollapsibleSection>
+            </CollapsibleSection>)}
 
-            <CollapsibleSection title="Réductions pensions" level="advanced">
+            {expertMode && (<CollapsibleSection title="Réductions pensions" level="advanced">
               <Toggle label="Courbe Equinoxe (vs. step function)"
                 checked={p.useEquinoxe} onChange={v => setParam('useEquinoxe', v)} tip={TIPS.useEquinoxe} />
               {!p.useEquinoxe && (
@@ -364,9 +407,9 @@ export default function App() {
                     defaultValue={PRESETS.default.params.threshold} />
                 </>
               )}
-            </CollapsibleSection>
+            </CollapsibleSection>)}
 
-            <CollapsibleSection title="CDC / Fonds" level="advanced">
+            {expertMode && (<CollapsibleSection title="CDC / Fonds" level="advanced">
               <EnhancedSlider id="F0" label="Actifs CDC F₀" value={p.F0}
                 onChange={v => setParam('F0', v)} min={100} max={300} step={10} unit="Md€" decimals={0} tip={TIPS.F0}
                 defaultValue={PRESETS.default.params.F0} />
@@ -376,10 +419,12 @@ export default function App() {
               <EnhancedSlider id="Thl" label="Demi-vie cohorte T_hl" value={p.Thl}
                 onChange={v => setParam('Thl', v)} min={10} max={40} step={1} unit="ans" decimals={0} tip={TIPS.Thl}
                 defaultValue={PRESETS.default.params.Thl} />
-            </CollapsibleSection>
-          </div>
+            </CollapsibleSection>)}
+            </div>
+          </>
         )}
 
+        {expertMode && (
         <div className="mc-controls">
           <button className="mc-btn" onClick={runMC} disabled={mcRunning}>
             {mcRunning ? 'Simulation en cours...' : 'Lancer Monte Carlo'}
@@ -392,6 +437,7 @@ export default function App() {
           {mcProgress && <span className="mc-progress">{mcProgress}</span>}
           {mcBands && <span className="mc-progress" style={{ color: 'var(--color-success)' }}>Monte Carlo affiché</span>}
         </div>
+        )}
       </section>
 
       {/* KPIs */}
@@ -456,59 +502,26 @@ export default function App() {
         </div>
         {showTable && (
           <>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', margin: '0.75rem 0 0.4rem' }}>
+              <button className="mc-btn" onClick={() => setShowAllColumns(!showAllColumns)}>
+                {showAllColumns ? 'Colonnes essentielles' : 'Toutes les colonnes'}
+              </button>
+            </div>
             <div className="data-table-wrapper">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th title="Année calendaire (2026 = année 0 de la réforme)">Année</th>
-                    <th title="Indice de cohorte legacy : fraction du cohort pré-réforme encore en vie. 1 = population 2026, décroît vers 0 à l'extinction de la cohorte (~2096).">φ_t</th>
-                    <th title="Dépenses annuelles de pensions payées par le système legacy (répartition). Décroît à mesure que la cohorte pré-réforme s'éteint.">Dép. legacy</th>
-                    <th title="Dépenses annuelles de pensions payées depuis le pot de capitalisation. Croît à mesure que les nouvelles cohortes (capi) remplacent les legacy.">Dép. capi</th>
-                    <th title="Total des pensions versées = legacy + capi. Doit évoluer de façon continue (indexation × nombre total de retraités).">Total pens.</th>
-                    <th title="Rendement nominal annuel du fonds legacy (CDC) : fonds × r_f_nominal. Ressource pour couvrir les dépenses legacy.">Rend. fonds</th>
-                    <th title="Produit net annuel des ventes de logements HLM (plus-value × volume), déduit de 5% de frais. Ressource one-off pour le fonds legacy.">HLM</th>
-                    <th title="Récupération des abattements fiscaux existants sur cotisations salariales (A0 indexé sur salaires). Ressource pour le fonds legacy.">Abatt.</th>
-                    <th title="Cotisations salariales dirigées vers le pot de capitalisation. Les cotisations des salariés inéligibles restent au legacy.">Sal.→capi</th>
-                    <th title="Part de la cotisation employeur allouée au legacy pour couvrir le déficit annuel.">Empl.→leg</th>
-                    <th title="Part de la cotisation employeur allouée au pot de capitalisation (= total − part legacy, au minimum φF · emplC_e).">Empl.→cap</th>
-                    <th title="Intérêts payés cette année sur la dette de transition = dette × r_d. Au taux endogène si la prime de risque est activée.">Int. dette</th>
-                    <th title="Solde annuel du fonds legacy : ressources (rendement + HLM + abattement + cotisations + empl.→leg) − dépenses legacy − intérêts. Négatif = besoin d'emprunter.">Flux net</th>
-                    <th title="Emprunt souverain nouveau émis cette année pour combler un flux net négatif.">Emprunt</th>
-                    <th title="Remboursement volontaire de dette cette année : α × flux_net si surplus, plafonné par la dette restante.">Rembours.</th>
-                    <th title="Prélèvement de transition : fraction λ des flux entrant en capi, détournée pour rembourser la dette. Se désactive en douceur quand la dette → 0.">Prélèv.</th>
-                    <th title="Encours de la dette de transition en fin d'année (Md€). Dette accumulée par la réforme, distincte de la dette française pré-existante.">Dette</th>
-                    <th title="Taux souverain appliqué à la dette. Fixe (3,5%) ou endogène (base + prime de risque selon le ratio dette totale / PIB).">r_d (%)</th>
-                    <th title="Ratio dette totale (pré-existante + transition) / PIB. Déclenche la prime de risque à 150%, 200%, 300%.">Dette/PIB</th>
-                    <th title="Valeur nominale du pot de capitalisation en fin d'année, en Md€ courants. Net des versements de pensions capi.">Capi nom.</th>
-                    <th title="Valeur réelle du pot en euros 2026 (déflatée par l'inflation cumulée). Mesure le pouvoir d'achat du pot.">Capi réel</th>
-                    <th title="Écart r_f − (r_d − π) : rendement réel du fonds − coût réel de la dette. Positif = la réforme crée de la valeur ; négatif = elle en détruit.">Spread</th>
+                    {TABLE_COLUMNS.filter(c => c.always || showAllColumns).map(c => (
+                      <th key={c.key} title={c.title}>{c.label}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {(showAllRows ? results : results.slice(0, 15)).map(r => (
                     <tr key={r.year}>
-                      <td>{r.year}</td>
-                      <td>{r.cohIdx.toFixed(3)}</td>
-                      <td>{r.legacyExp.toFixed(1)}</td>
-                      <td>{r.capiPayout.toFixed(1)}</td>
-                      <td>{r.totalPensionExp.toFixed(1)}</td>
-                      <td>{r.fundReturn.toFixed(1)}</td>
-                      <td>{r.hlmProceeds.toFixed(1)}</td>
-                      <td>{r.abatement.toFixed(1)}</td>
-                      <td>{r.emplC_s.toFixed(1)}</td>
-                      <td>{r.emplrToLeg.toFixed(1)}</td>
-                      <td>{r.emplrToCap.toFixed(1)}</td>
-                      <td>{r.debtInterest.toFixed(1)}</td>
-                      <td>{r.netFlow.toFixed(1)}</td>
-                      <td>{r.borrowed.toFixed(1)}</td>
-                      <td>{r.repaid.toFixed(1)}</td>
-                      <td>{r.levy.toFixed(1)}</td>
-                      <td>{fmtN(r.debt)}</td>
-                      <td>{(r.r_d * 100).toFixed(2)}</td>
-                      <td>{r.debtRatio.toFixed(1)}%</td>
-                      <td>{fmtN(r.capi)}</td>
-                      <td>{fmtN(r.capiReal)}</td>
-                      <td>{(r.spread * 100).toFixed(2)}%</td>
+                      {TABLE_COLUMNS.filter(c => c.always || showAllColumns).map(c => (
+                        <td key={c.key}>{c.render(r)}</td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
@@ -528,137 +541,158 @@ export default function App() {
       <section className="section">
         <h2>Graphiques</h2>
 
-        <div className="chart-container">
-          <h3>Bilan du fonds legacy — Dépenses vs. Revenus (Md€)</h3>
-          <p className="chart-note">Aire empilée = revenus du fonds. Au-dessus de la ligne rouge = excédent (remboursement dette).</p>
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
-              <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
-              <Tooltip formatter={(v) => `${v.toFixed(1)} Md€`} />
-              <Legend wrapperStyle={{ fontSize: 13 }} />
-              <Area type="monotone" dataKey="fundReturn" stackId="income" fill="#60a5fa" stroke="#3b82f6" name="Rendement fonds" />
-              <Area type="monotone" dataKey="hlmProceeds" stackId="income" fill="#34d399" stroke="#10b981" name="HLM" />
-              <Area type="monotone" dataKey="abatement" stackId="income" fill="#fbbf24" stroke="#f59e0b" name="Abattement fiscal" />
-              <Area type="monotone" dataKey="emplrToLeg" stackId="income" fill="#a78bfa" stroke="#8b5cf6" name="Cotis. employeur → legacy" />
-              <Line type="monotone" dataKey="legacyExp" stroke="#ef4444" strokeWidth={3} name="Dépenses legacy" dot={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
+        <div className="chart-tabs">
+          {CHART_TABS.map(tab => (
+            <button key={tab.id}
+              className={`chart-tab${activeChartTab === tab.id ? ' active' : ''}`}
+              onClick={() => setActiveChartTab(tab.id)}>
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        <div className="chart-container">
-          <h3>Dépenses retraites — Legacy (PAYG) vs. Capitalisation (Md€)</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
-              <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
-              <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} />
-              <Legend wrapperStyle={{ fontSize: 13 }} />
-              <Area type="monotone" dataKey="legacyExp" stackId="pensions" fill="#fca5a5" stroke="#ef4444" name="Pensions legacy (PAYG)" />
-              <Area type="monotone" dataKey="capiPayout" stackId="pensions" fill="#86efac" stroke="#059669" name="Pensions capitalisation" />
-              <Line type="monotone" dataKey="totalPensionExp" stroke="#1e293b" strokeWidth={2} strokeDasharray="5 5" name="Total pensions" dot={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
+        {/* Tab: Dépenses */}
+        <div style={{ visibility: activeChartTab === 'depenses' ? 'visible' : 'hidden', height: activeChartTab === 'depenses' ? 'auto' : 0, overflow: 'hidden' }}>
+          <div className="chart-container">
+            <h3>Bilan du fonds legacy — Dépenses vs. Revenus (Md€)</h3>
+            <p className="chart-note">Aire empilée = revenus du fonds. Au-dessus de la ligne rouge = excédent (remboursement dette).</p>
+            <ResponsiveContainer width="100%" height={320}>
+              <ComposedChart data={chartData} margin={{ bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
+                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
+                <Tooltip formatter={(v) => `${v.toFixed(1)} Md€`} />
+                <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
+                <Area type="monotone" dataKey="fundReturn" stackId="income" fill="#60a5fa" stroke="#3b82f6" name="Rendement fonds" />
+                <Area type="monotone" dataKey="hlmProceeds" stackId="income" fill="#34d399" stroke="#10b981" name="HLM" />
+                <Area type="monotone" dataKey="abatement" stackId="income" fill="#fbbf24" stroke="#f59e0b" name="Abattement fiscal" />
+                <Area type="monotone" dataKey="emplrToLeg" stackId="income" fill="#a78bfa" stroke="#8b5cf6" name="Cotis. employeur → legacy" />
+                <Line type="monotone" dataKey="legacyExp" stroke="#ef4444" strokeWidth={3} name="Dépenses legacy" dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="chart-container">
+            <h3>Dépenses retraites — Legacy (PAYG) vs. Capitalisation (Md€)</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart data={chartData} margin={{ bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
+                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
+                <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} />
+                <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
+                <Area type="monotone" dataKey="legacyExp" stackId="pensions" fill="#fca5a5" stroke="#ef4444" name="Pensions legacy (PAYG)" />
+                <Area type="monotone" dataKey="capiPayout" stackId="pensions" fill="#86efac" stroke="#059669" name="Pensions capitalisation" />
+                <Line type="monotone" dataKey="totalPensionExp" stroke="#1e293b" strokeWidth={2} strokeDasharray="5 5" name="Total pensions" dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        <div className="chart-container">
-          <h3>Trajectoire dette souveraine (Md€) + taux d'emprunt effectif</h3>
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
-              <YAxis yAxisId="left" label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
-              <YAxis yAxisId="right" orientation="right" label={{ value: 'r_d (%)', angle: 90, position: 'insideRight', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
-              <Tooltip />
-              <Legend wrapperStyle={{ fontSize: 13 }} />
-              {mcBands && (
-                <>
-                  <Area yAxisId="left" type="monotone" dataKey="debt_p5_p95" fill="#fecaca" stroke="none" name="IC 90%" opacity={0.4} />
-                  <Area yAxisId="left" type="monotone" dataKey="debt_p25_p75" fill="#fca5a5" stroke="none" name="IC 50%" opacity={0.4} />
-                </>
-              )}
-              <Line yAxisId="left" type="monotone" dataKey="debt" stroke="#dc2626" strokeWidth={3} name="Dette (Md€)" dot={false} />
-              {mcBands && <Line yAxisId="left" type="monotone" dataKey="debt_p50" stroke="#dc2626" strokeWidth={1} strokeDasharray="4 4" name="Médiane MC" dot={false} />}
-              <Line yAxisId="right" type="monotone" dataKey="r_d" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" name="r_d effectif (%)" dot={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
+        {/* Tab: Dette & Taux */}
+        <div style={{ visibility: activeChartTab === 'dette' ? 'visible' : 'hidden', height: activeChartTab === 'dette' ? 'auto' : 0, overflow: 'hidden' }}>
+          <div className="chart-container">
+            <h3>Trajectoire dette souveraine (Md€) + taux d'emprunt effectif</h3>
+            <ResponsiveContainer width="100%" height={320}>
+              <ComposedChart data={chartData} margin={{ bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
+                <YAxis yAxisId="left" width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
+                <YAxis yAxisId="right" orientation="right" label={{ value: 'r_d (%)', angle: 90, position: 'insideRight', style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
+                {kpis.peakDebtYear && <ReferenceLine yAxisId="left" x={kpis.peakDebtYear} stroke="var(--color-danger)" strokeDasharray="4 4" label={{ value: 'Pic', position: 'top', fontSize: 11, fill: 'var(--color-danger)' }} />}
+                {kpis.debtFreeYear && <ReferenceLine yAxisId="left" x={kpis.debtFreeYear} stroke="var(--color-success)" strokeDasharray="4 4" label={{ value: 'Remb.', position: 'top', fontSize: 11, fill: 'var(--color-success)' }} />}
+                {mcBands && (
+                  <>
+                    <Area yAxisId="left" type="monotone" dataKey="debt_p5_p95" fill="#fecaca" stroke="none" name="IC 90%" opacity={0.4} />
+                    <Area yAxisId="left" type="monotone" dataKey="debt_p25_p75" fill="#fca5a5" stroke="none" name="IC 50%" opacity={0.4} />
+                  </>
+                )}
+                <Line yAxisId="left" type="monotone" dataKey="debt" stroke="#dc2626" strokeWidth={3} name="Dette (Md€)" dot={false} />
+                {mcBands && <Line yAxisId="left" type="monotone" dataKey="debt_p50" stroke="#dc2626" strokeWidth={1} strokeDasharray="4 4" name="Médiane MC" dot={false} />}
+                <Line yAxisId="right" type="monotone" dataKey="r_d" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" name="r_d effectif (%)" dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        <div className="chart-container">
-          <h3>Pot de capitalisation (Md€)</h3>
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
-              <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
-              <Tooltip formatter={(v) => {
-                if (Array.isArray(v)) return `[${fmtN(v[0])}, ${fmtN(v[1])}] Md€`
-                return `${typeof v === 'number' ? fmtN(v) : v} Md€`
-              }} />
-              <Legend wrapperStyle={{ fontSize: 13 }} />
-              {mcBands && (
-                <>
-                  <Area type="monotone" dataKey="capi_p5_p95" fill="#bbf7d0" stroke="none" name="IC 90% nom." opacity={0.3} />
-                  <Area type="monotone" dataKey="capi_p25_p75" fill="#86efac" stroke="none" name="IC 50% nom." opacity={0.3} />
-                  <Area type="monotone" dataKey="capiReal_p5_p95" fill="#bfdbfe" stroke="none" name="IC 90% réel" opacity={0.3} />
-                  <Area type="monotone" dataKey="capiReal_p25_p75" fill="#93c5fd" stroke="none" name="IC 50% réel" opacity={0.3} />
-                </>
-              )}
-              <Line type="monotone" dataKey="capi" stroke="#059669" strokeWidth={3} name="Nominal" dot={false} />
-              <Line type="monotone" dataKey="capiReal" stroke="#2563eb" strokeWidth={3} name="Réel (€ 2026)" dot={false} />
-              {mcBands && <Line type="monotone" dataKey="capi_p50" stroke="#059669" strokeWidth={1} strokeDasharray="4 4" name="Médiane MC" dot={false} />}
-            </ComposedChart>
-          </ResponsiveContainer>
+        {/* Tab: Capitalisation */}
+        <div style={{ visibility: activeChartTab === 'capitalisation' ? 'visible' : 'hidden', height: activeChartTab === 'capitalisation' ? 'auto' : 0, overflow: 'hidden' }}>
+          <div className="chart-container">
+            <h3>Pot de capitalisation (Md€)</h3>
+            <ResponsiveContainer width="100%" height={320}>
+              <ComposedChart data={chartData} margin={{ bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
+                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
+                <Tooltip formatter={(v) => {
+                  if (Array.isArray(v)) return `[${fmtN(v[0])}, ${fmtN(v[1])}] Md€`
+                  return `${typeof v === 'number' ? fmtN(v) : v} Md€`
+                }} />
+                <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
+                {mcBands && (
+                  <>
+                    <Area type="monotone" dataKey="capi_p5_p95" fill="#bbf7d0" stroke="none" name="IC 90% nom." opacity={0.3} />
+                    <Area type="monotone" dataKey="capi_p25_p75" fill="#86efac" stroke="none" name="IC 50% nom." opacity={0.3} />
+                    <Area type="monotone" dataKey="capiReal_p5_p95" fill="#bfdbfe" stroke="none" name="IC 90% réel" opacity={0.3} />
+                    <Area type="monotone" dataKey="capiReal_p25_p75" fill="#93c5fd" stroke="none" name="IC 50% réel" opacity={0.3} />
+                  </>
+                )}
+                <Line type="monotone" dataKey="capi" stroke="#059669" strokeWidth={3} name="Nominal" dot={false} />
+                <Line type="monotone" dataKey="capiReal" stroke="#2563eb" strokeWidth={3} name="Réel (€ 2026)" dot={false} />
+                {mcBands && <Line type="monotone" dataKey="capi_p50" stroke="#059669" strokeWidth={1} strokeDasharray="4 4" name="Médiane MC" dot={false} />}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="chart-container">
+            <h3>Spread σ = r_f − (r_d − π) en points de %</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={chartData} margin={{ bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
+                <YAxis width={50} label={{ value: '%', angle: -90, position: 'insideLeft', dx: -4, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
+                <Tooltip formatter={(v) => `${v.toFixed(2)}%`} />
+                <ReferenceLine y={0} stroke="#dc2626" strokeWidth={2} strokeDasharray="8 4" label={{ value: 'σ=0', fill: '#dc2626', fontSize: 13 }} />
+                <Line type="monotone" dataKey="spread" stroke="#7c3aed" strokeWidth={2} name="Spread σ (%)" dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        <div className="chart-container">
-          <h3>Spread σ = r_f − (r_d − π) en points de %</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
-              <YAxis label={{ value: '%', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
-              <Tooltip formatter={(v) => `${v.toFixed(2)}%`} />
-              <ReferenceLine y={0} stroke="#dc2626" strokeWidth={2} strokeDasharray="8 4" label={{ value: 'σ=0', fill: '#dc2626', fontSize: 13 }} />
-              <Line type="monotone" dataKey="spread" stroke="#7c3aed" strokeWidth={2} name="Spread σ (%)" dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="chart-container">
-          <h3>Flux de cotisations (Md€/an)</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={chartData.filter((_, i) => i % 2 === 0)}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
-              <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
-              <Tooltip formatter={(v) => `${v.toFixed(1)} Md€`} />
-              <Legend wrapperStyle={{ fontSize: 13 }} />
-              <Bar dataKey="emplC_s_toCapi" stackId="a" fill="#3b82f6" name="Salarié → capi" />
-              <Bar dataKey="emplC_s_toPayg" stackId="a" fill="#fb923c" name="Salarié → legacy" />
-              <Bar dataKey="emplrToCap_bar" stackId="a" fill="#8b5cf6" name="Employeur → capi" />
-              <Bar dataKey="emplrToLeg_bar" stackId="a" fill="#f97316" name="Employeur → legacy" />
-              <Bar dataKey="levy" stackId="b" fill="#ef4444" name="Prélèvement transition" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="chart-container">
-          <h3>VAN cumulée — Engagements legacy vs. paiements capitalisation (Md€, actualisés à r_d)</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 13 }} />
-              <YAxis label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 13 } }} tick={{ fontSize: 13 }} />
-              <Tooltip formatter={(v) => `${typeof v === 'number' ? fmtN(v) : v} Md€`} />
-              <Legend wrapperStyle={{ fontSize: 13 }} />
-              <Line type="monotone" dataKey="pvLegacyCum" stroke="#ef4444" strokeWidth={3} name="VAN engagements legacy" dot={false} />
-              <Line type="monotone" dataKey="pvCapiPayoutCum" stroke="#059669" strokeWidth={3} name="VAN pensions capi" dot={false} />
-              <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
-            </ComposedChart>
-          </ResponsiveContainer>
+        {/* Tab: Flux & VAN */}
+        <div style={{ visibility: activeChartTab === 'flux' ? 'visible' : 'hidden', height: activeChartTab === 'flux' ? 'auto' : 0, overflow: 'hidden' }}>
+          <div className="chart-container">
+            <h3>Flux de cotisations (Md€/an)</h3>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={chartData.filter((_, i) => i % 2 === 0)} margin={{ bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
+                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
+                <Tooltip formatter={(v) => `${v.toFixed(1)} Md€`} />
+                <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
+                <Bar dataKey="emplC_s_toCapi" stackId="a" fill="#3b82f6" name="Salarié → capi" />
+                <Bar dataKey="emplC_s_toPayg" stackId="a" fill="#fb923c" name="Salarié → legacy" />
+                <Bar dataKey="emplrToCap_bar" stackId="a" fill="#8b5cf6" name="Employeur → capi" />
+                <Bar dataKey="emplrToLeg_bar" stackId="a" fill="#f97316" name="Employeur → legacy" />
+                <Bar dataKey="levy" stackId="b" fill="#ef4444" name="Prélèvement transition" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="chart-container">
+            <h3>VAN cumulée — Engagements legacy vs. paiements capitalisation (Md€, actualisés à r_d)</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart data={chartData} margin={{ bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
+                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
+                <Tooltip formatter={(v) => `${typeof v === 'number' ? fmtN(v) : v} Md€`} />
+                <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
+                <Line type="monotone" dataKey="pvLegacyCum" stroke="#ef4444" strokeWidth={3} name="VAN engagements legacy" dot={false} />
+                <Line type="monotone" dataKey="pvCapiPayoutCum" stroke="#059669" strokeWidth={3} name="VAN pensions capi" dot={false} />
+                <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </section>
 
