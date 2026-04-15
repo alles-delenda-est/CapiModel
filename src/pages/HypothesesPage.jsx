@@ -12,7 +12,7 @@ export default function HypothesesPage() {
 
       {/* --- Preamble --- */}
       <section className="hyp-section hyp-preamble">
-        <h2>Transparence des hypotheses</h2>
+        <h2>Transparence des hypothèses</h2>
         <p>
           Tout modele economique repose sur des hypotheses. Cette page detaille
           <strong> chaque parametre</strong> utilise dans le simulateur : sa valeur par defaut,
