@@ -219,9 +219,12 @@ export default function HypothesesPage() {
               <td>Dépenses initiales E<sub>0</sub></td>
               <td>{defaults.E0} Md€</td>
               <td>
-                Total des pensions versées en 2025, toutes caisses confondues (base,
-                complémentaire, réversion). Environ 14&nbsp;% du PIB&nbsp;— le troisième
-                ratio le plus lourd de l'OCDE.
+                Dépenses cibles du simulateur (pensions contributives de base, complémentaires
+                et réversion), représentant ~12,1&nbsp;% du PIB modélisé. Ce chiffre est 
+                inférieur aux ~13,8&nbsp;% projetés par le COR car il <strong>exclut 
+                délibérément</strong> le minimum vieillesse (ASPA), les départs anticipés 
+                pour invalidité, les déficits de certains régimes spéciaux et les frais 
+                de gestion administrative.
               </td>
               <td>DREES 2022, COR</td>
             </tr>
