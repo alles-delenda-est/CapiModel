@@ -14,44 +14,48 @@ export default function HypothesesPage() {
       <section className="hyp-section hyp-preamble">
         <h2>Transparence des hypothèses</h2>
         <p>
-          Tout modele economique repose sur des hypotheses. Cette page detaille
-          <strong> chaque parametre</strong> utilise dans le simulateur : sa valeur par defaut,
-          ce qu'il represente, pourquoi cette valeur a ete choisie, et ses limites.
-          Les sources academiques et institutionnelles sont indiquees pour chaque parametre.
+          Un modèle économique ne vaut que par les hypothèses qu'il assume. Cette page les
+          met toutes sur la table&nbsp;: <strong>chaque paramètre</strong> du simulateur y
+          figure avec sa valeur par défaut, ce qu'il représente, pourquoi nous l'avons
+          choisie, et où il cesse d'être crédible. Les sources académiques et
+          institutionnelles accompagnent chaque ligne.
         </p>
         <p>
-          Le simulateur permet de modifier tous ces parametres via les curseurs.
-          Les valeurs ci-dessous correspondent au scenario <strong>« Hypotheses de base »</strong>,
-          qui integre les corrections du document critique.
+          Rien n'est figé&nbsp;: tous ces paramètres se règlent au curseur dans le
+          simulateur. Les valeurs ci-dessous correspondent au scénario
+          <strong> «&nbsp;Hypothèses de base&nbsp;»</strong>, celui qui intègre les
+          corrections du document critique et que nous tenons pour la meilleure
+          approximation honnête.
         </p>
       </section>
 
       {/* --- Macro --- */}
       <section className="hyp-section">
-        <h2>Parametres macroeconomiques</h2>
+        <h2>Paramètres macroéconomiques</h2>
         <table className="hyp-table">
           <thead>
-            <tr><th>Parametre</th><th>Valeur</th><th>Explication</th><th>Source</th></tr>
+            <tr><th>Paramètre</th><th>Valeur</th><th>Explication</th><th>Source</th></tr>
           </thead>
           <tbody>
             <tr>
               <td>Inflation π</td>
               <td>{(defaults.pi * 100).toFixed(1)}%</td>
               <td>
-                Taux d'inflation annuel. La BCE vise 2% a moyen terme. Hypothese
-                standard pour les projections longues, mais l'inflation francaise a
-                atteint 5-6% en 2022-2023.
+                Taux d'inflation annuel. La BCE vise 2&nbsp;% à moyen terme&nbsp;: nous
+                retenons cette cible, standard pour toute projection longue, sans oublier
+                que l'inflation française a franchi 5-6&nbsp;% en 2022-2023.
               </td>
               <td>Cible BCE</td>
             </tr>
             <tr>
-              <td>Croissance salariale reelle w<sub>r</sub></td>
+              <td>Croissance salariale réelle w<sub>r</sub></td>
               <td>{(defaults.w_r * 100).toFixed(1)}%</td>
               <td>
-                Hausse annuelle des salaires au-dela de l'inflation. La France a connu
-                ~0,5-0,7% ces dernieres annees (bien en dessous de la moyenne OCDE de 2,5%).
-                Le modele original utilisait 1,5% — la valeur par defaut de 0,7% est plus
-                prudente et alignee avec les donnees recentes.
+                Hausse annuelle des salaires au-delà de l'inflation. La France plafonne à
+                ~0,5-0,7&nbsp;% depuis des années, très en dessous de la moyenne OCDE de
+                2,5&nbsp;%. Le modèle original tablait sur 1,5&nbsp;%&nbsp;: nous ramenons
+                la valeur par défaut à 0,7&nbsp;%, plus prudente et plus fidèle à ce que
+                le pays produit réellement.
               </td>
               <td>INSEE, OCDE Employment Outlook 2025</td>
             </tr>
@@ -59,17 +63,18 @@ export default function HypothesesPage() {
               <td>Horizon N</td>
               <td>{defaults.N} ans</td>
               <td>
-                Nombre d'annees simulees a partir de 2026. 70 ans couvre la totalite
-                de la transition (le dernier retraite legacy disparait vers 2096).
+                Nombre d'années simulées à partir de 2026. 70 ans couvre la transition de
+                bout en bout&nbsp;: le dernier retraité legacy disparaît vers 2096.
               </td>
-              <td>Choix de modelisation</td>
+              <td>Choix de modélisation</td>
             </tr>
             <tr>
               <td>PIB initial</td>
               <td>{defaults.baseGDP.toLocaleString()} Md€</td>
               <td>
-                PIB nominal de la France en 2025. Le PIB croit au taux de croissance
-                nominal des salaires (simplification — suppose une part salariale constante).
+                PIB nominal de la France en 2025. Il croît au rythme nominal des
+                salaires&nbsp;— simplification commode, qui suppose une part salariale
+                constante.
               </td>
               <td>INSEE Comptes nationaux</td>
             </tr>
@@ -77,17 +82,19 @@ export default function HypothesesPage() {
               <td>Dette existante</td>
               <td>{defaults.existingDebt.toLocaleString()} Md€</td>
               <td>
-                Stock de dette souveraine francaise hors dette de transition.
-                114% du PIB en 2025, 3e ratio le plus eleve de la zone euro.
+                Stock de dette souveraine française hors dette de transition. 114&nbsp;%
+                du PIB en 2025, soit le 3<sup>e</sup> ratio le plus élevé de la zone euro.
               </td>
               <td>AFT, Eurostat</td>
             </tr>
           </tbody>
         </table>
         <div className="hyp-warning">
-          <strong>Point de vigilance :</strong> La croissance salariale est le parametre
-          le plus impactant sur les recettes de cotisations. Si la croissance reelle est
-          0,7% au lieu de 1,5%, les cotisations cumulees sont ~30% plus faibles sur 40 ans.
+          <strong>Point de vigilance&nbsp;:</strong> la croissance salariale est le
+          paramètre le plus puissant de tout le modèle. À 0,7&nbsp;% plutôt qu'à
+          1,5&nbsp;%, les cotisations cumulées fondent de ~30&nbsp;% sur 40 ans. Tout
+          repose sur la vigueur de la masse salariale&nbsp;; on comprend pourquoi nous
+          insistons tant sur la libéralisation du marché du travail.
         </div>
       </section>
 
@@ -95,11 +102,11 @@ export default function HypothesesPage() {
       <section className="hyp-section">
         <h2>Règle de transition vers la capitalisation</h2>
         <p>
-          Le modèle original fait basculer 100 % des cotisations salariales vers la
-          capitalisation dès 2026. C'est cohérent avec la logique d'un document technique,
-          mais irréaliste politiquement (demander à un actif de 62 ans d'abandonner 40
-          années de droits PAYG juste avant de partir à la retraite). Deux paramètres
-          permettent désormais de calibrer cette transition.
+          Le modèle original faisait basculer 100&nbsp;% des cotisations salariales vers
+          la capitalisation dès 2026. Parfaitement cohérent sur le papier, politiquement
+          impensable&nbsp;: on ne demande pas à un actif de 62 ans d'abandonner quarante
+          années de droits acquis six mois avant sa retraite. Deux paramètres permettent
+          désormais de lisser cette bascule.
         </p>
 
         <h3>1. Règle d'éligibilité à la capitalisation (<code>cutoffAge</code>)</h3>
@@ -110,39 +117,42 @@ export default function HypothesesPage() {
           <tbody>
             <tr>
               <td><strong>Aucun</strong> (null)</td>
-              <td>Tout le monde bascule dès 2026 (comportement original).</td>
-              <td>Référence pure, utilisée par le scénario <em>Original v5</em>.</td>
+              <td>Tout le monde bascule dès 2026. Comportement du document technique original.</td>
+              <td>Référence pure, retenue par le scénario <em>Original v5</em>.</td>
             </tr>
             <tr>
               <td>60 ans</td>
-              <td>Les &lt;60 ans en 2026 basculent, les &ge;60 restent PAYG. Phase pure-compounding de 6 ans avant premiers versements capi.</td>
-              <td>Réforme minimale — protège uniquement ceux à quelques années de la retraite.</td>
+              <td>Les &lt;60 ans en 2026 basculent, les &ge;60 restent en répartition. Phase <em>pure-compounding</em> de 6 ans avant les premiers versements capi.</td>
+              <td>Réforme minimale&nbsp;: elle ne protège que les actifs à quelques années de la retraite.</td>
             </tr>
             <tr>
               <td>55 ans</td>
-              <td>Phase pure-compounding de 11 ans.</td>
-              <td>Intermédiaire.</td>
+              <td>Phase <em>pure-compounding</em> de 11 ans.</td>
+              <td>Compromis intermédiaire.</td>
             </tr>
             <tr>
               <td><strong>50 ans</strong> (défaut)</td>
               <td>
-                ~65 % des actifs basculent en année 1, 100 % après ~15 ans.
-                Phase pure-compounding de 16 ans. Dette pic réduite de ~32-38 %
-                et intérêts cumulés de ~47 % par rapport au basculement immédiat.
+                ~65&nbsp;% des actifs basculent dès l'année 1, 100&nbsp;% après
+                ~15&nbsp;ans. Phase <em>pure-compounding</em> de 16 ans. La dette pic
+                recule de ~32-38&nbsp;% et les intérêts cumulés de ~47&nbsp;% par rapport
+                au basculement immédiat.
               </td>
               <td>
-                Équilibre entre courage politique (on démarre la réforme pour la moitié
-                de la population) et protection des droits acquis de ceux proches de la retraite.
+                Le point d'équilibre&nbsp;: assez de courage pour engager la moitié de la
+                population, assez de prudence pour préserver les droits acquis de ceux
+                qui approchent de la retraite.
               </td>
             </tr>
           </tbody>
         </table>
         <p>
-          <strong>Mécanique détaillée :</strong> la part de la masse salariale routée vers
-          la capitalisation croît linéairement chaque année avec l'entrée de nouvelles cohortes
-          jeunes dans le marché du travail et le départ à la retraite des plus âgés. La levée
-          λ (prélèvement sur la capi pour rembourser la dette de transition) ne s'active
-          qu'après les premiers versements capi — il n'y a rien à ponctionner avant.
+          <strong>Mécanique détaillée&nbsp;:</strong> la part de la masse salariale
+          orientée vers la capitalisation croît linéairement, au rythme des jeunes
+          cohortes qui entrent sur le marché du travail et des aînés qui partent en
+          retraite. Le prélèvement λ (la ponction sur la capi destinée à rembourser la
+          dette de transition) n'entre en vigueur qu'après les premiers versements
+          capi&nbsp;— on ne ponctionne pas ce qui n'existe pas encore.
         </p>
 
         <h3>2. Croissance de la dette existante (<code>existingDebtGrowth</code>)</h3>
@@ -155,69 +165,72 @@ export default function HypothesesPage() {
               <td>Original v5</td>
               <td>0 %</td>
               <td>
-                La dette française pré-réforme (3 200 Md€) est figée pendant 70 ans
-                alors que le PIB nominal croît de ~2,7 %/an. Le ratio dette/PIB baisse
-                mécaniquement et le taux d'emprunt endogène ne se déclenche jamais.
-                Rétro-compatibilité stricte uniquement.
+                La dette française pré-réforme (3&nbsp;200&nbsp;Md€) reste figée pendant
+                70 ans pendant que le PIB nominal progresse de ~2,7&nbsp;%/an. Le ratio
+                dette/PIB baisse mécaniquement et la prime endogène ne se déclenche
+                jamais. Utile pour la rétro-compatibilité, rien de plus.
               </td>
             </tr>
             <tr>
               <td><strong>Hypothèses de base</strong></td>
               <td><strong>2,7 %</strong></td>
               <td>
-                La dette existante suit le PIB nominal (inflation 2 % + croissance
-                salariale 0,7 %). Le ratio dette/PIB pré-réforme reste constant à ~114 % ;
-                seule la dette de transition fait monter le ratio total.
+                La dette existante suit le PIB nominal (inflation 2&nbsp;% + croissance
+                salariale 0,7&nbsp;%). Le ratio dette/PIB pré-réforme tient à
+                ~114&nbsp;%&nbsp;; seule la dette de transition fait bouger le ratio
+                total. C'est la trajectoire honnête.
               </td>
             </tr>
             <tr>
               <td>Optimiste</td>
               <td>2,0 %</td>
-              <td>Croissance PIB supérieure à la dette existante → désendettement lent.</td>
+              <td>Le PIB croît plus vite que la dette existante, et le pays se désendette doucement.</td>
             </tr>
             <tr>
               <td>Stress</td>
               <td>3,5 %</td>
               <td>
-                Déficits structurels persistants, la dette existante s'aggrave plus vite
-                que le PIB. Le ratio franchit les seuils 150 % puis 200 %, déclenchant la
-                prime de risque endogène sur <em>toute</em> la dette.
+                Déficits structurels persistants, la dette existante dérape plus vite que
+                le PIB. Le ratio franchit 150&nbsp;% puis 200&nbsp;%, et la prime de
+                risque endogène s'applique alors à <em>toute</em> la dette.
               </td>
             </tr>
           </tbody>
         </table>
         <div className="hyp-warning">
-          <strong>Point de vigilance :</strong> ce paramètre est une <em>politique
-          budgétaire implicite</em>, pas un choc aléatoire — il reflète la capacité de
-          l'État à stabiliser ou dégrader sa trajectoire de dette hors-réforme. À 0 %,
-          le modèle sous-estime structurellement le risque souverain ; à 3,5 % il surestime
-          la panique des marchés. La fourchette réaliste pour la France est 2-3 %.
+          <strong>Point de vigilance&nbsp;:</strong> ce paramètre n'est pas un aléa, c'est
+          une <em>politique budgétaire implicite</em>. Il traduit la capacité (ou
+          l'incapacité) de l'État à tenir sa trajectoire de dette hors-réforme. À
+          0&nbsp;%, on efface le risque souverain d'un trait de plume&nbsp;; à
+          3,5&nbsp;%, on peint la panique des marchés avant qu'elle n'arrive. La
+          fourchette honnête pour la France tient dans 2-3&nbsp;%.
         </div>
       </section>
 
       {/* --- Pension System --- */}
       <section className="hyp-section">
-        <h2>Systeme de retraite — depenses legacy</h2>
+        <h2>Système de retraite — dépenses legacy</h2>
         <table className="hyp-table">
           <thead>
-            <tr><th>Parametre</th><th>Valeur</th><th>Explication</th><th>Source</th></tr>
+            <tr><th>Paramètre</th><th>Valeur</th><th>Explication</th><th>Source</th></tr>
           </thead>
           <tbody>
             <tr>
-              <td>Depenses initiales E<sub>0</sub></td>
+              <td>Dépenses initiales E<sub>0</sub></td>
               <td>{defaults.E0} Md€</td>
               <td>
-                Total des pensions versees en 2025, toutes caisses confondues
-                (base, complementaire, reversion). Environ 14% du PIB.
+                Total des pensions versées en 2025, toutes caisses confondues (base,
+                complémentaire, réversion). Environ 14&nbsp;% du PIB&nbsp;— le troisième
+                ratio le plus lourd de l'OCDE.
               </td>
               <td>DREES 2022, COR</td>
             </tr>
             <tr>
-              <td>Retraites R</td>
+              <td>Retraités R</td>
               <td>{defaults.R} millions</td>
               <td>
-                Nombre total de retraites de droit direct. Le ratio cotisants/retraites
-                est d'environ 1,7 et continue de baisser.
+                Nombre total de retraités de droit direct. Le ratio cotisants/retraités
+                s'établit autour de 1,7 et continue de s'éroder, année après année.
               </td>
               <td>CNAV, DREES</td>
             </tr>
@@ -225,28 +238,29 @@ export default function HypothesesPage() {
               <td>Pic cohorte T<sub>pk</sub></td>
               <td>{defaults.Tpk} ans</td>
               <td>
-                Annees avant que les depenses legacy atteignent leur pic.
-                Reflete l'arrivee a la retraite de travailleurs ayant des droits PAYG partiels.
-                Le pic est a +18% au-dessus du niveau initial.
+                Nombre d'années avant que les dépenses legacy atteignent leur maximum.
+                Il traduit l'arrivée à la retraite des actifs porteurs de droits
+                partiels&nbsp;; le pic culmine à +18&nbsp;% au-dessus du niveau initial.
               </td>
-              <td>Calibration parametrique</td>
+              <td>Calibration paramétrique</td>
             </tr>
             <tr>
               <td>Demi-vie cohorte T<sub>hl</sub></td>
               <td>{defaults.Thl} ans</td>
               <td>
-                Vitesse a laquelle les depenses legacy declinent apres le pic.
-                18 ans signifie que la moitie des depenses legacy ont disparu
-                18 ans apres le pic. Extinction complete a t=70.
+                Rythme auquel les dépenses legacy s'éteignent après le pic. 18 ans&nbsp;:
+                c'est le temps qu'il faut pour qu'elles retombent de moitié. Extinction
+                complète à t&nbsp;=&nbsp;70.
               </td>
-              <td>Calibration parametrique</td>
+              <td>Calibration paramétrique</td>
             </tr>
           </tbody>
         </table>
         <div className="hyp-note">
-          <strong>Limite :</strong> Le profil de cohorte est parametrique (courbe analytique),
-          pas actuariel. Il n'utilise pas les tables de mortalite INSEE ou les donnees
-          generation par generation de la CNAV.
+          <strong>Limite&nbsp;:</strong> le profil de cohorte est paramétrique, pas
+          actuariel. Nous le traçons avec une courbe analytique&nbsp;; nous n'injectons
+          ni les tables de mortalité INSEE, ni les données génération par génération de
+          la CNAV. C'est une approximation, assumée comme telle.
         </div>
       </section>
 
@@ -254,15 +268,16 @@ export default function HypothesesPage() {
       <section className="hyp-section">
         <h2>Distribution des pensions — DREES 2022</h2>
         <p>
-          Le modele utilise la distribution reelle des pensions par deciles pour calculer
-          les economies de la courbe Equinoxe. Le decile 10 (pensions &gt;2 900€/mois)
-          concentre la plus grande partie des economies.
+          Le modèle s'appuie sur la distribution réelle des pensions par déciles pour
+          chiffrer les économies de la courbe Équinoxe. Sans surprise, c'est le décile
+          10 (pensions supérieures à 2&nbsp;900&nbsp;€/mois) qui concentre l'essentiel du
+          gain.
         </p>
         <table className="hyp-table hyp-table-compact">
           <thead>
             <tr>
-              <th>Decile</th><th>Borne basse</th><th>Borne haute</th>
-              <th>Midpoint</th>
+              <th>Décile</th><th>Borne basse</th><th>Borne haute</th>
+              <th>Médiane</th>
             </tr>
           </thead>
           <tbody>
@@ -280,18 +295,19 @@ export default function HypothesesPage() {
 
       {/* --- Equinoxe --- */}
       <section className="hyp-section">
-        <h2>Courbe Equinoxe — reductions progressives des pensions</h2>
+        <h2>Courbe Équinoxe — la réduction progressive des pensions</h2>
         <p>
-          Au lieu d'une reduction brutale au-dessus d'un seuil fixe (step function),
-          la courbe Equinoxe applique un <strong>taux de reduction progressif</strong> qui
-          augmente avec le niveau de pension. Aucune reduction en dessous de 1 800€/mois.
-          Les pensions les plus elevees subissent un taux plus fort.
+          Plutôt qu'un couperet au-dessus d'un seuil fixe, la courbe Équinoxe applique un
+          <strong> taux de réduction progressif</strong> qui s'alourdit à mesure que la
+          pension grimpe. Rien n'est retiré en dessous de 1&nbsp;800&nbsp;€/mois&nbsp;;
+          l'effort se concentre sur les pensions les plus élevées, celles qui dépassent
+          de loin ce que la génération concernée a réellement cotisé.
         </p>
         <table className="hyp-table hyp-table-compact">
           <thead>
             <tr>
               <th>Pension brute (€/mois)</th>
-              <th>Taux de reduction</th>
+              <th>Taux de réduction</th>
               <th>Perte mensuelle</th>
             </tr>
           </thead>

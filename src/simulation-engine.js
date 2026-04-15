@@ -294,51 +294,37 @@ export function runSimulation(params) {
     const idxFact = Math.pow(1 + iota, t)      // eq 5
     const hpFact = Math.pow((1 + g_h) * (1 + pi), t)  // eq 6 (nominal house price growth, Fisher)
 
-    // Cohort index (eq 10, modified) — smoothed C¹ continuous.
-    // Structure: boomer bulge peaking at Tpk, exponential decay with half-life Thl,
-    // smoothstep extinction envelope zeroing out by T_extinct. Replaces prior
-    // piecewise linear/exp/linear formulation (which had kinks at Tpk and T_extinct-10).
-    const T_extinct = 70  // years after reform: no legacy pensioners remain
-    let cohIdx
-    if (t >= T_extinct) {
-      cohIdx = 0
-    } else {
-      // Bulge-then-decay core: matches prior values at t=0 (1.0), t=Tpk (1.18),
-      // and t≫Tpk (exponential decay with same half-life).
-      const core = (t <= Tpk)
-        ? 1.0 + 0.18 * smoothstep(t, 0, Tpk)
-        : 1.18 * Math.exp(-(Math.LN2 / Thl) * (t - Tpk))
-      // Smooth extinction envelope over final 15 years (replaces linear blend over 10)
-      const envelope = 1 - smoothstep(t, T_extinct - 15, T_extinct)
-      cohIdx = Math.max(0, core * envelope)
-    }
-
-    // --- Linked demographic kernel (critique fix #3, revised) ---
-    // cohIdx = pre-reform retiree cohort index (decays to 0 by T_extinct).
-    // retireeIdx = TOTAL retirees, calibrated to COR central scenario:
-    //   1.00 in 2026 → ~1.30 peak in ~2060 (t=34) → ~1.25 long-run (t=70).
-    //   INSEE/COR projects 17M → ~22M retirees by 2060, plateau thereafter.
-    //   This replaces the simpler `max(1, cohIdx)` which floored at 1.0 and
-    //   understated long-run aging by ~20-30%.
-    // capi retirees = retireeIdx − cohIdx, gated by T_capi_start with a short ramp.
-    const DEMO_PEAK_T = 34               // ~2060, COR central-scenario retiree peak
-    const DEMO_PEAK_MULT = 1.30          // peak retiree count vs. 2026 baseline
-    const DEMO_LONG_RUN_MULT = 1.25      // post-2060 plateau
+    // --- Retiree kernel (eq 10, revised) ---
+    // `retireeIdx` is the total retiree headcount index (COR central scenario:
+    //   1.00 in 2026 → 1.30 peak ~2060 → 1.25 long-run plateau). The boomer
+    //   bulge is already embedded in this aggregate trajectory.
+    // `cohIdx` is the pre-reform cohort SHARE: fraction of today's retirees
+    //   (plus their contemporaries still retiring) still alive. Monotonic
+    //   smooth decay from 1.0 to 0.0 over T_extinct years. No bulge — the
+    //   bulge lives in retireeIdx, not here. (Tpk/Thl still tune the decay
+    //   shape via a half-life-like parameterisation.)
+    //
+    // Prior formulation used `max(cohIdx, demographicBaseline)` which
+    // created a kink when the two curves crossed (visible dip in total
+    // pensions ~2035). This version separates aggregate demography from
+    // cohort share and routes the two populations cleanly.
+    const T_extinct = 70
+    const cohIdx = t >= T_extinct
+      ? 0
+      : 1 - smoothstep(t, 0, T_extinct)
+    const DEMO_PEAK_T = 34
+    const DEMO_PEAK_MULT = 1.30
+    const DEMO_LONG_RUN_MULT = 1.25
     const demoRampUp = smoothstep(t, 0, DEMO_PEAK_T) * (DEMO_PEAK_MULT - 1)
     const demoDecline = smoothstep(t, DEMO_PEAK_T, T_extinct) * (DEMO_PEAK_MULT - DEMO_LONG_RUN_MULT)
-    const demographicBaseline = 1 + demoRampUp - demoDecline
-    const retireeIdx = Math.max(cohIdx, demographicBaseline)
+    const retireeIdx = 1 + demoRampUp - demoDecline
     // Capi retiree pool builds gradually as successive post-cutoff cohorts cross retirement age.
-    // Span: from first post-cutoff retirement (t = 66 − (cutoffAge−1)) to last (t = 66 − 22).
-    // Default ≈ 27 yrs for cutoffAge=50. Avoids a discontinuity at T_capi_start.
     const capiRampSpan = cutoffAge == null ? 20 : Math.max(5, cutoffAge - 22)
     const capiActivation = smoothstep(t, T_capi_start, T_capi_start + capiRampSpan)
-    // Legacy retirees = pre-reform cohort only; PAYG is closed, so it decays with cohIdx
-    // regardless of total demographic growth. The demographic excess (retireeIdx − cohIdx)
-    // consists of post-cutoff cohorts, who retire into capi once it activates.
-    const capiRetirees = capiActivation * Math.max(0, retireeIdx - cohIdx)
-    // To prevent a gap in total pension coverage during the transition, anyone not covered 
-    // by capi (due to age cutoff or incomplete ramp) falls back to the legacy PAYG system.
+    // Post-reform share of retirees, eligible for capi; gated by capiActivation.
+    const capiRetirees = (1 - cohIdx) * retireeIdx * capiActivation
+    // Legacy retirees = pre-reform cohort + post-reform retirees not yet on capi.
+    // Conservation: legacyRetirees + capiRetirees = retireeIdx exactly.
     const legacyRetirees = retireeIdx - capiRetirees
     // Diagnostic share (fraction of retirees drawing capi)
     const capiRetireeShare = retireeIdx > 0 ? capiRetirees / retireeIdx : 0
@@ -375,8 +361,8 @@ export function runSimulation(params) {
     const effectivePrice = P0 * hpFact * (1 - priceDiscount)
 
     const capitalGain = Math.max(0, effectivePrice - Pbook)  // k€ per unit
-    // Finite program horizon: smooth taper to zero over the last 2 years of T_hlm.
-    const hlmProgramActive = 1 - smoothstep(t, T_hlm - 2, T_hlm)
+    // Finite program horizon: smooth taper to zero over the last 5 years of T_hlm.
+    const hlmProgramActive = 1 - smoothstep(t, T_hlm - 5, T_hlm)
     const hlmProceeds = unitsSold * capitalGain * 0.95 * hlmProgramActive
 
     // Fiscal abatement recovery (eq 18)
@@ -406,6 +392,14 @@ export function runSimulation(params) {
     } else {
       r_d = r_d_base
     }
+    // Hard ceiling on sovereign rate. Without it, the endogenous spread creates
+    // a positive feedback (high debt → high r_d → more debt) that diverges
+    // numerically under stress parameters. 20% matches historical EM-crisis
+    // ceilings (Greece 2012 ~12%, Argentina 2001 ~20%); beyond that level a
+    // sovereign is effectively cut off from markets and this model no longer
+    // applies. Surfacing the cap is more honest than silently exploding.
+    const R_D_CAP = 0.20
+    r_d = Math.min(r_d, R_D_CAP)
 
     // Debt interest (eq 20)
     const debtInterest = debt * r_d
@@ -477,8 +471,18 @@ export function runSimulation(params) {
     const r_c_n_eff = (1 + r_c_eff) * (1 + pi) - 1
 
     const capiAvailable = capi * (1 + r_c_n_eff) + netCapiFlow
-    const capiPayout = Math.max(0, Math.min(capiPayoutDesired, capiAvailable))
-    const capiShortfall = Math.max(0, capiPayoutDesired - capiPayout)
+
+    // State Guarantee (Holistic Resolution): 
+    // If the capitalisation fund goes bankrupt, the state cannot let pensions plummet.
+    // The state guarantees the payout, absorbing any shortfall as new sovereign debt.
+    const capiShortfall = Math.max(0, capiPayoutDesired - capiAvailable)
+    const capiPayout = capiPayoutDesired // State guarantees full desired payout
+    
+    if (capiShortfall > 0) {
+      debt += capiShortfall
+      borrowed += capiShortfall // Track for UI flows
+    }
+
     cumCapiShortfall += capiShortfall
     // Kept for diagnostic continuity with prior API
     const capiPayoutShare = capiPayoutDesired > 0 ? capiPayout / capiPayoutDesired : 0
@@ -486,8 +490,8 @@ export function runSimulation(params) {
     // Total pension expenditure = legacy (PAYG) + capi-funded actually paid
     const totalPensionExp = legacyExp + capiPayout
 
-    // Capitalisation accumulation (eqs 33-34) — net of payouts, no floor needed
-    capi = capiAvailable - capiPayout  // eq 33, adjusted
+    // Capitalisation accumulation (eqs 33-34) — bounded at 0 if bankrupt
+    capi = Math.max(0, capiAvailable - capiPayout)  // eq 33, adjusted
     const capiReal = capi / Math.pow(1 + pi, t + 1)  // eq 34
 
     // Spread (eq 3)
