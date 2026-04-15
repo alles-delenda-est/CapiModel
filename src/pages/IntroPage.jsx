@@ -1,14 +1,135 @@
 
-import { useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import {
+  LineChart, Line, AreaChart, Area, BarChart, Bar, ComposedChart,
+  XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Legend,
+} from 'recharts'
 import { runSimulation, extractKPIs, PRESETS } from '../simulation-engine.js'
 import './IntroPage.css'
 
-// French number formatter: thousands separated by non-breaking space, comma for decimals
+// French number formatter
 const fmt = (n, decimals = 0) =>
   new Intl.NumberFormat('fr-FR', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(n)
+
+const DEMOGRAPHIC_DATA = [
+  { year: 1960, ratio: 4.0 }, { year: 1970, ratio: 3.5 }, { year: 1980, ratio: 3.0 },
+  { year: 1990, ratio: 2.7 }, { year: 2000, ratio: 2.4 }, { year: 2010, ratio: 2.0 },
+  { year: 2020, ratio: 1.7 }, { year: 2030, ratio: 1.5 }, { year: 2040, ratio: 1.3 },
+  { year: 2050, ratio: 1.2 },
+]
+
+const SCROLL_CARDS = [
+  { id: 'horse-demo',    chartKey: 'demographie' },
+  { id: 'horse-debt',    chartKey: 'dette-traj' },
+  { id: 'horse-travail', chartKey: 'shift' },
+  { id: 'horse-immo',   chartKey: 'hlm' },
+  { id: 'reform-1',     chartKey: 'shift' },
+  { id: 'reform-2',     chartKey: 'legacy-capi' },
+  { id: 'reform-3',     chartKey: 'dette-peak' },
+  { id: 'reform-4',     chartKey: 'levy' },
+]
+
+const AX = { fontSize: 12, fill: 'var(--text-secondary)' }
+const MT = { bottom: 24, top: 8, left: 4, right: 8 }
+
+function ScrollChart({ chartKey, chartData, peakDebtYear, debtFreeYear }) {
+  if (!chartData) return null
+  const xAxis = { dataKey: 'year', tick: { fontSize: 12 }, label: { value: 'Année', position: 'insideBottom', offset: -5, style: AX } }
+  switch (chartKey) {
+    case 'demographie':
+      return (<>
+        <p className="scrolly-chart-title">Ratio cotisants / retraités</p>
+        <ResponsiveContainer width="100%" height={260}>
+          <LineChart data={DEMOGRAPHIC_DATA} margin={MT}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis {...xAxis} />
+            <YAxis tick={{ fontSize: 12 }} width={40} domain={[0, 4.5]} />
+            <Tooltip formatter={v => v.toFixed(1)} labelFormatter={l => `Année ${l}`} />
+            <ReferenceLine y={1} stroke="var(--color-danger)" strokeDasharray="6 3" label={{ value: 'Seuil 1:1', fill: 'var(--color-danger)', fontSize: 11 }} />
+            <Line type="monotone" dataKey="ratio" stroke="var(--accent-sienna)" strokeWidth={3} dot={{ r: 4, fill: 'var(--accent-sienna)' }} name="Ratio" />
+          </LineChart>
+        </ResponsiveContainer>
+      </>)
+    case 'dette-traj':
+    case 'dette-peak':
+      return (<>
+        <p className="scrolly-chart-title">Dette de transition (Md€)</p>
+        <ResponsiveContainer width="100%" height={260}>
+          <AreaChart data={chartData} margin={MT}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis {...xAxis} />
+            <YAxis tick={{ fontSize: 12 }} width={55} />
+            <Tooltip formatter={v => `${Math.round(v)} Md€`} labelFormatter={l => `Année ${l}`} />
+            {peakDebtYear && <ReferenceLine x={peakDebtYear} stroke="var(--color-danger)" strokeDasharray="4 4" label={{ value: 'Pic', position: 'top', fontSize: 11, fill: 'var(--color-danger)' }} />}
+            {debtFreeYear && <ReferenceLine x={debtFreeYear} stroke="var(--color-success)" strokeDasharray="4 4" label={{ value: 'Remb.', position: 'top', fontSize: 11, fill: 'var(--color-success)' }} />}
+            <Area type="monotone" dataKey="debt" fill="#fecaca" stroke="#dc2626" strokeWidth={2} name="Dette (Md€)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </>)
+    case 'shift':
+      return (<>
+        <p className="scrolly-chart-title">Part des actifs en capitalisation</p>
+        <ResponsiveContainer width="100%" height={260}>
+          <LineChart data={chartData} margin={MT}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis {...xAxis} />
+            <YAxis tick={{ fontSize: 12 }} width={45} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} />
+            <Tooltip formatter={v => `${(v * 100).toFixed(1)}%`} labelFormatter={l => `Année ${l}`} />
+            <ReferenceLine y={0.5} stroke="var(--border-color)" strokeDasharray="4 4" label={{ value: '50%', fill: 'var(--text-secondary)', fontSize: 11 }} />
+            <Line type="monotone" dataKey="shareWorkersCapi" stroke="var(--accent-sienna)" strokeWidth={3} dot={false} name="Part capitalisation" />
+          </LineChart>
+        </ResponsiveContainer>
+      </>)
+    case 'hlm':
+      return (<>
+        <p className="scrolly-chart-title">Produit annuel des ventes HLM (Md€)</p>
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={chartData} margin={MT}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis {...xAxis} />
+            <YAxis tick={{ fontSize: 12 }} width={45} />
+            <Tooltip formatter={v => `${v.toFixed(1)} Md€`} labelFormatter={l => `Année ${l}`} />
+            <Bar dataKey="hlmProceeds" fill="var(--accent-sienna)" name="HLM (Md€)" radius={[2, 2, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </>)
+    case 'legacy-capi':
+      return (<>
+        <p className="scrolly-chart-title">Dépenses legacy → capitalisation (Md€)</p>
+        <ResponsiveContainer width="100%" height={260}>
+          <ComposedChart data={chartData} margin={MT}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis {...xAxis} />
+            <YAxis tick={{ fontSize: 12 }} width={55} />
+            <Tooltip formatter={v => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} labelFormatter={l => `Année ${l}`} />
+            <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" />
+            <Area type="monotone" dataKey="legacyExp" stackId="p" fill="#fca5a5" stroke="#ef4444" name="Pensions legacy" />
+            <Area type="monotone" dataKey="capiPayout" stackId="p" fill="#86efac" stroke="#059669" name="Pensions capitalisation" />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </>)
+    case 'levy':
+      return (<>
+        <p className="scrolly-chart-title">Prélèvement + remboursements (Md€)</p>
+        <ResponsiveContainer width="100%" height={260}>
+          <ComposedChart data={chartData} margin={MT}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis {...xAxis} />
+            <YAxis tick={{ fontSize: 12 }} width={55} />
+            <Tooltip formatter={v => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} labelFormatter={l => `Année ${l}`} />
+            <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" />
+            <Bar dataKey="levy" fill="var(--accent-sienna)" name="Prélèvement (Md€)" radius={[2, 2, 0, 0]} />
+            <Line type="monotone" dataKey="repaid" stroke="#059669" strokeWidth={2} dot={false} name="Remboursements (Md€)" />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </>)
+    default:
+      return null
+  }
+}
 
 export default function IntroPage({ navigateTo }) {
   // Run baseline scenario to show dynamic numbers
@@ -19,6 +140,40 @@ export default function IntroPage({ navigateTo }) {
   }, [])
 
   const k = baseline.kpis
+
+  const chartDataFull = useMemo(() => baseline.results.map(r => ({
+    year: r.year, debt: r.debt, shareWorkersCapi: r.shareWorkersCapi,
+    hlmProceeds: r.hlmProceeds, legacyExp: r.legacyExp, capiPayout: r.capiPayout,
+    levy: r.levy, repaid: r.repaid,
+  })), [baseline.results])
+
+  const [activeCard, setActiveCard] = useState('horse-demo')
+  const [displayedKey, setDisplayedKey] = useState('horse-demo')
+  const [fading, setFading] = useState(false)
+  const cardRefs = useRef({})
+
+  useEffect(() => {
+    const observers = []
+    SCROLL_CARDS.forEach(({ id }) => {
+      const el = cardRefs.current[id]
+      if (!el) return
+      const obs = new IntersectionObserver(
+        ([entry]) => { if (entry.isIntersecting) setActiveCard(id) },
+        { root: null, rootMargin: '-5% 0px -40% 0px', threshold: 0 }
+      )
+      obs.observe(el)
+      observers.push(obs)
+    })
+    return () => observers.forEach(o => o.disconnect())
+  }, [])
+
+  useEffect(() => {
+    setFading(true)
+    const t = setTimeout(() => { setDisplayedKey(activeCard); setFading(false) }, 150)
+    return () => clearTimeout(t)
+  }, [activeCard])
+
+  const activeChartKey = SCROLL_CARDS.find(c => c.id === displayedKey)?.chartKey
 
   return (
     <div className="intro-page">
@@ -90,11 +245,13 @@ export default function IntroPage({ navigateTo }) {
         </p>
       </section>
 
-      {/* --- The 4 horsemen --- */}
-      <section className="intro-section">
-        <h2>Les Quatre Cavaliers</h2>
-        <div className="mechanism-grid">
-          <div className="mechanism-card">
+      {/* --- Scrollytelling: Horsemen + Virtues + Reform --- */}
+      <div className="scrolly-container">
+        <div className="scrolly-narrative">
+
+          <h2 className="scrolly-section-title">Les Quatre Cavaliers</h2>
+
+          <div className="scroll-card mechanism-card" ref={el => { cardRefs.current['horse-demo'] = el }}>
             <h3>1. La pente démographique</h3>
             <p>
               Comme nous pouvons tous le constater, les Français font de moins en moins
@@ -108,7 +265,8 @@ export default function IntroPage({ navigateTo }) {
               la charge des intérêts que les Français doivent supporter.
             </p>
           </div>
-          <div className="mechanism-card">
+
+          <div className="scroll-card mechanism-card" ref={el => { cardRefs.current['horse-debt'] = el }}>
             <h3>2. La dette</h3>
             <p>
               La conséquence directe de cette pente démographique, ainsi que de la
@@ -119,7 +277,7 @@ export default function IntroPage({ navigateTo }) {
               bien.
             </p>
           </div>
-          <div className="mechanism-card">
+          <div className="scroll-card mechanism-card" ref={el => { cardRefs.current['horse-travail'] = el }}>
             <h3>3. Les marchés sclérosés&nbsp;: le travail</h3>
             <p>
               Premier parmi ceux qui nous empêchent de nous en sortir, notre marché du
@@ -135,7 +293,7 @@ export default function IntroPage({ navigateTo }) {
               de réduire la dépendance qui commence à gangrener notre modèle social.
             </p>
           </div>
-          <div className="mechanism-card">
+          <div className="scroll-card mechanism-card" ref={el => { cardRefs.current['horse-immo'] = el }}>
             <h3>4. Les marchés sclérosés&nbsp;: l'immobilier</h3>
             <p>
               Enfin, mais loin d'être le moins important des facteurs qui nous empêchent
@@ -153,25 +311,17 @@ export default function IntroPage({ navigateTo }) {
               réellement à ce que veulent les gens.
             </p>
           </div>
-        </div>
-      </section>
 
-
-      {/* --- Les Vertus --- */}
-      <section className="intro-les-vertues">
-        <h2>Quatre vertus cardinales (budgétaires) au secours</h2>
-        <p>
-          L'hypothèse de ce simulateur est que la France possède les moyens de s'en
-          sortir, et notamment que nous pourrions nous appuyer sur quatre vertus
-          budgétaires&nbsp;:
-        </p>
-      </section>
-
-      {/* --- The 4 virtues --- */}
-      <section className="intro-section">
-        <h2>Les Quatre Vertus au secours</h2>
-        <div className="mechanism-grid">
-          <div className="mechanism-card">
+          {/* === Virtues interlude — no scroll refs, chart stays on hlm === */}
+          <div className="scrolly-interlude">
+            <h2 className="scrolly-section-title">Quatre vertus cardinales au secours</h2>
+            <p>
+              L'hypothèse de ce simulateur est que la France possède les moyens de s'en
+              sortir, et notamment que nous pourrions nous appuyer sur quatre vertus
+              budgétaires&nbsp;:
+            </p>
+            <div className="mechanism-grid">
+              <div className="mechanism-card">
             <h3>1. La Justice</h3>
             <p>
               La première étape consiste à acter la justice intergénérationnelle et à
@@ -252,31 +402,30 @@ export default function IntroPage({ navigateTo }) {
               donnerons simplement de l'argent aux Français qui en ont besoin.
             </p>
           </div>
-        </div>
-      </section>
+            </div>
+          </div>
 
-      {/* --- The Reform Mechanism --- */}
-      <section className="intro-section">
-        <h2>Quelles sont les clés de notre réforme ?</h2>
-        <p>
-          Une réforme du financement des retraites en France doit accomplir trois
-          choses à la fois&nbsp;:
-        </p>
-        <ol>
-          <li>Réduire la charge actuelle, qui dépasse de loin notre capacité de paiement&nbsp;;</li>
-          <li>Payer les droits acquis, ainsi réduits&nbsp;;</li>
-          <li>Démarrer la capitalisation pour que les générations futures puissent, elles aussi, avoir une retraite.</li>
-        </ol>
-        <p>
-          Pour atteindre ces trois objectifs, nous avons recours à nos quatre vertus,
-          voir ci-dessus.
-        </p>
-        <h2>Comment fonctionne la réforme simulée ?</h2>
-        <p>
-          À partir de 2026, le modèle suppose que&nbsp;:
-        </p>
-        <div className="mechanism-grid">
-          <div className="mechanism-card">
+          {/* === Reform intro === */}
+          <div className="scrolly-interlude">
+            <h2 className="scrolly-section-title">Les Clés de la Réforme</h2>
+            <p>
+              Une réforme du financement des retraites en France doit accomplir trois
+              choses à la fois&nbsp;:
+            </p>
+            <ol>
+              <li>Réduire la charge actuelle, qui dépasse de loin notre capacité de paiement&nbsp;;</li>
+              <li>Payer les droits acquis, ainsi réduits&nbsp;;</li>
+              <li>Démarrer la capitalisation pour que les générations futures puissent, elles aussi, avoir une retraite.</li>
+            </ol>
+            <p>
+              Pour atteindre ces trois objectifs, nous avons recours à nos quatre vertus,
+              voir ci-dessus.
+            </p>
+            <h3>Comment fonctionne la réforme simulée ?</h3>
+            <p>À partir de 2026, le modèle suppose que&nbsp;:</p>
+          </div>
+
+          <div className="scroll-card mechanism-card" ref={el => { cardRefs.current['reform-1'] = el }}>
             <h3>1. Les cotisations salariés basculent — progressivement, par cohorte</h3>
             <p>
               Les 11,3&nbsp;% de cotisations «&nbsp;salariales&nbsp;» (bien que{' '}
@@ -291,7 +440,8 @@ export default function IntroPage({ navigateTo }) {
               immédiat du document technique original.
             </p>
           </div>
-          <div className="mechanism-card">
+
+          <div className="scroll-card mechanism-card" ref={el => { cardRefs.current['reform-2'] = el }}>
             <h3>2. Un fonds legacy absorbe le choc</h3>
             <p>
               Les <strong>220&nbsp;Md€ d'actifs de la CDC (Caisse des dépôts et
@@ -307,7 +457,8 @@ export default function IntroPage({ navigateTo }) {
               davantage la dette.
             </p>
           </div>
-          <div className="mechanism-card">
+
+          <div className="scroll-card mechanism-card" ref={el => { cardRefs.current['reform-3'] = el }}>
             <h3>3. L'État emprunte pour combler le déficit</h3>
             <p>
               Pendant les ~20 premières années, les cotisations «&nbsp;employeurs&nbsp;»,
@@ -319,7 +470,8 @@ export default function IntroPage({ navigateTo }) {
               facilitera une transition crédible et lisible vers un système sans dette.
             </p>
           </div>
-          <div className="mechanism-card">
+
+          <div className="scroll-card mechanism-card" ref={el => { cardRefs.current['reform-4'] = el }}>
             <h3>4. Un prélèvement accélère le remboursement</h3>
             <p>
               Une fois que les premières cohortes éligibles à la capitalisation commencent
@@ -330,8 +482,21 @@ export default function IntroPage({ navigateTo }) {
               C'est le principal levier pour atteindre la dette zéro.
             </p>
           </div>
+
         </div>
-      </section>
+
+        <div className="scrolly-sticky">
+          <div style={{ opacity: fading ? 0 : 1, transition: 'opacity 0.15s ease', width: '100%' }}>
+            <ScrollChart
+              chartKey={activeChartKey}
+              chartData={chartDataFull}
+              peakDebtYear={k.peakDebtYear}
+              debtFreeYear={k.debtFreeYear}
+            />
+          </div>
+        </div>
+
+      </div>
 
       {/* --- Risques majeurs --- */}
       <section className="intro-section">

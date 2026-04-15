@@ -233,10 +233,103 @@
   color: var(--bg-primary);
 }
 
+/* ---- Scrollytelling layout ---- */
+.scrolly-container {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+  margin-bottom: 0.85rem;
+}
+
+.scrolly-narrative {
+  flex: 0 0 56%;
+  min-width: 0;
+}
+
+.scrolly-sticky {
+  flex: 0 0 40%;
+  position: sticky;
+  top: 2rem;
+  height: calc(100vh - 4rem);
+  display: flex;
+  align-items: center;
+  background: var(--bg-tile);
+  border: 1px solid var(--border-ultra-thin);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.scroll-card {
+  margin-bottom: 1.25rem;
+}
+
+.scrolly-section-title {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 1.25rem 0 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border-ultra-thin);
+  letter-spacing: -0.005em;
+}
+
+.scrolly-interlude {
+  background: var(--bg-tile);
+  border: 1px solid var(--border-ultra-thin);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  margin: 1.25rem 0;
+}
+
+.scrolly-interlude h3 {
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0.75rem 0 0.4rem;
+}
+
+.scrolly-interlude p, .scrolly-interlude ol {
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.scrolly-interlude ol {
+  padding-left: 1.25rem;
+}
+
+.scrolly-interlude li {
+  margin-bottom: 0.25rem;
+}
+
+.scrolly-chart-title {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.5rem;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .intro-page { margin: 0; }
   .mechanism-grid { grid-template-columns: 1fr; }
   .baseline-grid { grid-template-columns: repeat(2, 1fr); }
   .cta-buttons { flex-direction: column; align-items: center; }
+  .scrolly-container { flex-direction: column; }
+  .scrolly-narrative { flex: none; width: 100%; }
+  .scrolly-sticky {
+    position: static;
+    height: auto;
+    min-height: 300px;
+    width: 100%;
+    flex: none;
+  }
 }
