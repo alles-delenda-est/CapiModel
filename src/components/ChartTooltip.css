@@ -1,0 +1,59 @@
+.ct-box {
+  background: #fff;
+  border: 1px solid rgba(28, 28, 28, 0.12);
+  border-radius: 6px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  min-width: 180px;
+  max-width: 280px;
+}
+
+.ct-year {
+  font-family: 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #1C1C1C;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(28, 28, 28, 0.1);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ct-annotation {
+  font-size: 0.72rem;
+  color: #D35400;
+  font-family: 'IBM Plex Mono', monospace;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.ct-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.ct-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ct-name {
+  flex: 1;
+  font-size: 0.8rem;
+  color: #595959;
+}
+
+.ct-value {
+  font-family: 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1C1C1C;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

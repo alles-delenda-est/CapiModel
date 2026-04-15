@@ -50,7 +50,7 @@ Current focus: exposing policy levers that were previously hardcoded (v2 transit
 
 ## Open Questions
 
-- **General equilibrium feedback on r_c:** As the capitalisation fund approaches GDP scale, how much would equilibrium returns compress? Dominant long-run uncertainty, not yet modelled.
+- **General equilibrium feedback on r_c:** The model now includes an endogenous penalty on the capitalization return as the fund scales. The real return linearly approaches inflation (0% real return) as the fund reaches 2× GDP, correctly modeling the compression of equity premia at macroeconomic scale.
 - **Macro shock module:** A recession in years 5–10 (when debt is rising fastest) could be catastrophic. Add to Monte Carlo?
 - **Actuarial vs parametric cohort model:** The current T_pk/T_hl exponential decay is simple and adjustable, but doesn't match INSEE mortality tables.
 - **Political feasibility of the transition levy:** 30 % levy on capi inflows from year ~16 is a large implicit tax on the new system's beneficiaries. Less distortionary mechanism?

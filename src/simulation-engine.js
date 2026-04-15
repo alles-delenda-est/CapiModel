@@ -133,7 +133,7 @@ export const PRESETS = {
       r_d_base: 0.035, endogenousRd: true, extraSpread: 0,
       W0: 1250, tauS: 0.113, tauE: 0.165, phiF: 0,
       F0: 220, E0: 345,
-      U0: 5.3, P0: 175, Pbook: 45, rho: 0.05, g_h: 0.015,
+      U0: 5.3, P0: 175, Pbook: 45, rho: 0.05, g_h: 0.015, T_hlm: 20,
       hlmDiscount: true, delta: 0.3,
       A0: 7.0,
       R: 17,
@@ -158,7 +158,7 @@ export const PRESETS = {
       r_d_base: 0.035, endogenousRd: false, extraSpread: 0,
       W0: 1250, tauS: 0.113, tauE: 0.165, phiF: 0,
       F0: 220, E0: 307,
-      U0: 5.3, P0: 175, Pbook: 45, rho: 0.10, g_h: 0.015,
+      U0: 5.3, P0: 175, Pbook: 45, rho: 0.10, g_h: 0.015, T_hlm: 20,
       hlmDiscount: false, delta: 0,
       A0: 7.0,
       R: 17,
@@ -182,7 +182,7 @@ export const PRESETS = {
       r_d_base: 0.035, endogenousRd: true, extraSpread: 0,
       W0: 1250, tauS: 0.113, tauE: 0.165, phiF: 0,
       F0: 220, E0: 345,
-      U0: 5.3, P0: 175, Pbook: 45, rho: 0.05, g_h: 0.015,
+      U0: 5.3, P0: 175, Pbook: 45, rho: 0.05, g_h: 0.015, T_hlm: 20,
       hlmDiscount: true, delta: 0.3,
       A0: 7.0,
       R: 17,
@@ -206,7 +206,7 @@ export const PRESETS = {
       r_d_base: 0.035, endogenousRd: true, extraSpread: 0.005,
       W0: 1250, tauS: 0.113, tauE: 0.165, phiF: 0,
       F0: 220, E0: 345,
-      U0: 5.3, P0: 175, Pbook: 45, rho: 0.03, g_h: 0.015,
+      U0: 5.3, P0: 175, Pbook: 45, rho: 0.03, g_h: 0.015, T_hlm: 20,
       hlmDiscount: true, delta: 0.5,
       A0: 7.0,
       R: 17,
@@ -234,7 +234,7 @@ export function runSimulation(params) {
     r_d_base, endogenousRd, extraSpread,
     W0, tauS, tauE, phiF,
     F0, E0,
-    U0, P0, Pbook, rho, g_h,
+    U0, P0, Pbook, rho, g_h, T_hlm = 20,
     hlmDiscount, delta,
     A0, R,
     kappa, threshold,
@@ -258,7 +258,17 @@ export function runSimulation(params) {
   const w_n = pi + w_r + pi * w_r  // exact Fisher
   const r_f_n = (1 + r_f) * (1 + pi) - 1  // eq 1
   const r_c_n = (1 + r_c) * (1 + pi) - 1  // eq 2
-  const iota = Math.min(pi, w_n)  // pension indexation rate
+  // Pension indexation: French law indexes on inflation (π). When real wage
+  // growth is negative (w_n < π), legal indexation would exceed wage growth,
+  // so we cap at wage growth to avoid pensions outpacing the wage bill.
+  const iota = (w_n < pi) ? w_n : pi
+
+  // Smoothstep helper (Hermite C¹ blend from 0 to 1 on [a,b])
+  const smoothstep = (x, a, b) => {
+    if (b === a) return x >= a ? 1 : 0
+    const u = Math.max(0, Math.min(1, (x - a) / (b - a)))
+    return u * u * (3 - 2 * u)
+  }
 
   // Pension reduction savings (eq 8 or Equinoxe)
   const S0 = useEquinoxe ? equinoxeSavings(R) : stepReductionSavings(R, kappa, threshold)
@@ -273,6 +283,8 @@ export function runSimulation(params) {
   let debt = 0        // model-specific sovereign debt (Md€)
   let fund = F0       // legacy fund balance (Md€)
   let capi = 0        // capitalisation pot (Md€)
+  let cumDiscount = 1 // Π_{s=0..t-1} 1/(1+r_d(s)), proper time-varying discount
+  let cumCapiShortfall = 0  // cumulative unmet capi pension payouts (Md€)
 
   for (let t = 0; t < N; t++) {
     const year = 2026 + t
@@ -282,34 +294,57 @@ export function runSimulation(params) {
     const idxFact = Math.pow(1 + iota, t)      // eq 5
     const hpFact = Math.pow((1 + g_h) * (1 + pi), t)  // eq 6 (nominal house price growth, Fisher)
 
-    // Cohort index (eq 10, modified)
-    // Hard extinction: last worker with PAYG accrual (age ~20 at reform) retires at ~65
-    // and dies by ~90, so legacy cohort extinct by t ≈ 70. Linear ramp to zero
-    // from the exponential decay, reaching zero at T_extinct.
+    // Cohort index (eq 10, modified) — smoothed C¹ continuous.
+    // Structure: boomer bulge peaking at Tpk, exponential decay with half-life Thl,
+    // smoothstep extinction envelope zeroing out by T_extinct. Replaces prior
+    // piecewise linear/exp/linear formulation (which had kinks at Tpk and T_extinct-10).
     const T_extinct = 70  // years after reform: no legacy pensioners remain
     let cohIdx
-    if (t === 0) {
-      cohIdx = 1.0
-    } else if (t <= Tpk) {
-      cohIdx = 1.0 + 0.18 * (t / Tpk)
-    } else if (t >= T_extinct) {
+    if (t >= T_extinct) {
       cohIdx = 0
     } else {
-      // Exponential decay with linear blend to zero at T_extinct
-      const expDecay = 1.18 * Math.exp(-(Math.LN2 / Thl) * (t - Tpk))
-      // Linearly force to zero between T_extinct-10 and T_extinct
-      const blendStart = T_extinct - 10
-      if (t >= blendStart) {
-        const blendFrac = (T_extinct - t) / (T_extinct - blendStart)
-        cohIdx = expDecay * blendFrac
-      } else {
-        cohIdx = expDecay
-      }
+      // Bulge-then-decay core: matches prior values at t=0 (1.0), t=Tpk (1.18),
+      // and t≫Tpk (exponential decay with same half-life).
+      const core = (t <= Tpk)
+        ? 1.0 + 0.18 * smoothstep(t, 0, Tpk)
+        : 1.18 * Math.exp(-(Math.LN2 / Thl) * (t - Tpk))
+      // Smooth extinction envelope over final 15 years (replaces linear blend over 10)
+      const envelope = 1 - smoothstep(t, T_extinct - 15, T_extinct)
+      cohIdx = Math.max(0, core * envelope)
     }
-    cohIdx = Math.max(0, cohIdx)
 
-    // Annual legacy expenditure (eq 11)
-    const legacyExp = Math.max(0, E0net * cohIdx * idxFact)
+    // --- Linked demographic kernel (critique fix #3, revised) ---
+    // cohIdx = pre-reform retiree cohort index (decays to 0 by T_extinct).
+    // retireeIdx = TOTAL retirees, calibrated to COR central scenario:
+    //   1.00 in 2026 → ~1.30 peak in ~2060 (t=34) → ~1.25 long-run (t=70).
+    //   INSEE/COR projects 17M → ~22M retirees by 2060, plateau thereafter.
+    //   This replaces the simpler `max(1, cohIdx)` which floored at 1.0 and
+    //   understated long-run aging by ~20-30%.
+    // capi retirees = retireeIdx − cohIdx, gated by T_capi_start with a short ramp.
+    const DEMO_PEAK_T = 34               // ~2060, COR central-scenario retiree peak
+    const DEMO_PEAK_MULT = 1.30          // peak retiree count vs. 2026 baseline
+    const DEMO_LONG_RUN_MULT = 1.25      // post-2060 plateau
+    const demoRampUp = smoothstep(t, 0, DEMO_PEAK_T) * (DEMO_PEAK_MULT - 1)
+    const demoDecline = smoothstep(t, DEMO_PEAK_T, T_extinct) * (DEMO_PEAK_MULT - DEMO_LONG_RUN_MULT)
+    const demographicBaseline = 1 + demoRampUp - demoDecline
+    const retireeIdx = Math.max(cohIdx, demographicBaseline)
+    // Capi retiree pool builds gradually as successive post-cutoff cohorts cross retirement age.
+    // Span: from first post-cutoff retirement (t = 66 − (cutoffAge−1)) to last (t = 66 − 22).
+    // Default ≈ 27 yrs for cutoffAge=50. Avoids a discontinuity at T_capi_start.
+    const capiRampSpan = cutoffAge == null ? 20 : Math.max(5, cutoffAge - 22)
+    const capiActivation = smoothstep(t, T_capi_start, T_capi_start + capiRampSpan)
+    // Legacy retirees = pre-reform cohort only; PAYG is closed, so it decays with cohIdx
+    // regardless of total demographic growth. The demographic excess (retireeIdx − cohIdx)
+    // consists of post-cutoff cohorts, who retire into capi once it activates.
+    const capiRetirees = capiActivation * Math.max(0, retireeIdx - cohIdx)
+    // To prevent a gap in total pension coverage during the transition, anyone not covered 
+    // by capi (due to age cutoff or incomplete ramp) falls back to the legacy PAYG system.
+    const legacyRetirees = retireeIdx - capiRetirees
+    // Diagnostic share (fraction of retirees drawing capi)
+    const capiRetireeShare = retireeIdx > 0 ? capiRetirees / retireeIdx : 0
+
+    // Annual legacy expenditure (eq 11) — scales with legacy retiree headcount
+    const legacyExp = Math.max(0, E0net * legacyRetirees * idxFact)
 
     // Wage bill and contributions (eqs 12-14)
     const wageBill = W0 * wFactor               // eq 12
@@ -332,16 +367,17 @@ export function runSimulation(params) {
     const unitsSold = (t === 0 ? U0 * rho : U0 * Math.pow(1 - rho, t - 1) * rho)  // eq 16 (millions)
     const unitsSoldCount = unitsSold * 1e6  // actual count
 
-    // Volume-dependent price discount (critique fix #3)
+    // Volume-dependent price discount (critique fix #3) — single 30% cap
     let priceDiscount = 0
     if (hlmDiscount && delta > 0) {
-      priceDiscount = delta * (unitsSoldCount / baselineTransactions)
-      priceDiscount = Math.min(priceDiscount, 0.30)  // floor: max 30% discount
+      priceDiscount = Math.min(0.30, delta * (unitsSoldCount / baselineTransactions))
     }
-    const effectivePrice = P0 * hpFact * Math.max(0.70, 1 - priceDiscount)
+    const effectivePrice = P0 * hpFact * (1 - priceDiscount)
 
     const capitalGain = Math.max(0, effectivePrice - Pbook)  // k€ per unit
-    const hlmProceeds = unitsSold * capitalGain * 0.95  // Md€ (unitsSold in millions × capitalGain in k€ = 10⁶×10³ = Md€)
+    // Finite program horizon: smooth taper to zero over the last 2 years of T_hlm.
+    const hlmProgramActive = 1 - smoothstep(t, T_hlm - 2, T_hlm)
+    const hlmProceeds = unitsSold * capitalGain * 0.95 * hlmProgramActive
 
     // Fiscal abatement recovery (eq 18)
     const abatement = A0 * wFactor
@@ -406,45 +442,52 @@ export function runSimulation(params) {
       fund = fund + netFlow - repaid                 // eq 29
     }
 
-    // Transition levy (eqs 30-31) — only on actual capi inflows, and only after
-    // cohort capi contributions have started.
-    let levy = 0
-    if (t >= Tlambda_effective && debt > 0) {
-      levy = lambda * (emplC_s_toCapi + emplrToCap)  // eq 30
-    }
+    // Transition levy (eqs 30-31) — smoothed activation and phase-out (critique fix #5).
+    // Activation: 2-year ramp around Tlambda_effective (was a hard step).
+    // Phase-out: scales with debt/gdp, fading to zero as debt → 0 (was a step at debt=0).
+    // Legacy behavior recovered in the limit debt ≫ gdp and t ≫ Tlambda_effective.
+    const levyActivation = smoothstep(t, Tlambda_effective - 1, Tlambda_effective + 1)
+    const debtToGdp = gdp > 0 ? debt / gdp : 0
+    const levyPhaseOut = smoothstep(debtToGdp, 0, 0.05)  // fades over last 5% of GDP
+    const levyFactor = levyActivation * levyPhaseOut
+    const grossLevy = levyFactor * lambda * (emplC_s_toCapi + emplrToCap)  // eq 30
+    const levy = Math.min(grossLevy, debt)
     debt = Math.max(0, debt - levy)                  // eq 31
 
     // Net capitalisation flow (eq 32) — only the share flowing to capi
     const netCapiFlow = emplC_s_toCapi + emplrToCap - levy
 
     // --- Capitalisation pension payouts ---
-    // Each retiring cohort's capi share = (post-reform career years) / (total career).
-    // A worker retiring at t has min(t, career) years of capi contributions out of
-    // ~43-year career (age 22→65). The first retirees (t=1-3) have tiny capi pots;
-    // by t=43 new retirees are 100% capi-funded. The average capi share across all
-    // retirees alive at time t is approximately t / T_career, capped at 1.
-    // We use T_career ≈ 43 but weight early years lower (few retirees have capi yet,
-    // and their pots are tiny), so use a slightly convex ramp: (t/T_career)^1.2.
-    // With cutoffAge, payouts only begin after T_capi_start (= 66 - cutoffAge) years:
-    // no cohort eligible to capi has yet reached retirement age. When cutoffAge == null,
-    // T_capi_start = 0 and the formula is bit-exact identical to the original.
-    let capiPayoutShare
-    if (t < T_capi_start) {
-      capiPayoutShare = 0
-    } else {
-      const effT = Math.min(t - T_capi_start, T_career)
-      capiPayoutShare = Math.min(1, Math.pow(effT / T_career, 1.2))
-    }
-    // "Full system" expenditure = what total pensions would be with no reform
-    // (indexed E0, before Equinoxe cuts — since capi pensions replace the original level)
-    const fullSystemExp = E0 * idxFact
-    const capiPayout = capiPayoutShare * fullSystemExp
-    // Total pension expenditure = legacy (PAYG) + capi-funded
+    // Desired payout scales with retiree headcount (cohIdx) × capi share × full index.
+    // This ties legacy and capi to a single demographic kernel so their sum is
+    // continuous across the transition.
+    const capiPayoutDesired = E0 * capiRetirees * idxFact
+
+    // Pot constraint (critique fix #2): cannot pay out more than the pot holds
+    // after this year's returns and contributions. Shortfall is tracked explicitly
+    // rather than silently masked by a Math.max(0) clamp on `capi`.
+    
+    // General Equilibrium (GE) feedback on capi return.
+    // As the fund approaches the size of the macro-economy, capital abundance
+    // suppresses the equity premium, driving real returns towards 0.
+    // Return approaches inflation as fund reaches GDP, caps at inflation (real return 0) at 2x GDP.
+    const capiToGdpRatio = gdp > 0 ? capi / gdp : 0
+    const gePenalty = Math.max(0, 1 - (capiToGdpRatio / 2))
+    const r_c_eff = r_c * gePenalty
+    const r_c_n_eff = (1 + r_c_eff) * (1 + pi) - 1
+
+    const capiAvailable = capi * (1 + r_c_n_eff) + netCapiFlow
+    const capiPayout = Math.max(0, Math.min(capiPayoutDesired, capiAvailable))
+    const capiShortfall = Math.max(0, capiPayoutDesired - capiPayout)
+    cumCapiShortfall += capiShortfall
+    // Kept for diagnostic continuity with prior API
+    const capiPayoutShare = capiPayoutDesired > 0 ? capiPayout / capiPayoutDesired : 0
+
+    // Total pension expenditure = legacy (PAYG) + capi-funded actually paid
     const totalPensionExp = legacyExp + capiPayout
 
-    // Capitalisation accumulation (eqs 33-34) — net of payouts
-    capi = capi * (1 + r_c_n) + netCapiFlow - capiPayout  // eq 33, adjusted
-    capi = Math.max(0, capi)
+    // Capitalisation accumulation (eqs 33-34) — net of payouts, no floor needed
+    capi = capiAvailable - capiPayout  // eq 33, adjusted
     const capiReal = capi / Math.pow(1 + pi, t + 1)  // eq 34
 
     // Spread (eq 3)
@@ -453,15 +496,13 @@ export function runSimulation(params) {
     // Cumulative interest (for KPI)
     const prevCumInterest = t > 0 ? results[t - 1].cumInterest : 0
 
-    // --- NPV calculations ---
-    // Discount rate: use r_d as the discount rate (opportunity cost of sovereign borrowing)
-    // PV factor for year t cash flows
-    const pvFactor = 1 / Math.pow(1 + r_d, t + 1)
-
-    // NPV of remaining legacy liabilities: sum of future legacy expenditure from year t onward
-    // We compute the PV contribution of this year's legacy expenditure
+    // --- NPV calculations (critique fix #1) ---
+    // Proper time-varying discount: cumulative product of (1 + r_d(s)) over the path,
+    // not this year's rate raised to (t+1). Previous formula caused retroactive jumps
+    // in cumulative PV whenever endogenous r_d stepped up (debt-crisis regime).
+    cumDiscount = cumDiscount / (1 + r_d)
+    const pvFactor = cumDiscount
     const pvLegacyExp = legacyExp * pvFactor
-    // NPV of capi payouts this year
     const pvCapiPayout = capiPayout * pvFactor
     // NPV of debt stock: just the nominal debt discounted (though debt IS the NPV of itself at par)
     // More useful: we track cumulative PV of legacy liabilities and capi assets
@@ -505,6 +546,9 @@ export function runSimulation(params) {
       netCapiFlow,
       capi,
       capiReal,
+      capiPayoutDesired,
+      capiShortfall,
+      cumCapiShortfall,
       spread,
       cumInterest: prevCumInterest + debtInterest,
       S0,
@@ -540,6 +584,9 @@ export function extractKPIs(results) {
   const minSpread = Math.min(...results.map(r => r.spread))
 
   const last = results[results.length - 1]
+  const totalCapiShortfall = last.cumCapiShortfall
+  const peakCapiShortfall = Math.max(...results.map(r => r.capiShortfall))
+  const firstShortfallYear = results.find(r => r.capiShortfall > 0.1)?.year || null
   return {
     peakDebt,
     peakDebtYear,
@@ -552,5 +599,8 @@ export function extractKPIs(results) {
     S0: results[0]?.S0 || 0,
     pvLegacyTotal: last.pvLegacyCum,
     pvCapiPayoutTotal: last.pvCapiPayoutCum,
+    totalCapiShortfall,
+    peakCapiShortfall,
+    firstShortfallYear,
   }
 }

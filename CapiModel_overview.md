@@ -32,6 +32,7 @@ Setting `cutoffAge = null` and `existingDebtGrowth = 0` reproduces the v1 docume
 - **4 preset scenarios**: Hypothèses de base, Original v5, Optimiste, Stress Test
 - **~27 adjustable parameters** with tooltip explanations, grouped into collapsible sections with criticality levels (critical / normal / advanced)
 - **Endogenous borrowing rate**: sovereign risk premium rises with the combined (existing + transition) debt/GDP ratio via a piecewise-linear model (thresholds at 150 %, 200 %, 300 %, calibrated to France/US/Italy precedent)
+- **General Equilibrium Return Penalty**: the capitalization fund's real return scales down dynamically, capping at inflation as the fund reaches 2× GDP, to model equity premium compression at macroeconomic scale.
 - **HLM volume-dependent price discount**: accounts for market absorption constraints
 - **Equinoxe progressive pension reductions**: continuous curve above €1,800/month, replacing the original step-function design
 - **Monte Carlo simulation** (100–1,000 runs): correlated stochastic shocks to returns, inflation, wages, and borrowing rates via Web Worker, producing fan charts with confidence intervals
@@ -58,8 +59,9 @@ React 19 + Vite 7 + Recharts. Single-page application, no backend. The `dist/` f
 
 ## Key assumptions and limitations
 
-- **Cohort index is parametric, not actuarial** — uses an 18-year half-life exponential decay with hard extinction at Year 70, rather than INSEE mortality tables
-- **Capitalisation payouts are stylised** — convex ramp `((t − T_capi_start) / 43)^1.2` after the first eligible cohorts retire, rather than individual vintage tracking
+- **Cohort index is parametric, not actuarial** — smoothstep ramp to a 1.18× boomer peak at Year 8, then 18-year half-life exponential decay with a smooth envelope to extinction at Year 70, rather than INSEE mortality tables
+- **Retiree count is COR-calibrated but parametric** — `retireeIdx` follows a smoothstep curve to a 1.30× peak at Year 34 (~2060, aligned with the COR central scenario) then plateaus at 1.25× long-run, floored by `cohIdx`. A full COR lookup table (or INSEE mortality tables) remains an option to implement for higher fidelity.
+- **Capitalisation payouts use a linked kernel** — `capiPayout = E0 × max(0, retireeIdx − cohIdx) × idxFact`, capped at the available pot; any unmet desired payout is surfaced as a cumulative shortfall KPI
 - **No behavioural responses** — retirement timing, labour supply, and precautionary savings effects are excluded
 - **Wage bill grows uniformly** — no cyclical or unemployment shocks in the deterministic run (Monte Carlo has year-persistent regime shifts)
 - **Single national HLM price** — no Île-de-France vs province differentiation

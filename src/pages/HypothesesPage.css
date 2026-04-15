@@ -5,8 +5,9 @@
 
 /* Preamble */
 .hyp-preamble {
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  border: 1px solid var(--color-primary-light);
+  background: var(--bg-tile);
+  border: 1px solid var(--border-ultra-thin);
+  border-left: 3px solid var(--accent-sienna);
 }
 
 /* Sections */
@@ -19,16 +20,20 @@
 }
 
 .hyp-section h2 {
-  font-size: 1.2rem;
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.75rem;
-  border-bottom: 2px solid var(--border-color);
-  padding-bottom: 0.3rem;
+  margin-bottom: 0.85rem;
+  border-bottom: 1px solid var(--border-ultra-thin);
+  padding-bottom: 0.4rem;
+  letter-spacing: -0.005em;
 }
 
 .hyp-section h3 {
-  font-size: 1rem;
-  color: var(--color-primary);
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  color: var(--text-primary);
   margin-top: 0.75rem;
   margin-bottom: 0.4rem;
   font-weight: 600;
@@ -126,7 +131,7 @@
   border-radius: var(--radius);
   border: 1px solid var(--border-color);
   margin: 0.5rem 0;
-  font-family: 'Georgia', serif;
+  font-family: var(--font-mono);
 }
 
 /* Spread list */
@@ -203,8 +208,8 @@
 }
 
 .preset-default {
-  border-color: var(--color-primary-light);
-  background: #eff6ff;
+  border-color: var(--accent-sienna);
+  background: var(--bg-primary);
 }
 
 /* Sources */
