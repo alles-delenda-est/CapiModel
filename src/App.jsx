@@ -153,6 +153,7 @@ export default function App() {
   const [mcProgress, setMcProgress] = useState('')
   const [expertMode, setExpertMode] = useState(false)
   const [activeChartTab, setActiveChartTab] = useState('depenses')
+  const [depensesUnit, setDepensesUnit] = useState('eur')
   const [showAllColumns, setShowAllColumns] = useState(false)
   const workerRef = useRef(null)
 
@@ -240,9 +241,29 @@ export default function App() {
         debt_p50: mc.debt_p50,
         capiPayout: r.capiPayout, totalPensionExp: r.totalPensionExp,
         pvLegacyCum: r.pvLegacyCum, pvCapiPayoutCum: r.pvCapiPayoutCum,
+        gdp: r.gdp,
       }
     })
   }, [results, mcBands])
+
+  const depensesData = useMemo(() => {
+    if (depensesUnit === 'eur') return chartData
+    return chartData.map(r => {
+      const g = r.gdp || 1
+      return {
+        year: r.year,
+        gdp: r.gdp,
+        fundReturn: (r.fundReturn / g) * 100,
+        hlmProceeds: (r.hlmProceeds / g) * 100,
+        abatement: (r.abatement / g) * 100,
+        emplrToLeg: (r.emplrToLeg / g) * 100,
+        legacyExp: (r.legacyExp / g) * 100,
+        capiPayout: (r.capiPayout / g) * 100,
+        totalPensionExp: (r.totalPensionExp / g) * 100,
+      }
+    })
+  }, [chartData, depensesUnit])
+  const depensesUnitLabel = depensesUnit === 'eur' ? 'Md€' : '% PIB'
 
   const p = params
 
@@ -553,15 +574,19 @@ export default function App() {
 
         {/* Tab: Dépenses */}
         <div style={{ visibility: activeChartTab === 'depenses' ? 'visible' : 'hidden', height: activeChartTab === 'depenses' ? 'auto' : 0, overflow: 'hidden' }}>
+          <div className="mode-toggle" style={{ marginBottom: '0.75rem' }}>
+            <button className={`mode-toggle-btn${depensesUnit === 'eur' ? ' active' : ''}`} onClick={() => setDepensesUnit('eur')}>Md€</button>
+            <button className={`mode-toggle-btn${depensesUnit === 'gdp' ? ' active' : ''}`} onClick={() => setDepensesUnit('gdp')}>% PIB</button>
+          </div>
           <div className="chart-container">
-            <h3>Bilan du fonds legacy — Dépenses vs. Revenus (Md€)</h3>
+            <h3>Bilan du fonds legacy — Dépenses vs. Revenus ({depensesUnitLabel})</h3>
             <p className="chart-note">Aire empilée = revenus du fonds. Au-dessus de la ligne rouge = excédent (remboursement dette).</p>
             <ResponsiveContainer width="100%" height={320}>
-              <ComposedChart data={chartData} margin={{ bottom: 20 }}>
+              <ComposedChart data={depensesData} margin={{ bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
-                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
-                <Tooltip formatter={(v) => `${v.toFixed(1)} Md€`} />
+                <YAxis width={55} label={{ value: depensesUnitLabel, angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
+                <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} ${depensesUnitLabel}`} />
                 <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
                 <Area type="monotone" dataKey="fundReturn" stackId="income" fill="#60a5fa" stroke="#3b82f6" name="Rendement fonds" />
                 <Area type="monotone" dataKey="hlmProceeds" stackId="income" fill="#34d399" stroke="#10b981" name="HLM" />
@@ -572,13 +597,13 @@ export default function App() {
             </ResponsiveContainer>
           </div>
           <div className="chart-container">
-            <h3>Dépenses retraites — Legacy (PAYG) vs. Capitalisation (Md€)</h3>
+            <h3>Dépenses retraites — Legacy (PAYG) vs. Capitalisation ({depensesUnitLabel})</h3>
             <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={chartData} margin={{ bottom: 20 }}>
+              <ComposedChart data={depensesData} margin={{ bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
-                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
-                <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} />
+                <YAxis width={55} label={{ value: depensesUnitLabel, angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
+                <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} ${depensesUnitLabel}`} />
                 <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
                 <Area type="monotone" dataKey="legacyExp" stackId="pensions" fill="#fca5a5" stroke="#ef4444" name="Pensions legacy (PAYG)" />
                 <Area type="monotone" dataKey="capiPayout" stackId="pensions" fill="#86efac" stroke="#059669" name="Pensions capitalisation" />
