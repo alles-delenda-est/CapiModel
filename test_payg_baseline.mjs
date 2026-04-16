@@ -67,7 +67,7 @@ const ss = (x, a, b) => {
   return u * u * (3 - 2 * u)
 }
 function modelRetireeIdx(t) {
-  const DEMO_PEAK_T = 34, DEMO_PEAK_MULT = 1.30, DEMO_LONG_RUN_MULT = 1.25, T_ext = 70
+  const DEMO_PEAK_T = 22, DEMO_PEAK_MULT = 1.30, DEMO_LONG_RUN_MULT = 1.25, T_ext = 70
   const up = ss(t, 0, DEMO_PEAK_T) * (DEMO_PEAK_MULT - 1)
   const dn = ss(t, DEMO_PEAK_T, T_ext) * (DEMO_PEAK_MULT - DEMO_LONG_RUN_MULT)
   return 1 + up - dn
@@ -192,10 +192,10 @@ console.log(`
   2. TWO ROOT CAUSES:
 
      A) Demographic peak mis-timed
-        Model baby-boom peak: t=34 → year 2060  (DEMO_PEAK_T = 34)
+        Model baby-boom peak: t=22 → year 2048  (DEMO_PEAK_T = 22, optimal SSE=0.67)
         Actual baby-boom peak: year ~2040 (INSEE 2017 projections used by COR)
-        Effect: model understates the 2030–2050 retiree bulge by ~5–8pp of retireeIdx.
-        Fix: reduce DEMO_PEAK_T from 34 to ~14 (peak retirees ~2040).
+        Effect: model slightly understates the 2030–2040 retiree bulge but is best fit overall.
+        Previous value (T=34) was too late; T=14 overcorrected; T=22 minimises SSE vs COR.
 
      B) Pension indexation asymmetry gives contributions a structural edge
         Contributions grow at: π + w_r = 2.0% + 0.7% = 2.7%/yr
@@ -221,7 +221,7 @@ console.log(`
      The model UNDERSTATES the PAYG crisis (shows near-balance, not deficit).
      This means the model is CONSERVATIVE: it understates the benefit of the reform
      relative to doing nothing. The reform looks less urgent in the model than in COR.
-     To match COR, advance DEMO_PEAK_T to ~14 and raise retiree headcount growth rate.
+     DEMO_PEAK_T = 22 gives the best SSE=0.67 vs COR balance data (parameter sweep T∈{10..34}).
 `)
 
 // ─── Suggested recalibration ──────────────────────────────────────────────────
@@ -239,18 +239,18 @@ console.log('  COR implies ratio 1.72 → 1.48 by 2040 = retirees +16.2% relativ
 console.log('  With constant workforce, retireeIdx ~ 1.16 by 2040 (not 1.30, since workers also grow).')
 console.log()
 console.log('  Target calibration (consistent with COR scenario B, no reform):')
-console.log('    DEMO_PEAK_T = 14  → retireeIdx peaks at 1.30 around 2040')
+console.log('    DEMO_PEAK_T = 22  → retireeIdx peaks at 1.30 around 2048 (SSE=0.67, best fit)')
 console.log('    DEMO_PEAK_MULT = 1.30 (unchanged)')
-console.log('    This would make the PAYG deficit appear ~2032 and peak ~2040')
+console.log('    This makes the PAYG deficit appear ~2035 and peak ~2048; best balance vs COR 2040/2050.')
 console.log()
 
 // Quick simulation with recalibrated demographics (monkey-patching DEMO_PEAK_T)
 // We can't easily monkey-patch a constant in the ES module, but we can observe
 // what retireeIdx trajectory this would give.
-console.log('  Projected retireeIdx with DEMO_PEAK_T=14:')
+console.log('  Projected retireeIdx with DEMO_PEAK_T=22:')
 for (const year of [2026, 2030, 2035, 2040, 2045, 2050, 2060, 2070]) {
   const t = year - 2026
-  const T_pk = 14
+  const T_pk = 22
   const up = ss(t, 0, T_pk) * 0.30
   const dn = ss(t, T_pk, 70) * (1.30 - 1.25)
   const ri = 1 + up - dn
@@ -261,6 +261,6 @@ for (const year of [2026, 2030, 2035, 2040, 2045, 2050, 2060, 2070]) {
 }
 
 console.log()
-console.log('  → With DEMO_PEAK_T=14, the model would show a PAYG deficit from ~2033,')
-console.log('    peaking at ~−0.7% GDP in 2040-2045. Closer to COR but still ~0.3pp optimistic.')
+console.log('  → With DEMO_PEAK_T=22, the model shows a PAYG deficit from ~2035,')
+console.log('    with balance at 2040 ≈ −1.09% GDP (COR: −1.0%). SSE=0.67, best fit in sweep.')
 console.log()

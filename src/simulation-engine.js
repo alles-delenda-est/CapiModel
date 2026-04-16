@@ -312,7 +312,7 @@ export function runSimulation(params) {
     const cohIdx = t >= T_extinct
       ? 0
       : 1 - smoothstep(t, 0, T_extinct)
-    const DEMO_PEAK_T = 34
+    const DEMO_PEAK_T = 22
     const DEMO_PEAK_MULT = 1.30
     const DEMO_LONG_RUN_MULT = 1.25
     const demoRampUp = smoothstep(t, 0, DEMO_PEAK_T) * (DEMO_PEAK_MULT - 1)
