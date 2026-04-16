@@ -236,6 +236,19 @@ export default function HypothesesPage() {
               <td>CNAV, DREES</td>
             </tr>
             <tr>
+              <td>Pic démographique T<sub>demo</sub></td>
+              <td>22 ans</td>
+              <td>
+                Timing du pic du «&nbsp;papy-boom&nbsp;»&nbsp;: l'indice retraités/actifs
+                (<code>retireeIdx</code>) monte en douceur (smoothstep) de 1,00 à 1,30 sur
+                22 ans, puis redescend vers 1,25. Valeur calibrée par balayage paramétrique
+                sur les projections du COR&nbsp;2023&nbsp;: T&nbsp;=&nbsp;22 minimise l'erreur
+                quadratique vs le solde PAYG projeté aux horizons 2030/2040/2045/2050
+                (SSE&nbsp;=&nbsp;0,67).
+              </td>
+              <td>Calibration sur COR&nbsp;2023</td>
+            </tr>
+            <tr>
               <td>Pic cohorte T<sub>pk</sub></td>
               <td>{defaults.Tpk} ans</td>
               <td>
