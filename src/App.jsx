@@ -379,7 +379,7 @@ export default function App() {
 
             {expertMode && (<CollapsibleSection title="HLM" level="normal">
               <EnhancedSlider id="rho" label="Taux de liquidation ρ" value={p.rho}
-                onChange={v => setParam('rho', v)} min={0.01} max={0.15} step={0.01} unit="" decimals={2} tip={TIPS.rho}
+                onChange={v => setParam('rho', v)} min={0} max={0.15} step={0.01} unit="" decimals={2} tip={TIPS.rho}
                 defaultValue={PRESETS.default.params.rho} warningAbove={0.10} />
               <Toggle label="Décote volume HLM" checked={p.hlmDiscount}
                 onChange={v => setParam('hlmDiscount', v)} tip={TIPS.hlmDiscount} />
