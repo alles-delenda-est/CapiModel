@@ -110,7 +110,6 @@
 .hyp-table td:nth-child(2) {
   font-weight: 600;
   color: var(--accent-sienna);
-  white-space: nowrap;
 }
 
 .hyp-table tbody tr:nth-child(even) {
