@@ -1,8 +1,8 @@
 import { PRESETS, DREES_DECILES, equinoxeReductionRate } from '../simulation-engine.js'
 import './HypothesesPage.css'
 
-// Generate Equinoxe curve sample points for the table
-const EQUINOXE_POINTS = [1800, 2000, 2500, 3000, 3500, 4000, 5000]
+// Sample points illustrating the Équinoxe step function — one per bracket + above cap
+const EQUINOXE_POINTS = [1500, 1900, 2250, 2750, 3500, 5000, 7000]
 
 export default function HypothesesPage() {
   const defaults = PRESETS.default.params
@@ -307,21 +307,32 @@ export default function HypothesesPage() {
         </table>
       </section>
 
-      {/* --- Equinoxe --- */}
+      {/* --- Rééquilibrage Équinoxe --- */}
       <section className="hyp-section">
-        <h2>Courbe Équinoxe — la réduction progressive des pensions</h2>
+        <h2>Rééquilibrage Équinoxe — proposition du Parti Équinoxe</h2>
         <p>
-          Plutôt qu'un couperet au-dessus d'un seuil fixe, la courbe Équinoxe applique un
-          <strong> taux de réduction progressif</strong> qui s'alourdit à mesure que la
-          pension grimpe. Rien n'est retiré en dessous de 1&nbsp;800&nbsp;€/mois&nbsp;;
-          l'effort se concentre sur les pensions les plus élevées, celles qui dépassent
-          de loin ce que la génération concernée a réellement cotisé.
+          Le rééquilibrage Équinoxe est une proposition portée par le{' '}
+          <a href="https://parti-equinoxe.fr/contre-budget-2026/" target="_blank" rel="noopener noreferrer">
+            parti politique Équinoxe
+          </a>{' '}dans le cadre de leur contre-budget 2026. Étant un document
+          «&nbsp;d'urgence&nbsp;» sorti pour les élections de 2026, il n'y a pas de
+          réformes de fond&nbsp;; néanmoins cette partie de leur proposition me semble
+          un prérequis aux réformes de fond telles que proposées par ce modèle, et
+          donc y est intégrée.
+        </p>
+        <p>
+          Plutôt que de bêtement couper les retraites au-dessus d'un certain seuil, ils
+          proposent d'appliquer un taux de réduction progressif qui s'alourdit à mesure
+          que la pension grimpe. Rien n'est retiré en dessous de 1&nbsp;800&nbsp;€/mois&nbsp;;
+          l'effort se concentre sur les pensions qui dépassent de loin ce que la génération
+          concernée a réellement cotisé. Le total des économies est ~26&nbsp;Md€/an.
         </p>
         <table className="hyp-table hyp-table-compact">
           <thead>
             <tr>
               <th>Pension brute (€/mois)</th>
               <th>Taux de réduction</th>
+              <th>Pension après réduction</th>
               <th>Perte mensuelle</th>
             </tr>
           </thead>
@@ -330,18 +341,19 @@ export default function HypothesesPage() {
               const rate = equinoxeReductionRate(p)
               return (
                 <tr key={p}>
-                  <td>{p.toLocaleString()} €</td>
-                  <td>{(rate * 100).toFixed(1)}%</td>
-                  <td>{(p * rate).toFixed(0)} €</td>
+                  <td>{p.toLocaleString()}&nbsp;€</td>
+                  <td>{(rate * 100).toFixed(1)}&nbsp;%</td>
+                  <td>{Math.round(p * (1 - rate)).toLocaleString()}&nbsp;€</td>
+                  <td>{Math.round(p * rate).toLocaleString()}&nbsp;€</td>
                 </tr>
               )
             })}
           </tbody>
         </table>
         <div className="hyp-note">
-          Cette structure progressive evite l'effet de seuil (notch) de la step function
-          et est juridiquement plus robuste vis-a-vis du principe d'egalite. Le total
-          des economies est ~26 Md€/an (vs. 13-16 Md€ pour la step function).
+          Source&nbsp;: <em>Contre-Budget 2026</em>, Parti Équinoxe. Le taux s'applique
+          à la pension totale (step function par tranche, plafonnée à 20&nbsp;% au-delà
+          de 4&nbsp;000&nbsp;€/mois).
         </div>
       </section>
 

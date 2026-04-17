@@ -15,34 +15,15 @@ export const DREES_DECILES = [
   { lo: 2900, hi: 6000, mid: 4120 },
 ]
 
-// --- Equinoxe progressive reduction curve anchor points ---
-// r(p) = reduction rate as a function of monthly brut pension p
-const EQUINOXE_ANCHORS = [
-  { p: 1800, r: 0.001 },
-  { p: 2000, r: 0.004 },
-  { p: 2500, r: 0.041 },
-  { p: 3000, r: 0.10  },
-  { p: 4000, r: 0.20  },
-]
-
-// Slope for extrapolation above 4000: (0.20 - 0.10) / (4000 - 3000) = 0.0001 per €
-const EQUINOXE_EXTRAPOLATION_SLOPE = 0.0001
-
-/**
- * Equinoxe reduction rate for a given monthly pension level.
- * Piecewise linear interpolation between anchor points.
- */
+// --- Rééquilibrage Équinoxe — step function per bracket (Contre-Budget 2026) ---
+// Rates applied to total pension; hard cap at 20% above 4 000 €/month.
 export function equinoxeReductionRate(p) {
   if (p <= 1800) return 0
-  const anchors = EQUINOXE_ANCHORS
-  for (let i = 0; i < anchors.length - 1; i++) {
-    if (p <= anchors[i + 1].p) {
-      const frac = (p - anchors[i].p) / (anchors[i + 1].p - anchors[i].p)
-      return anchors[i].r + frac * (anchors[i + 1].r - anchors[i].r)
-    }
-  }
-  // Above 4000: extrapolate linearly
-  return anchors[anchors.length - 1].r + (p - anchors[anchors.length - 1].p) * EQUINOXE_EXTRAPOLATION_SLOPE
+  if (p <= 2000) return 0.001   // 0,1 %
+  if (p <= 2500) return 0.004   // 0,4 %
+  if (p <= 3000) return 0.041   // 4,1 %
+  if (p <= 4000) return 0.10    // 10 %
+  return 0.20                    // 20 % — capped per Équinoxe proposal
 }
 
 /**
@@ -126,7 +107,7 @@ export function calculateBorrowingRate(debtRatio, options = {}) {
 export const PRESETS = {
   default: {
     label: 'Hypothèses de base',
-    description: 'r_c=3%, w_r=0.7%, E₀=345 Md€, réductions Equinoxe, taux endogènes',
+    description: 'r_c=3%, w_r=0.7%, E₀=345 Md€, rééquilibrage Équinoxe, taux endogènes',
     params: {
       N: 70, pi: 0.02, w_r: 0.007,
       r_f: 0.03, r_c: 0.03,

@@ -39,7 +39,7 @@ const TIPS = {
   phiF: "Part minimum des cotisations employeur réservée à la capitalisation, même pendant la phase de déficit legacy.",
   lambda: "Fraction des flux de capitalisation prélevée pour accélérer le remboursement de la dette de transition.",
   Tlambda: "Année (après la réforme) à partir de laquelle le prélèvement sur la capitalisation s'active.",
-  useEquinoxe: "Courbe progressive de réduction des pensions élevées (Equinoxe) vs. réduction fixe au-dessus d'un seuil.",
+  useEquinoxe: "Réduction progressive des pensions élevées par tranche selon la proposition du Parti Équinoxe (plafonnée à 20 % au-delà de 4 000 €/mois). Alternative : réduction uniforme au-dessus d'un seuil fixe.",
   kappa: "Taux de réduction appliqué aux pensions au-dessus du seuil (mode step function uniquement).",
   threshold: "Seuil mensuel de pension brute au-dessus duquel la réduction s'applique (mode step function).",
   F0: "Valeur des actifs CDC (hors Livret A) transférés au fonds legacy le jour de la réforme.",
@@ -416,7 +416,7 @@ export default function App() {
             </CollapsibleSection>)}
 
             {expertMode && (<CollapsibleSection title="Réductions pensions" level="advanced">
-              <Toggle label="Courbe Equinoxe (vs. step function)"
+              <Toggle label="Rééquilibrage Équinoxe (vs. réduction uniforme)"
                 checked={p.useEquinoxe} onChange={v => setParam('useEquinoxe', v)} tip={TIPS.useEquinoxe} />
               {!p.useEquinoxe && (
                 <>
@@ -497,7 +497,7 @@ export default function App() {
           <div className="kpi-card">
             <h3>Économies pension S₀</h3>
             <div className="kpi-value">{kpis.S0.toFixed(1)} Md€/an</div>
-            <div className="kpi-sub">{p.useEquinoxe ? 'Equinoxe' : 'Step function'}</div>
+            <div className="kpi-sub">{p.useEquinoxe ? 'Rééquilibrage Équinoxe' : 'Réduction uniforme'}</div>
           </div>
           <div className="kpi-card">
             <h3>Position nette</h3>
