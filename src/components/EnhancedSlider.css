@@ -193,17 +193,21 @@
     height: 32px;
   }
 
-  /* Tooltips: position below on mobile (more room) */
+  /* Tooltips: fixed at bottom of viewport on mobile — prevents any edge overflow */
   .es-tip-icon::after {
-    bottom: auto;
-    top: calc(100% + 8px);
-    max-width: 240px;
+    position: fixed;
+    bottom: 24px;
+    left: 16px;
+    right: 16px;
+    top: auto;
+    width: auto;
+    max-width: none;
+    transform: none;
+    text-align: left;
+    z-index: 9999;
   }
 
   .es-tip-icon::before {
-    bottom: auto;
-    top: calc(100% + 2px);
-    border-top-color: transparent;
-    border-bottom-color: #1e293b;
+    display: none;
   }
 }
