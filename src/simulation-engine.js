@@ -103,6 +103,25 @@ export function calculateBorrowingRate(debtRatio, options = {}) {
   return baseRate + premium + extraSpread
 }
 
+// --- Demographic profiles ---
+// Drive the retireeIdx trajectory: 1.00 at t=0 → peak at peakT → longRunMult plateau.
+// cor_central reproduces the previous hardcoded curve bit-exact.
+export const DEMO_PROFILES = {
+  cor_central: { peakMult: 1.30, longRunMult: 1.25, peakT: 22 },
+  realistic:   { peakMult: 1.40, longRunMult: 1.35, peakT: 22 },
+  reformed:    { peakMult: 1.30, longRunMult: 1.25, peakT: 22 },
+}
+
+function resolveDemoProfile(p) {
+  if (p == null) return DEMO_PROFILES.cor_central
+  if (typeof p === 'string') return DEMO_PROFILES[p] ?? DEMO_PROFILES.cor_central
+  return {
+    peakMult:    p.peakMult    ?? 1.30,
+    longRunMult: p.longRunMult ?? 1.25,
+    peakT:       p.peakT       ?? 22,
+  }
+}
+
 // --- Preset configurations ---
 export const PRESETS = {
   default: {
@@ -228,7 +247,12 @@ export function runSimulation(params) {
     rpThreshold1, rpSlope1,
     rpThreshold2, rpSlope2,
     rpThreshold3, rpSlope3,
+    demoProfile = 'cor_central',
+    R_ramp = 0,
+    R_ramp_years = 10,
   } = params
+
+  const demo = resolveDemoProfile(demoProfile)
 
   // Transition rule derived values (cutoff-based cohort routing)
   const T_career = 43
@@ -293,11 +317,8 @@ export function runSimulation(params) {
     const cohIdx = t >= T_extinct
       ? 0
       : 1 - smoothstep(t, 0, T_extinct)
-    const DEMO_PEAK_T = 22
-    const DEMO_PEAK_MULT = 1.30
-    const DEMO_LONG_RUN_MULT = 1.25
-    const demoRampUp = smoothstep(t, 0, DEMO_PEAK_T) * (DEMO_PEAK_MULT - 1)
-    const demoDecline = smoothstep(t, DEMO_PEAK_T, T_extinct) * (DEMO_PEAK_MULT - DEMO_LONG_RUN_MULT)
+    const demoRampUp = smoothstep(t, 0, demo.peakT) * (demo.peakMult - 1)
+    const demoDecline = smoothstep(t, demo.peakT, T_extinct) * (demo.peakMult - demo.longRunMult)
     const retireeIdx = 1 + demoRampUp - demoDecline
     // Capi retiree pool builds gradually as successive post-cutoff cohorts cross retirement age.
     const capiRampSpan = cutoffAge == null ? 20 : Math.max(5, cutoffAge - 22)
@@ -313,8 +334,15 @@ export function runSimulation(params) {
     // Annual legacy expenditure (eq 11) — scales with legacy retiree headcount
     const legacyExp = Math.max(0, E0net * legacyRetirees * idxFact)
 
-    // Wage bill and contributions (eqs 12-14)
-    const wageBill = W0 * wFactor               // eq 12
+    // Wage bill and contributions (eqs 12-14).
+    // laborRamp models labor-market reform (participation/employment channel only):
+    // employed headcount grows by R_ramp over R_ramp_years (smoothstep), which
+    // proportionally scales the total wage bill. Default R_ramp=0 reproduces
+    // baseline behavior bit-exact.
+    const laborRamp = R_ramp === 0
+      ? 1
+      : 1 + R_ramp * smoothstep(t, 0, R_ramp_years)
+    const wageBill = W0 * wFactor * laborRamp   // eq 12
     const emplC_s = wageBill * tauS              // eq 13
     const emplC_e = wageBill * tauE              // eq 14
 
@@ -499,6 +527,9 @@ export function runSimulation(params) {
       t,
       year,
       cohIdx,
+      retireeIdx,
+      legacyRetirees,
+      capiRetirees,
       legacyExp,
       capiPayout,
       totalPensionExp,

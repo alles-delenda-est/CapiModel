@@ -12,6 +12,7 @@ import CollapsibleSection from './components/CollapsibleSection.jsx'
 import CutoffSelector from './components/CutoffSelector.jsx'
 import IntroPage from './pages/IntroPage.jsx'
 import SimplifiedView from './pages/SimplifiedView.jsx'
+import TransitionWalkthrough from './pages/TransitionWalkthrough.jsx'
 import HypothesesPage from './pages/HypothesesPage.jsx'
 
 // --- Tooltip descriptions for each parameter (layman-friendly) ---
@@ -278,6 +279,7 @@ export default function App() {
 
       {currentPage === 'intro' && <IntroPage navigateTo={navigateTo} />}
       {currentPage === 'simple' && <SimplifiedView navigateTo={navigateTo} />}
+      {currentPage === 'walkthrough' && <TransitionWalkthrough navigateTo={navigateTo} />}
       {currentPage === 'hypotheses' && <HypothesesPage />}
       {currentPage === 'simulateur' && <>
 
