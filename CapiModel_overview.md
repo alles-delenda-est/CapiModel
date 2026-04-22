@@ -27,6 +27,24 @@ The v1 document assumed every worker instantly switched to capitalisation in 202
 
 Setting `cutoffAge = null` and `existingDebtGrowth = 0` reproduces the v1 document bit-exactly (the `Original v5` preset).
 
+## Transition Walkthrough (`#/walkthrough`)
+
+A 6-stage cumulative walkthrough that builds the reform stack one layer at a time:
+
+1. **Status quo** — realistic demographics (peak 1.40× / plateau 1.35×), no reforms
+2. **Équinoxe** — progressive pension reductions on high pensions
+3. **Capitalisation (brut)** — workers ≤50 switch to capi; no transition levy yet
+4. **HLM/CdC + transition levy** — HLM asset sales + 30% levy on capi flows
+5. **Labor market reform** — +10% employment over 8 years (participation channel only; calibrated via grid search)
+6. **Demographic reform** — demographic profile softens back toward COR central
+
+Each stage adds one reform component. Two layered charts (pension flows + debt/interest) show all stages up to the current one, with prior stages rendered at 25% opacity. Per-stage KPI deltas (peak debt, debt-free year, cumulative interest, net position) quantify the marginal impact of each reform.
+
+### Engine extensions for the walkthrough
+
+- **`demoProfile`** parameter: named demographic trajectories (`cor_central`, `realistic`, `reformed`). Default `cor_central` preserves prior behaviour.
+- **`R_ramp` / `R_ramp_years`** parameters: labor-market reform (employment channel). Default `R_ramp=0` — no effect on existing pages.
+
 ## Key features
 
 - **4 preset scenarios**: Hypothèses de base, Original v5, Optimiste, Stress Test
@@ -61,7 +79,7 @@ React 19 + Vite 7 + Recharts. Single-page application, no backend. The `dist/` f
 ## Key assumptions and limitations
 
 - **Cohort index is parametric, not actuarial** — smoothstep ramp to a 1.18× boomer peak at Year 8, then 18-year half-life exponential decay with a smooth envelope to extinction at Year 70, rather than INSEE mortality tables
-- **Retiree count is COR-calibrated but parametric** — `retireeIdx` follows a smoothstep curve to a 1.30× peak at Year 34 (~2060, aligned with the COR central scenario) then plateaus at 1.25× long-run, floored by `cohIdx`. A full COR lookup table (or INSEE mortality tables) remains an option to implement for higher fidelity.
+- **Retiree count is COR-calibrated but parametric** — `retireeIdx` follows a smoothstep curve to a configurable peak then plateaus at a configurable long-run level (default: 1.30× peak, 1.25× plateau via `demoProfile: 'cor_central'`), floored by `cohIdx`. A full COR lookup table (or INSEE mortality tables) remains an option to implement for higher fidelity.
 - **Capitalisation payouts use a linked kernel** — `capiPayout = E0 × max(0, retireeIdx − cohIdx) × idxFact`, capped at the available pot; any unmet desired payout is surfaced as a cumulative shortfall KPI
 - **No behavioural responses** — retirement timing, labour supply, and precautionary savings effects are excluded
 - **Wage bill grows uniformly** — no cyclical or unemployment shocks in the deterministic run (Monte Carlo has year-persistent regime shifts)
@@ -72,4 +90,5 @@ React 19 + Vite 7 + Recharts. Single-page application, no backend. The `dist/` f
 
 - `cdc_legacy_fund_model.md` — Full model specification (34 equations + v2 annexe)
 - `critique.md` — Structured critique identifying weaknesses and recommended fixes, all implemented
+- `scripts/calibrate-stage5.js` — Grid search for walkthrough stage-5 labor reform parameters
 - `CLAUDE.md` — Repo/build/deploy reference for automated tooling

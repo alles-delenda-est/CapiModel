@@ -37,7 +37,7 @@ The simulator's value is **pedagogical, not prescriptive**:
 5. Document the model fully (`cdc_legacy_fund_model.md`) with bit-exact v1 rétro-compatibility
 6. Maintain an honest critique (`critique.md`) that steelmans the objections
 
-Current focus: exposing policy levers that were previously hardcoded (v2 transition rule) while preserving the `Original v5` preset as a bit-exact reproduction anchor. Deployed via Vercel (`capi-model.vercel.app`) from `main`.
+Current focus: the Transition Walkthrough (`#/walkthrough`) — a 6-stage cumulative walkthrough that builds the reform stack one layer at a time, with layered charts (pension flows + debt/interest) showing prior stages as muted ghosts beneath the current stage. Deployed via Vercel (`capi-model.vercel.app`) from `main`.
 
 ## Key Discoveries
 
@@ -56,3 +56,25 @@ Current focus: exposing policy levers that were previously hardcoded (v2 transit
 - **Political feasibility of the transition levy:** 30 % levy on capi inflows from year ~16 is a large implicit tax on the new system's beneficiaries. Less distortionary mechanism?
 - **Calibration of Tpk/Thl conditional on cutoffAge:** The legacy extinction profile should in principle depend on how much of the workforce was enrolled in PAYG at each date — currently decoupled.
 - **Stochastic `existingDebtGrowth`:** Currently a policy assumption; a Monte Carlo version could explore scenarios where markets push the pre-reform trajectory out of control independently of the transition.
+
+## Engine Extensions (Walkthrough branch)
+
+### Demographic profiles (`demoProfile`)
+
+The `retireeIdx` trajectory was previously hardcoded (peak 1.30×, plateau 1.25×). Now parameterised via named profiles:
+
+| Profile | Peak | Plateau | Use |
+|---|---|---|---|
+| `cor_central` | 1.30× | 1.25× | Default — reproduces prior behaviour bit-exact |
+| `realistic` | 1.40× | 1.35× | Pessimistic — walkthrough stages 1–5 |
+| `reformed` | 1.30× | 1.25× | Walkthrough stage 6 (demographic reform restores COR-like curve) |
+
+Accepts a string key or an explicit `{peakMult, longRunMult, peakT}` object.
+
+### Labor-market reform (`R_ramp`, `R_ramp_years`)
+
+Models the participation/employment channel only. Employed headcount grows by `R_ramp` over `R_ramp_years` via smoothstep, scaling the wage bill proportionally. Default `R_ramp=0` — no effect on existing pages.
+
+Calibrated via brute-force grid search (`scripts/calibrate-stage5.js`): minimize cumulative interest subject to per-retiree real pension ≥ 2026 level. Picked **R_ramp=0.10, R_ramp_years=8** (~closing the France/Germany employment-rate gap). The pension-floor constraint is non-binding (pensions are state-guaranteed), so the value sits at the upper boundary of the plausible grid.
+
+Not modelled: wage effects from non-wage cost reduction, fiscal savings from cutting transfers.
