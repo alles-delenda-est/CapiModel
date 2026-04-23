@@ -18,7 +18,7 @@ const STAGE_1 = {
   ...BASE,
   demoProfile: 'realistic',
   useEquinoxe: false,
-  cutoffAge: null,
+  enableCapi: false,
   hlmDiscount: false,
   delta: 0,
   rho: 0,
@@ -26,7 +26,7 @@ const STAGE_1 = {
   R_ramp: 0,
 }
 const STAGE_2 = { ...STAGE_1, useEquinoxe: true }
-const STAGE_3 = { ...STAGE_2, cutoffAge: 50 }
+const STAGE_3 = { ...STAGE_2, enableCapi: true, cutoffAge: 50 }
 const STAGE_4 = {
   ...STAGE_3,
   hlmDiscount: true,
@@ -54,6 +54,7 @@ const STAGES = [
       'Les pensions versées (zone rouge + verte) croissent avec le nombre de retraités. Le financement courant (ligne bleue) suit la masse salariale. L\u2019écart entre les deux alimente la dette de transition.',
     chartExplain2:
       'Sans réforme et avec une démographie défavorable, la dette publique (zones bleues) croît sans limite. Le ratio dette/PIB (axe droit, violet) diverge.',
+    debtLabel: 'Trajectoire dette actuelle',
     params: STAGE_1,
   },
   {
@@ -67,6 +68,7 @@ const STAGES = [
       'La zone des pensions (rouge) recule par rapport à l\u2019étape 1 (grisée)\u202f: l\u2019abattement Équinoxe réduit les prestations élevées. Le financement (bleu) reste comparable.',
     chartExplain2:
       'La dette croît moins vite que l\u2019étape précédente (grisée). Le ratio dette/PIB reste divergent mais le pic est retardé.',
+    debtLabel: 'Trajectoire dette avec réformes Équinoxe',
     params: STAGE_2,
   },
   {
@@ -313,7 +315,7 @@ export default function TransitionWalkthrough({ navigateTo }) {
                     yAxisId="left"
                     fill="#60a5fa" fillOpacity={o * 0.35} stroke="#3b82f6" strokeOpacity={o}
                     strokeWidth={isCurrent ? 2 : 1} dot={false} isAnimationActive={false}
-                    name={isCurrent ? 'Dette de transition' : undefined}
+                    name={isCurrent ? (STAGES[i].debtLabel ?? 'Dette de transition') : undefined}
                     legendType={isCurrent ? 'plainline' : 'none'} />,
                   <Area key={`ci_${i}`} type="monotone" dataKey={`cumInterest_${i}`} stackId={`debt_${i}`}
                     yAxisId="left"

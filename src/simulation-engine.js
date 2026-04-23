@@ -250,6 +250,7 @@ export function runSimulation(params) {
     demoProfile = 'cor_central',
     R_ramp = 0,
     R_ramp_years = 10,
+    enableCapi = true,
   } = params
 
   const demo = resolveDemoProfile(demoProfile)
@@ -322,7 +323,7 @@ export function runSimulation(params) {
     const retireeIdx = 1 + demoRampUp - demoDecline
     // Capi retiree pool builds gradually as successive post-cutoff cohorts cross retirement age.
     const capiRampSpan = cutoffAge == null ? 20 : Math.max(5, cutoffAge - 22)
-    const capiActivation = smoothstep(t, T_capi_start, T_capi_start + capiRampSpan)
+    const capiActivation = enableCapi ? smoothstep(t, T_capi_start, T_capi_start + capiRampSpan) : 0
     // Post-reform share of retirees, eligible for capi; gated by capiActivation.
     const capiRetirees = (1 - cohIdx) * retireeIdx * capiActivation
     // Legacy retirees = pre-reform cohort + post-reform retirees not yet on capi.
@@ -351,8 +352,8 @@ export function runSimulation(params) {
     // shareWorkersCapi = fraction of the workforce whose age in 2026 was ≤ cutoffAge,
     // increasing linearly as older cohorts retire. Bit-exact reproduces old model when
     // cutoffAge == null (share = 1 always).
-    const shareWorkersCapi = (cutoffAge == null)
-      ? 1
+    const shareWorkersCapi = !enableCapi ? 0
+      : (cutoffAge == null) ? 1
       : Math.min(1, Math.max(0, (cutoffAge - 22 + t) / T_career))
     const emplC_s_toCapi = emplC_s * shareWorkersCapi
     const emplC_s_toPayg = emplC_s * (1 - shareWorkersCapi)
