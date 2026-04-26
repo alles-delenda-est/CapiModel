@@ -11,6 +11,7 @@ import {
   equinoxeRate,
   computeS0Brackets,
   computeRD,
+  computeGePenalty,
 } from '../src/simulation-engine-v1.js';
 
 describe('module scaffold', () => {
@@ -145,5 +146,33 @@ describe('computeRD §5.8 eq (34)', () => {
     const stress = { ...cfg, extraSpread: 0.01 };
     expect(computeRD(115, stress)).toBeCloseTo(0.045, 12);
     expect(computeRD(10000, stress)).toBe(0.20);
+  });
+});
+
+// §5.12 eq (47) GE penalty: linear taper between knee and floor; C⁰ at knee/floor.
+describe('computeGePenalty §5.12 eq (47)', () => {
+  const knee = 2.0, floor = 4.0;
+  it('exactly 1 at the knee (§6.6)', () => {
+    expect(computeGePenalty(knee, knee, floor)).toBe(1);
+  });
+  it('exactly 0 at the floor (§6.6)', () => {
+    expect(computeGePenalty(floor, knee, floor)).toBe(0);
+  });
+  it('returns 1 below knee (zero gradient region — §10.10)', () => {
+    expect(computeGePenalty(0, knee, floor)).toBe(1);
+    expect(computeGePenalty(1.5, knee, floor)).toBe(1);
+    expect(computeGePenalty(1.999, knee, floor)).toBe(1);
+  });
+  it('returns 0 above floor', () => {
+    expect(computeGePenalty(5, knee, floor)).toBe(0);
+    expect(computeGePenalty(100, knee, floor)).toBe(0);
+  });
+  it('linear midpoint = 0.5', () => {
+    expect(computeGePenalty(3.0, knee, floor)).toBeCloseTo(0.5, 12);
+  });
+  it('knee + ε strictly in (0, 1)', () => {
+    const v = computeGePenalty(2.001, knee, floor);
+    expect(v).toBeGreaterThan(0);
+    expect(v).toBeLessThan(1);
   });
 });

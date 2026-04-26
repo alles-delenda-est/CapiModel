@@ -205,6 +205,16 @@ export function computeRD(debtRatioPct, cfg) {
   return Math.min(r_d_base + premium + extraSpread, r_d_cap);
 }
 
+// §5.12 eq (47): General-equilibrium return penalty.
+// Below knee: 1 (no penalty). Above floor: 0 (full penalty).
+// Linear taper between. Intentionally C⁰ (not C¹) at the knee/floor —
+// per §6.6 and §10.10, do NOT smooth this kink.
+export function computeGePenalty(capiToGdp, knee, floor) {
+  if (capiToGdp <= knee) return 1;
+  if (capiToGdp >= floor) return 0;
+  return 1 - (capiToGdp - knee) / (floor - knee);
+}
+
 // =================== runSimulation ===================
 // (Filled in by Task 9.)
 
