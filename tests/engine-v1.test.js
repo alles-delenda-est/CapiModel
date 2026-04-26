@@ -385,3 +385,18 @@ describe('runSimulation skeleton', () => {
     expect(rows[69].year).toBe(2096);
   });
 });
+
+// §12 reference output — three values invariant under any v1.0 implementation
+describe('§12 self-check anchors (default config)', () => {
+  const rows = runSimulation();
+  it('S0_brackets ≈ 17.7 Md€/yr at t=0 (pre-phasing)', () => {
+    expect(rows[0].S0_brackets).toBeGreaterThan(17.0);
+    expect(rows[0].S0_brackets).toBeLessThan(18.5);
+  });
+  it('r_d(0) = r_d_base = 0.035  (debtRatio(0)=115% < threshold1=150%)', () => {
+    expect(rows[0].r_d_t).toBeCloseTo(0.035, 12);
+  });
+  it('cohIdx(0) = 1.0 by construction', () => {
+    expect(rows[0].cohIdx).toBe(1);
+  });
+});
