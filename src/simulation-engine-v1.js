@@ -148,6 +148,37 @@ export function interpLinear(t, anchors) {
   return last[1];
 }
 
+// §5.5 eq (18a): Equinoxe step-rate function r(p), p in €/month.
+export function equinoxeRate(p) {
+  if (p <= 1800) return 0;
+  if (p <= 2000) return 0.001;
+  if (p <= 2500) return 0.004;
+  if (p <= 3000) return 0.041;
+  if (p <= 4000) return 0.10;
+  return 0.20; // hard cap
+}
+
+// §5.5 eq (18): DREES bracket integral.
+// Numerical integration: 50-step midpoint Riemann per decile, uniform-density
+// assumption within each decile (each decile holds R_t/10 retirees).
+// R_t in millions of retirees; result in Md€/yr.
+export function computeS0Brackets(R_t) {
+  const STEPS = 50;
+  let totalAvgRP = 0; // sum across deciles of [average of r(p) × p within the decile]
+  for (const { lo, hi } of DREES_DECILES) {
+    const width = hi - lo;
+    const slice = width / STEPS;
+    let dec = 0; // ∫ r(p) × p dp ≈ Σ r(mid) × mid × slice
+    for (let i = 0; i < STEPS; i++) {
+      const mid = lo + (i + 0.5) * slice;
+      dec += equinoxeRate(mid) * mid * slice;
+    }
+    totalAvgRP += dec / width; // average r(p) × p within decile (units: €/mo)
+  }
+  // (R_t / 10) retirees per decile (millions) × avg €/mo × 12 months / 1e3 (€→Md€).
+  return (R_t / 10) * totalAvgRP * 12 / 1000;
+}
+
 // =================== runSimulation ===================
 // (Filled in by Task 9.)
 
