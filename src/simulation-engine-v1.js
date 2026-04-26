@@ -488,8 +488,21 @@ export function runSimulation(userConfig = {}) {
     const annuityRate_t = cfg.r_f_annuity > 0.001
       ? cfg.r_f_annuity / (1 - Math.pow(1 + cfg.r_f_annuity, -T_ret_t))
       : 1 / T_ret_t;
+    // v1.0a eq (53a): capi pot is owned by retirees BY ASSET SHARE, not by
+    // headcount share. The v1.0 formula `K_t × annuityRate × headcount_share`
+    // applied a per-individual annuity rate (~7%) to the entire aggregate pot
+    // scaled by the retiree-vs-total head ratio. Retirees actually own only a
+    // fraction of K_t — the rest belongs to still-accumulating workers. The
+    // v1.0 expropriation masked the transition's fiscal cost (cumShortfall=0).
+    // Asset-share ramps from 0 (no capi retirees yet) to capiAssetShareSteadyState
+    // over 30y starting at T_capi_start, proxying the time for the system to reach
+    // actuarial steady-state.
+    const capiAssetShare_t = smoothstep(t, T_capi_start, T_capi_start + 30)
+                           * cfg.capiAssetShareSteadyState;                     // (53a)
+    // capiRetireeShare_t retained as a real demographic quantity (used in
+    // diagnostics) but DOES NOT feed the payout formula in v1.0a.
     const capiRetireeShare_t = retireeIdx_t > 0 ? capiRetirees_t / retireeIdx_t : 0;
-    const potBasedPayout_t   = K_t * annuityRate_t * capiRetireeShare_t;        // (53)
+    const potBasedPayout_t   = K_t * annuityRate_t * capiAssetShare_t;          // (53)
     const capiPayoutDesired_t = Math.max(capiPayoutFloor_t, potBasedPayout_t);  // (54)
     const shortfall_t  = Math.max(0, capiPayoutDesired_t - K_avail_t);
     const capiPayout_t = capiPayoutDesired_t;
@@ -552,7 +565,8 @@ export function runSimulation(userConfig = {}) {
       capiToGdp_t, gePenalty_t, r_c_eff_t, r_cn_eff_t, K_avail_t,
       // §5.13 payouts
       capiPayoutFloor_t, LE_at_A_R_t, T_ret_t, annuityRate_t,
-      capiRetireeShare_t, potBasedPayout_t, capiPayoutDesired_t,
+      capiRetireeShare_t, capiAssetShare_t,
+      potBasedPayout_t, capiPayoutDesired_t,
       shortfall_t, capiPayout_t,
       // §2 stocks (post-update)
       F_t, D_t, K_t, CI_t, CK_t,
