@@ -630,6 +630,8 @@ Source: DREES *Les retraités et les retraites — édition 2023*, table sur la 
 | Parameter | Source | Value used |
 |---|---|---|
 | `existingDebt`, `baseGDP`, `R0`, `W0`, `E0` | INSEE/DREES 2024 actuals projected forward to Y0=2027 (per-parameter rationale in §3) | as in §3 |
+| `r_f_portfolio` (4.5% real) | OECD historical median for diversified institutional 60/40 mandates | 4.5% real |
+| `r_f_annuity` (1.5% real) | French OATi yield range 2024–2026 per Banque de France | 1.5% real |
 | `r_c` (4.5% real) | Norway GPFG 1998–2025 (6.64% nominal); Ontario Teachers' 7% nominal target | 4.5% real |
 | `lifeExpAt65_Y0` | INSEE Bilan démographique 2024 + 3-year COR projection | 21.55 + 0.3 × 0.91 = 21.82 |
 | `lifeExpAt65_per_decade` | COR Rapport juin 2025, central scenario | 0.91 |
