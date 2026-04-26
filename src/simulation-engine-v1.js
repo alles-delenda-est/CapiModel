@@ -110,7 +110,43 @@ export const DEFAULT_CONFIG = {
 };
 
 // =================== Pure helpers ===================
-// (Filled in by Task 3 onwards.)
+
+// §0: clamp x to [lo, hi].
+export function clamp(x, lo, hi) {
+  if (x < lo) return lo;
+  if (x > hi) return hi;
+  return x;
+}
+
+// §0: smoothstep S(x; a, b) = u² × (3 − 2u) where u = clamp((x − a) / (b − a), 0, 1).
+// When a == b, S = 1 for x >= a else 0.
+export function smoothstep(x, a, b) {
+  if (a === b) return x >= a ? 1 : 0;
+  const u = clamp((x - a) / (b - a), 0, 1);
+  return u * u * (3 - 2 * u);
+}
+
+// §5.1 eq (1): Fisher exact composition r_n = real + infl + real × infl.
+export function fisher(real, infl) {
+  return real + infl + real * infl;
+}
+
+// §5.2 eq (7d): piecewise-linear interpolation across `anchors = [[t_i, v_i], ...]`
+// (sorted ascending in t). Clamps to endpoints outside the range.
+export function interpLinear(t, anchors) {
+  if (t <= anchors[0][0]) return anchors[0][1];
+  const last = anchors[anchors.length - 1];
+  if (t >= last[0]) return last[1];
+  for (let i = 1; i < anchors.length; i++) {
+    const [t1, v1] = anchors[i];
+    if (t <= t1) {
+      const [t0, v0] = anchors[i - 1];
+      const u = (t - t0) / (t1 - t0);
+      return v0 + u * (v1 - v0);
+    }
+  }
+  return last[1];
+}
 
 // =================== runSimulation ===================
 // (Filled in by Task 9.)
