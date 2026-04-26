@@ -397,11 +397,12 @@ export function runSimulation(userConfig = {}) {
     const legacyExp_t      = Math.max(0, E0_net_t * legacyRetirees_t * I_factor_t); // (25)
 
     // ---------- §5.7 HLM proceeds ----------
-    // SPEC AMBIGUITY 1 (§5.7 eq 27): spec writes (1-ρ)^(t-1) for t≥1, so
-    // ΔU_0 = ΔU_1 = U0×ρ. Implemented literally as written.
-    const delta_U_t = (t === 0)
-      ? cfg.U0 * cfg.rho
-      : cfg.U0 * Math.pow(1 - cfg.rho, t - 1) * cfg.rho;                        // (27)
+    // v1.0a eq (27): uniform geometric form. ΔU_t = U_t × ρ where U_t = U0×(1-ρ)^t.
+    // Mass conservation: U_{t+1} = U_t − ΔU_t exactly. (v1.0 had a piecewise form
+    // ΔU_t = (t==0)?U0·ρ : U0·(1-ρ)^(t-1)·ρ which forced ΔU_0 = ΔU_1 and violated
+    // mass conservation by an extra year-1 cession.)
+    const U_t       = cfg.U0 * Math.pow(1 - cfg.rho, t);                        // (26)
+    const delta_U_t = U_t * cfg.rho;                                            // (27)
     const units_sold = delta_U_t * 1e6;
     const priceDiscount_t = (cfg.hlmDiscount && delta_eff > 0)
       ? Math.min(0.30, delta_eff * units_sold / cfg.baselineTransactions)
@@ -535,7 +536,7 @@ export function runSimulation(userConfig = {}) {
       capiRetirees: capiRetirees_t,
       legacyExp_t,
       // §5.7 HLM
-      delta_U_t, units_sold, priceDiscount_t, P_eff_t, gain_t, hlmActive_t,
+      U_t, delta_U_t, units_sold, priceDiscount_t, P_eff_t, gain_t, hlmActive_t,
       H_t_proceeds,
       // §5.8 borrowing rate
       GDP_t, D_ext_t, debtRatio_t, r_d_t, debtInterest_t,
