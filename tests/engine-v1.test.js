@@ -458,7 +458,34 @@ function assertInvariants(rows, cfg, label = '') {
     expect(r.T_ret_t, `${tag} T_ret ≥ 15`).toBeGreaterThanOrEqual(15 - 1e-12);
     // §6.5 NPV consistency
     expect(r.cumDF_t).toBeGreaterThan(0);
+
+    // ===== §6 v1.0a NEW INVARIANTS =====
+    // (a) HLM mass conservation: U_t ≡ U0 × (1-ρ)^t exactly, ΔU_t ≡ U_t × ρ.
+    const U_t_expected = cfg.U0 * Math.pow(1 - cfg.rho, r.t);
+    expect(r.U_t, `${tag} U_t = U0×(1-ρ)^t`).toBeCloseTo(U_t_expected, 12);
+    expect(r.delta_U_t, `${tag} ΔU_t = U_t×ρ`).toBeCloseTo(r.U_t * cfg.rho, 12);
+
+    // (b) capiAssetShare bounded in [0, capiAssetShareSteadyState].
+    expect(r.capiAssetShare_t, `${tag} capiAssetShare ≥ 0`).toBeGreaterThanOrEqual(0);
+    expect(r.capiAssetShare_t, `${tag} capiAssetShare ≤ steady-state`)
+      .toBeLessThanOrEqual(cfg.capiAssetShareSteadyState + 1e-12);
   }
+
+  // (c) HLM mass conservation across years: U_{t+1} = U_t − ΔU_t exactly.
+  for (let i = 1; i < rows.length; i++) {
+    const expected = rows[i - 1].U_t - rows[i - 1].delta_U_t;
+    expect(rows[i].U_t, `${label} HLM conservation at t=${i}`)
+      .toBeCloseTo(expected, 12);
+  }
+
+  // (d) capiAssetShare monotonically non-decreasing in t (since the smoothstep
+  // is non-decreasing and the steady-state factor is positive).
+  for (let i = 1; i < rows.length; i++) {
+    expect(rows[i].capiAssetShare_t,
+      `${label} capiAssetShare non-decreasing at t=${i}`)
+      .toBeGreaterThanOrEqual(rows[i - 1].capiAssetShare_t - 1e-12);
+  }
+
   // §6.5 cumDF monotonically non-increasing
   for (let i = 1; i < rows.length; i++) {
     expect(rows[i].cumDF_t,
@@ -482,6 +509,51 @@ function assertInvariants(rows, cfg, label = '') {
     }
   }
 }
+
+// §6 v1.0a: r_f_portfolio and r_f_annuity are distinct in the default config
+// and the engine never conflates them.
+describe('§6 v1.0a: r_f_portfolio ≠ r_f_annuity', () => {
+  it('default config has them distinct', () => {
+    expect(DEFAULT_CONFIG.r_f_portfolio).not.toBe(DEFAULT_CONFIG.r_f_annuity);
+    expect(DEFAULT_CONFIG.r_f_portfolio).toBe(0.045);
+    expect(DEFAULT_CONFIG.r_f_annuity).toBe(0.015);
+  });
+
+  it('changing only r_f_annuity affects capi annuity but NOT fund return or spread', () => {
+    const a = runSimulation()[0];
+    const b = runSimulation({ r_f_annuity: 0.005 })[0];
+    // fundReturn (eq 36) and spread (eq 58) are r_f_portfolio-driven → unchanged
+    expect(b.fundReturn_t).toBeCloseTo(a.fundReturn_t, 12);
+    expect(b.spread_t).toBeCloseTo(a.spread_t, 12);
+    // annuityRate (eq 53) IS r_f_annuity-driven → changes
+    expect(b.annuityRate_t).not.toBeCloseTo(a.annuityRate_t, 6);
+  });
+
+  it('changing only r_f_portfolio affects fund return and spread but NOT capi annuity rate', () => {
+    const a = runSimulation()[0];
+    const b = runSimulation({ r_f_portfolio: 0.06 })[0];
+    expect(b.fundReturn_t).not.toBeCloseTo(a.fundReturn_t, 6);
+    expect(b.spread_t).not.toBeCloseTo(a.spread_t, 6);
+    expect(b.annuityRate_t).toBeCloseTo(a.annuityRate_t, 12);
+  });
+});
+
+// §6 v1.0a: S0_brackets_t (benefit-side, legacy-scoped) and S0_csg_revenue_t
+// (tax-side, all-retirees) are independent functions of separate scopes.
+describe('§6 v1.0a: Équinoxe components computed independently', () => {
+  it('S0_csg=0 zeroes csg revenue but not brackets', () => {
+    const r = runSimulation({ S0_csg: 0 })[0];
+    expect(r.S0_csg_revenue_t).toBe(0);
+    expect(r.S0_brackets_t).toBeGreaterThan(17);
+  });
+  it('S0_irDeduction=0 leaves csg and brackets unaffected', () => {
+    const a = runSimulation()[0];
+    const b = runSimulation({ S0_irDeduction: 0 })[0];
+    expect(b.S0_csg_revenue_t).toBeCloseTo(a.S0_csg_revenue_t, 12);
+    expect(b.S0_brackets_t).toBeCloseTo(a.S0_brackets_t, 12);
+    expect(b.S0_irDeduction_t).toBe(0);
+  });
+});
 
 describe('§6 invariants — canned scenarios', () => {
   it('default config', () => {
