@@ -722,7 +722,7 @@ The following parameters are hardcoded in v1.0 but should become user-tunable in
 `R0 = 18.0` is **direct-right retirees only** (DREES Édition 2025 scope). `E0 = 390` is **all-régime pension expenditure** including survivors-only pensions (~11% of total per DREES). This asymmetry is deliberate but easy to get wrong:
 
 - The Équinoxe progressive-bracket reduction (eq 18) operates on direct-rights retirees, which is the policy interpretation. Use `R0` directly.
-- The legacy expenditure scaling (eq 25) is `E0_net_t × legacyRetirees(t) × I_t`, where `legacyRetirees(t)` is in the same units as `retireeIdx(t)` — both anchored to `R0` at t=0. So `legacyExp_0 = E0 × 1 × 1 = 390`, which is the all-régime expenditure including survivors-only.
+- The legacy expenditure scaling (eq 25) is `E0_legacy_t × legacyRetirees(t) × I_t`, where `legacyRetirees(t)` is in the same units as `retireeIdx(t)` — both anchored to `R0` at t=0. `E0_legacy_t` is the legacy-cohort benefit base after benefit-side Équinoxe deduction (eqs 18b–18c). At t=0, before phasing activates, `E0_legacy_0 = E0 = 390 Md€` — the all-régime expenditure including survivors-only. Tax-side Équinoxe (CSG, eqs 21a/21b/22) does not flow through this term; it appears as revenue in eq 38 via `S0_csg_revenue_t`.
 
 This means `legacyRetirees(t)` is technically a "direct-rights-equivalent" headcount index that *implicitly* includes survivors-only weighted by their pension share. The model treats them as a single block scaled with cohort dynamics. This is a known v1.0 simplification.
 
