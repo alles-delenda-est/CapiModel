@@ -801,7 +801,7 @@ Reserved for post-implementation calibration anchors. After v1.0 is built and th
 
 Three values that are **invariant under any v1.0 implementation** regardless of recalibration, and that implementations can self-check against immediately:
 
-- `S0_brackets ≈ 17.7` Md€/yr at year 0 (before phasing). Scales linearly with `R0`; with `R0=18.0` (direct-rights only) vs the v0.11 R0=17.0, expect ~17.7 (= 16.7 × 18.0/17.0). Computed from DREES integral.
+- `S0_brackets_t=0 ≈ 17.7` Md€/yr (before phasing; under v1.0a, the total Équinoxe effect is split into a time-varying benefit-side reduction `S0_brackets_t` per eqs 18b–18c and a time-varying CSG revenue `S0_csg_revenue_t` per eqs 21a/21b/22 — see §5.5). Year-0 bracket value scales linearly with `R0`; with `R0=18.0` (direct-rights only) vs the v0.11 R0=17.0, expect ~17.7 (= 16.7 × 18.0/17.0). Computed from DREES integral.
 - `r_d(0) = r_d_base = 0.035`, because `debtRatio(0) = 3450/3000 × 100 = 115%`, below the 150% threshold (so no premium).
 - `cohIdx(0) = 1.0` by construction.
 
