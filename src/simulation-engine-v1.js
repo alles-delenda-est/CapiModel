@@ -287,8 +287,247 @@ export function cohIdx(t) {
 }
 
 // =================== runSimulation ===================
-// (Filled in by Task 9.)
 
-export function runSimulation(_config = {}) {
-  throw new Error('runSimulation: not yet implemented');
+// §5.5 phasing modes (UI exposure of equinoxePhasing is Task 3 scope; engine
+// must implement all five modes per the spec).
+function equinoxePhaseFactor(t, cfg) {
+  switch (cfg.equinoxePhasing) {
+    case 'immediate':  return 1;
+    case 'phased-5y':  return smoothstep(t, 0, 5);
+    case 'phased-10y': return smoothstep(t, 0, 10);
+    case 'partial-50': return 0.5;
+    case 'partial-75': return 0.75;
+    // Unknown phasing string: treat as 'immediate' (defensive; never hit by tests).
+    default:           return 1;
+  }
+}
+
+// Deterministic 70-year simulation. Returns an array of yearly result rows.
+// Spec evaluation order is preserved exactly (§5.1 → §5.14). Every non-trivial
+// line carries the originating equation reference.
+export function runSimulation(userConfig = {}) {
+  const cfg = { ...DEFAULT_CONFIG, ...userConfig };
+  const rows = [];
+
+  // ---- State stocks (§2) ----
+  let F_t = cfg.F0;
+  let D_t = 0;
+  let K_t = 0;
+  let CI_t = 0;
+  let CK_t = 0;
+  // §5.14 cumDF convention: cumDF_(-1) = 1, so cumDF_0 = 1/(1+r_d(0)).
+  let cumDF_prev = 1;
+  let pvLegacyCum = 0;
+  let pvCapiPayoutCum = 0;
+
+  // ---- Constants per-config (no t dependence) ----
+  const w_n   = fisher(cfg.w_r, cfg.pi);                       // §5.1 eq (1)
+  const iota  = Math.min(w_n, cfg.pi);                         // §5.1 eq (2)
+  const r_f_n = fisher(cfg.r_f, cfg.pi);                       // §5.1 eq (3)
+  const cm = cfg.constructionMultiplier;
+  const g_h_eff = Math.max(0, cfg.g_h - 1.6 * (cm - 1) * 0.01);// §5.1 eq (6a)
+  const delta_eff = cfg.delta * clamp(2 - cm, 0.3, 1.7);       // §5.1 eq (6b)
+  const T_capi_start = T_capi_start_of(cfg);                   // §5.4 eq (14)
+  const capiRampSpan = capiRampSpan_of(cfg);                   // §5.6
+  const tau_e_eff = Math.max(0, cfg.tau_e - cfg.deltaTauxPatronal); // §5.3
+
+  for (let t = 0; t < cfg.N; t++) {
+    // ---------- §5.1 Growth factors ----------
+    const Omega_t    = Math.pow(1 + w_n, t);                                    // (4)
+    const I_factor_t = Math.pow(1 + iota, t);                                   // (5)
+    const H_factor_t = Math.pow((1 + g_h_eff) * (1 + cfg.pi), t);               // (6)
+
+    // ---------- §5.2 Demographic indices ----------
+    const retireeIdx_t = retireeIdx(t, cfg.demoProfile);                        // (7c)
+    const activePop_t  = activePopFactor(t, cfg.demoProfile);                   // (7d)
+    const cohIdx_t     = cohIdx(t);                                             // (7e)
+    const dependencyRatio_t = retireeIdx_t / activePop_t;                       // §5.2 diagnostic
+
+    // ---------- §5.3 Wage bill & contributions ----------
+    const empRateNow = cfg.employmentRate0
+      + smoothstep(t, 0, cfg.employmentTransitionYears)
+      * (cfg.employmentRateTarget - cfg.employmentRate0);                       // (8a)
+    const empFactor = empRateNow / cfg.employmentRate0;                         // (8b)
+    const W_t = cfg.W0 * Omega_t * empFactor * activePop_t;                     // (9)
+    const C_s_t = W_t * cfg.tau_s;                                              // (10)
+    const C_e_t = W_t * tau_e_eff;                                              // (11)
+
+    // ---------- §5.4 Retirement age & cohort routing ----------
+    const A_R_t = retirementAge(t, cfg);                                        // (12)
+    const sigma_capi_t = sigmaCapi(t, cfg);                                     // (15)
+    const C_s_capi_t = C_s_t * sigma_capi_t;                                    // (16)
+    const C_s_payg_t = C_s_t * (1 - sigma_capi_t);                              // (17)
+
+    // ---------- §5.5 Équinoxe ----------
+    const R_t_millions = cfg.R0 * retireeIdx_t;
+    const S0_brackets = cfg.useEquinoxe ? computeS0Brackets(R_t_millions) : 0;  // (18)
+    const S0_total    = cfg.useEquinoxe
+      ? S0_brackets + cfg.S0_irDeduction + cfg.S0_csg : 0;                      // (19)
+    const phaseFactor_t = cfg.useEquinoxe ? equinoxePhaseFactor(t, cfg) : 0;    // (20)
+    const S0_t = S0_total * phaseFactor_t;                                      // (21)
+    const E0_net_t = cfg.E0 - S0_t;                                             // (22)
+
+    // ---------- §5.6 Retirees split ----------
+    const capiAct_t        = capiActivation(t, cfg);
+    const capiRetirees_t   = (1 - cohIdx_t) * retireeIdx_t * capiAct_t;         // (23)
+    const legacyRetirees_t = retireeIdx_t - capiRetirees_t;                     // (24)
+    const legacyExp_t      = Math.max(0, E0_net_t * legacyRetirees_t * I_factor_t); // (25)
+
+    // ---------- §5.7 HLM proceeds ----------
+    // SPEC AMBIGUITY 1 (§5.7 eq 27): spec writes (1-ρ)^(t-1) for t≥1, so
+    // ΔU_0 = ΔU_1 = U0×ρ. Implemented literally as written.
+    const delta_U_t = (t === 0)
+      ? cfg.U0 * cfg.rho
+      : cfg.U0 * Math.pow(1 - cfg.rho, t - 1) * cfg.rho;                        // (27)
+    const units_sold = delta_U_t * 1e6;
+    const priceDiscount_t = (cfg.hlmDiscount && delta_eff > 0)
+      ? Math.min(0.30, delta_eff * units_sold / cfg.baselineTransactions)
+      : 0;                                                                      // (28)
+    const P_eff_t = cfg.P0 * H_factor_t * (1 - priceDiscount_t);                // (29)
+    const gain_t  = Math.max(0, P_eff_t - cfg.Pbook);
+    const hlmActive_t  = 1 - smoothstep(t, cfg.T_hlm - 5, cfg.T_hlm);
+    const H_t_proceeds = delta_U_t * gain_t * 0.95 * hlmActive_t;               // (30)
+
+    // ---------- §5.8 Endogenous borrowing rate ----------
+    const GDP_t   = cfg.baseGDP * Omega_t * empFactor * activePop_t;            // (31)
+    const D_ext_t = cfg.existingDebt * (GDP_t / cfg.baseGDP);                   // (32)
+    const debtRatio_t = (D_ext_t + D_t) / GDP_t * 100;                          // (33)
+    const r_d_t   = computeRD(debtRatio_t, cfg);                                // (34)
+    const debtInterest_t = D_t * r_d_t;                                         // (35)
+
+    // ---------- §5.9 Cash flow & employer waterfall ----------
+    const fundReturn_t = F_t * r_f_n;                                           // (36)
+    const abatement_t  = cfg.A0 * Omega_t * empFactor * activePop_t;            // (37)
+    const nonEmplrNet_t = fundReturn_t + H_t_proceeds + abatement_t
+                        + C_s_payg_t - debtInterest_t;                          // (38)
+    const deficit_t = legacyExp_t - nonEmplrNet_t;                              // (39)
+    const emplrAvail_t = C_e_t * (1 - cfg.phiF);                                // (40)
+
+    let emplrToLeg_t, emplrToCap_t;
+    if (deficit_t <= 0) {
+      emplrToLeg_t = 0;            emplrToCap_t = C_e_t;
+    } else if (deficit_t <= emplrAvail_t) {
+      emplrToLeg_t = deficit_t;    emplrToCap_t = C_e_t - deficit_t;
+    } else {
+      emplrToLeg_t = emplrAvail_t; emplrToCap_t = C_e_t * cfg.phiF;
+    }
+    const netFlow_t = nonEmplrNet_t + emplrToLeg_t - legacyExp_t;               // (41)
+
+    // ---------- §5.10 Borrow / repay ----------
+    // SPEC AMBIGUITY 5: borrowed_t initialised to deficit-branch borrowing,
+    // then incremented by capi shortfall in §5.13.
+    let borrowed_t = 0;
+    if (netFlow_t < 0) {
+      borrowed_t = -netFlow_t;
+      D_t = D_t + borrowed_t;                                                   // (42)
+    } else {
+      const repaid_t = Math.min(cfg.alpha * netFlow_t, D_t);
+      D_t = D_t - repaid_t;
+      F_t = F_t + (netFlow_t - repaid_t);                                       // (43)
+    }
+
+    // ---------- §5.11 Transition levy (smoothed) ----------
+    // SPEC AMBIGUITY 2: spec writes T_capi_start(t); treated as constant.
+    // SPEC AMBIGUITY 4: D_t in levyPhaseOut is post-§5.10 value.
+    const T_lambda_eff   = Math.max(cfg.Tlambda, T_capi_start);
+    const levyActivation = smoothstep(t, T_lambda_eff - 1, T_lambda_eff + 1);
+    const levyPhaseOut   = GDP_t > 0 ? smoothstep(D_t / GDP_t, 0, 0.05) : 0;
+    const levyFactor     = levyActivation * levyPhaseOut;
+    const grossLevy_t = levyFactor * cfg.lambda * (C_s_capi_t + emplrToCap_t);
+    const levy_t = Math.min(grossLevy_t, D_t);
+    D_t = Math.max(0, D_t - levy_t);                                            // (44)
+    const netCapiFlow_t = C_s_capi_t + emplrToCap_t - levy_t;                   // (45)
+
+    // ---------- §5.12 Capi accumulation & GE penalty ----------
+    const capiToGdp_t = K_t / GDP_t;                                            // (46)
+    const gePenalty_t = computeGePenalty(capiToGdp_t, cfg.geKneeRatio, cfg.geFloorRatio); // (47)
+    const r_c_eff_t   = cfg.r_c * gePenalty_t;                                  // (48)
+    const r_cn_eff_t  = fisher(r_c_eff_t, cfg.pi);                              // (49)
+    const K_avail_t   = K_t * (1 + r_cn_eff_t) + netCapiFlow_t;                 // (50)
+
+    // ---------- §5.13 Capi payouts & state guarantee ----------
+    // SPEC AMBIGUITY 3: floor uses E0 (not E0_net_t) — Équinoxe asymmetry.
+    const capiPayoutFloor_t = cfg.E0 * capiRetirees_t * I_factor_t;             // (51)
+    const LE_at_A_R_t = cfg.lifeExpAt65_Y0 + (65 - cfg.retirementAgeBase)
+                      + (t / 10) * cfg.lifeExpAt65_per_decade
+                      - (A_R_t - cfg.retirementAgeBase);                        // (52a)
+    const T_ret_t = Math.max(15, LE_at_A_R_t);                                  // (52b)
+    const annuityRate_t = cfg.r_f > 0.001
+      ? cfg.r_f / (1 - Math.pow(1 + cfg.r_f, -T_ret_t))
+      : 1 / T_ret_t;
+    const capiRetireeShare_t = retireeIdx_t > 0 ? capiRetirees_t / retireeIdx_t : 0;
+    const potBasedPayout_t   = K_t * annuityRate_t * capiRetireeShare_t;        // (53)
+    const capiPayoutDesired_t = Math.max(capiPayoutFloor_t, potBasedPayout_t);  // (54)
+    const shortfall_t  = Math.max(0, capiPayoutDesired_t - K_avail_t);
+    const capiPayout_t = capiPayoutDesired_t;
+    if (shortfall_t > 0) {
+      D_t = D_t + shortfall_t;                                                  // (55)
+      borrowed_t = borrowed_t + shortfall_t;
+    }
+    CK_t = CK_t + shortfall_t;                                                  // (56)
+    K_t  = Math.max(0, K_avail_t - capiPayout_t);                               // (57)
+
+    // ---------- §5.14 Diagnostics ----------
+    const spread_t = cfg.r_f - (r_d_t - cfg.pi);                                // (58)
+    CI_t = CI_t + debtInterest_t;                                               // (59)
+    const cumDF_t = cumDF_prev / (1 + r_d_t);
+    const pvLegacyExp_t  = legacyExp_t  * cumDF_t;
+    const pvCapiPayout_t = capiPayout_t * cumDF_t;
+    pvLegacyCum     = pvLegacyCum     + pvLegacyExp_t;
+    pvCapiPayoutCum = pvCapiPayoutCum + pvCapiPayout_t;                         // (60)
+    cumDF_prev = cumDF_t;
+
+    rows.push({
+      // identification
+      t, year: cfg.Y0 + t,
+      // §5.1 growth factors
+      w_n, iota, r_f_n, g_h_eff, delta_eff,
+      Omega_t, I_factor_t, H_factor_t,
+      // §5.2 demography
+      retireeIdx: retireeIdx_t,
+      activePopFactor: activePop_t,
+      cohIdx: cohIdx_t,
+      dependencyRatio_t,
+      // §5.3 wages / contributions
+      empRateNow, empFactor, W_t, tau_e_eff, C_s_t, C_e_t,
+      // §5.4 retirement & routing
+      A_R_t, sigma_capi_t,
+      capiActivation: capiAct_t,
+      T_capi_start, capiRampSpan,
+      C_s_capi_t, C_s_payg_t,
+      // §5.5 Équinoxe
+      S0_brackets, S0_total, phaseFactor_t, S0_t, E0_net_t,
+      // §5.6 retirees split & legacy expenditure
+      legacyRetirees: legacyRetirees_t,
+      capiRetirees: capiRetirees_t,
+      legacyExp_t,
+      // §5.7 HLM
+      delta_U_t, units_sold, priceDiscount_t, P_eff_t, gain_t, hlmActive_t,
+      H_t_proceeds,
+      // §5.8 borrowing rate
+      GDP_t, D_ext_t, debtRatio_t, r_d_t, debtInterest_t,
+      // §5.9 waterfall
+      fundReturn_t, abatement_t, nonEmplrNet_t, deficit_t, emplrAvail_t,
+      emplrToLeg_t, emplrToCap_t, netFlow_t,
+      // §5.10 (post-update) borrow tracker
+      borrowed_t,
+      // §5.11 levy
+      T_lambda_eff, levyActivation, levyPhaseOut, levyFactor,
+      grossLevy_t, levy_t, netCapiFlow_t,
+      // §5.12 capi accumulation
+      capiToGdp_t, gePenalty_t, r_c_eff_t, r_cn_eff_t, K_avail_t,
+      // §5.13 payouts
+      capiPayoutFloor_t, LE_at_A_R_t, T_ret_t, annuityRate_t,
+      capiRetireeShare_t, potBasedPayout_t, capiPayoutDesired_t,
+      shortfall_t, capiPayout_t,
+      // §2 stocks (post-update)
+      F_t, D_t, K_t, CI_t, CK_t,
+      // §5.14 diagnostics
+      spread_t, cumDF_t,
+      pvLegacyExp_t, pvCapiPayout_t,
+      pvLegacyCum_t: pvLegacyCum,
+      pvCapiPayoutCum_t: pvCapiPayoutCum,
+    });
+  }
+  return rows;
 }

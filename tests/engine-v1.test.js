@@ -21,6 +21,7 @@ import {
   retireeIdx,
   activePopFactor,
   cohIdx,
+  runSimulation,
 } from '../src/simulation-engine-v1.js';
 
 describe('module scaffold', () => {
@@ -341,5 +342,46 @@ describe('cohIdx §5.2 eq (7e)', () => {
       expect(v).toBeLessThanOrEqual(prev + 1e-15);
       prev = v;
     }
+  });
+});
+
+// ===== runSimulation main loop =====
+describe('runSimulation skeleton', () => {
+  it('returns array of length N = 70 for default config', () => {
+    expect(runSimulation().length).toBe(70);
+  });
+
+  it('row 0 carries all expected fields', () => {
+    const r = runSimulation()[0];
+    const expectedKeys = [
+      't', 'year', 'A_R_t', 'retireeIdx', 'legacyRetirees', 'capiRetirees',
+      'C_s_t', 'C_s_capi_t', 'C_s_payg_t', 'C_e_t', 'tau_e_eff',
+      'sigma_capi_t', 'capiActivation', 'capiRampSpan', 'T_capi_start',
+      'W_t', 'GDP_t', 'D_ext_t', 'D_t', 'F_t', 'K_t', 'CI_t', 'CK_t',
+      'r_d_t', 'debtRatio_t', 'debtInterest_t', 'spread_t',
+      'fundReturn_t', 'abatement_t', 'H_t_proceeds',
+      'nonEmplrNet_t', 'deficit_t', 'emplrAvail_t',
+      'emplrToLeg_t', 'emplrToCap_t', 'netFlow_t', 'borrowed_t',
+      'levyFactor', 'levy_t', 'netCapiFlow_t',
+      'capiToGdp_t', 'gePenalty_t', 'r_c_eff_t', 'K_avail_t',
+      'capiPayoutFloor_t', 'potBasedPayout_t', 'capiPayoutDesired_t',
+      'shortfall_t', 'capiPayout_t',
+      'S0_brackets', 'S0_total', 'S0_t', 'phaseFactor_t', 'E0_net_t',
+      'legacyExp_t', 'dependencyRatio_t',
+      'cumDF_t', 'pvLegacyExp_t', 'pvCapiPayout_t',
+      'pvLegacyCum_t', 'pvCapiPayoutCum_t',
+      'Omega_t', 'I_factor_t', 'H_factor_t', 'iota', 'w_n', 'r_f_n',
+      'g_h_eff', 'delta_eff', 'empRateNow', 'empFactor',
+    ];
+    for (const k of expectedKeys) {
+      expect(r, `missing field: ${k}`).toHaveProperty(k);
+    }
+  });
+
+  it('year column starts at Y0 and increments by 1', () => {
+    const rows = runSimulation();
+    expect(rows[0].year).toBe(2027);
+    expect(rows[10].year).toBe(2037);
+    expect(rows[69].year).toBe(2096);
   });
 });
