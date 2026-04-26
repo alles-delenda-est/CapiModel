@@ -267,6 +267,25 @@ export function capiActivation(t, cfg) {
   return smoothstep(t, start, start + span);
 }
 
+// §5.2 eq (7a–c): retireeIdx via parametric smoothstep envelope
+// (see §7 for kernel rationale; T_extinct = 70 in eq 7b is the extinction tail).
+export function retireeIdx(t, profileName) {
+  const p = DEMOGRAPHIC_PROFILES[profileName];
+  const rampUp  = smoothstep(t, 0, p.peakT) * (p.peakMult - 1);                    // (7a)
+  const decline = smoothstep(t, p.peakT, 70) * (p.peakMult - p.longRunMult);       // (7b)
+  return 1 + rampUp - decline;                                                     // (7c)
+}
+
+// §5.2 eq (7d): activePopFactor — piecewise linear over the profile anchors.
+export function activePopFactor(t, profileName) {
+  return interpLinear(t, DEMOGRAPHIC_PROFILES[profileName].activePopAnchors);
+}
+
+// §5.2 eq (7e): cohIdx — legacy 2027-cohort survival share (T_extinct = 45 yr per §7).
+export function cohIdx(t) {
+  return 1 - smoothstep(t, 0, 45);
+}
+
 // =================== runSimulation ===================
 // (Filled in by Task 9.)
 

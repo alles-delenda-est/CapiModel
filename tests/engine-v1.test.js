@@ -18,6 +18,9 @@ import {
   T_capi_start_of,
   T_career_base_of,
   capiRampSpan_of,
+  retireeIdx,
+  activePopFactor,
+  cohIdx,
 } from '../src/simulation-engine-v1.js';
 
 describe('module scaffold', () => {
@@ -283,5 +286,60 @@ describe('capiActivation §5.6', () => {
   it('one at T_capi_start + capiRampSpan and beyond', () => {
     expect(capiActivation(42, DEFAULT_CONFIG)).toBe(1);
     expect(capiActivation(70, DEFAULT_CONFIG)).toBe(1);
+  });
+});
+
+// §5.2 eq (7c) retireeIdx
+describe('retireeIdx §5.2 eq (7a–c)', () => {
+  it('retireeIdx(0) = 1 for all profiles (anchor)', () => {
+    for (const profile of Object.keys(DEMOGRAPHIC_PROFILES)) {
+      expect(retireeIdx(0, profile)).toBeCloseTo(1, 12);
+    }
+  });
+  it('cor_central peak = 1.30 at t = 22 (peakT)', () => {
+    expect(retireeIdx(22, 'cor_central')).toBeCloseTo(1.30, 12);
+  });
+  it('cor_central long-run = 1.25 at t = 70', () => {
+    expect(retireeIdx(70, 'cor_central')).toBeCloseTo(1.25, 12);
+  });
+  it('realistic peak = 1.40 at t = 22', () => {
+    expect(retireeIdx(22, 'realistic')).toBeCloseTo(1.40, 12);
+  });
+  it('reformed peak = 1.30 at t = 22', () => {
+    expect(retireeIdx(22, 'reformed')).toBeCloseTo(1.30, 12);
+  });
+});
+
+// §5.2 eq (7d) activePopFactor
+describe('activePopFactor §5.2 eq (7d)', () => {
+  it('exact at anchor t = 0 = 1.00 (cor_central)', () => {
+    expect(activePopFactor(0, 'cor_central')).toBeCloseTo(1.00, 12);
+  });
+  it('between (14, 1.0) and (29, 0.96): t=21.5 → 0.98', () => {
+    expect(activePopFactor(21.5, 'cor_central')).toBeCloseTo(0.98, 12);
+  });
+  it('clamps above last anchor (t > 70)', () => {
+    expect(activePopFactor(80, 'cor_central')).toBeCloseTo(0.86, 12);
+  });
+  it('reformed at t = 70 = 1.04', () => {
+    expect(activePopFactor(70, 'reformed')).toBeCloseTo(1.04, 12);
+  });
+});
+
+// §5.2 eq (7e) cohIdx — legacy cohort survival share
+describe('cohIdx §5.2 eq (7e)', () => {
+  it('cohIdx(0) = 1 by construction (§12 self-check)', () => {
+    expect(cohIdx(0)).toBe(1);
+  });
+  it('cohIdx(45) = 0 (extinction)', () => {
+    expect(cohIdx(45)).toBe(0);
+  });
+  it('monotonically non-increasing', () => {
+    let prev = cohIdx(0);
+    for (let t = 1; t <= 70; t++) {
+      const v = cohIdx(t);
+      expect(v).toBeLessThanOrEqual(prev + 1e-15);
+      prev = v;
+    }
   });
 });
