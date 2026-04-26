@@ -519,3 +519,103 @@ describe('§6 invariants — canned scenarios', () => {
     assertInvariants(runSimulation(cfg), cfg, 'extraSpread');
   });
 });
+
+// ===== §11.5 property-based tests =====
+// Deterministic PRNG (Mulberry32) so a failing seed reproduces.
+function mulberry32(seed) {
+  let s = seed >>> 0;
+  return function () {
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const cutoffChoices  = [null, 35, 40, 45, 50, 55, 60];
+const phasingChoices = ['immediate', 'phased-5y', 'phased-10y', 'partial-50', 'partial-75'];
+const profileChoices = ['cor_central', 'realistic', 'reformed'];
+const modeChoices    = ['fixed', 'indexed'];
+
+// Sample one config from the documented ranges in the Task 1 brief.
+function sampleConfig(rng) {
+  const u = (lo, hi) => lo + (hi - lo) * rng();
+  const pick = arr => arr[Math.floor(rng() * arr.length)];
+  return {
+    pi:   u(0.005, 0.05),
+    w_r:  u(-0.005, 0.015),
+    r_f:  u(0.01, 0.07),
+    r_c:  u(0.01, 0.07),
+    r_d_base: u(0.02, 0.06),
+    cutoffAge: pick(cutoffChoices),
+    retirementAgeBase: u(62, 68),
+    retirementAgeMode: pick(modeChoices),
+    useEquinoxe: rng() < 0.5,
+    equinoxePhasing: pick(phasingChoices),
+    enableCapi: rng() < 0.5,
+    demoProfile: pick(profileChoices),
+    employmentRateTarget: u(0.55, 0.85),
+    employmentTransitionYears: 3 + Math.floor(rng() * 23), // {3,4,...,25}
+    constructionMultiplier: u(0.5, 2.0),
+  };
+}
+
+describe('§11.5 property-based tests (1000 random configs)', () => {
+  it('all §6 invariants hold across 1000 random samples', () => {
+    const rng = mulberry32(0xCAB1ECAFE);
+    for (let i = 0; i < 1000; i++) {
+      const cfg = { ...DEFAULT_CONFIG, ...sampleConfig(rng) };
+      const rows = runSimulation(cfg);
+      try {
+        assertInvariants(rows, cfg, `i=${i}`);
+      } catch (e) {
+        throw new Error(
+          `Invariant failed on sample ${i}\nCONFIG: ${JSON.stringify(cfg)}\n${e.message}`,
+        );
+      }
+    }
+  }, 60_000);
+
+  // Property 2: r_d(t) ≤ r_d_cap = 0.20  (also covered by assertInvariants;
+  // explicit redundant check makes the property visible in test output.)
+  it('property: r_d(t) ≤ r_d_cap = 0.20 always', () => {
+    const rng = mulberry32(0xBEEF);
+    for (let i = 0; i < 200; i++) {
+      const cfg = { ...DEFAULT_CONFIG, ...sampleConfig(rng) };
+      for (const r of runSimulation(cfg)) {
+        expect(r.r_d_t).toBeLessThanOrEqual(0.20 + 1e-12);
+      }
+    }
+  });
+
+  // Property 3: under indexed mode, A_R(t) is non-decreasing.
+  it('property: indexed mode → A_R(t) non-decreasing', () => {
+    const rng = mulberry32(42);
+    for (let i = 0; i < 200; i++) {
+      const cfg = {
+        ...DEFAULT_CONFIG,
+        ...sampleConfig(rng),
+        retirementAgeMode: 'indexed',
+      };
+      const rows = runSimulation(cfg);
+      for (let t = 1; t < rows.length; t++) {
+        expect(rows[t].A_R_t).toBeGreaterThanOrEqual(rows[t - 1].A_R_t - 1e-12);
+      }
+    }
+  });
+
+  // Property 5 from §11.5: changing extraSpread does not directly affect gePenalty_t.
+  // (It changes gePenalty indirectly via debtRatio→r_d→deficit→K_t→capiToGdp,
+  // so we verify the year-0 case where K_0 isn't yet sensitive to spread.)
+  it('property: extraSpread does not affect gePenalty_0 (year 0)', () => {
+    const rng = mulberry32(7);
+    for (let i = 0; i < 100; i++) {
+      const base = { ...DEFAULT_CONFIG, ...sampleConfig(rng), extraSpread: 0 };
+      const stressed = { ...base, extraSpread: 0.02 };
+      const rB = runSimulation(base)[0];
+      const rS = runSimulation(stressed)[0];
+      expect(rS.gePenalty_t).toBeCloseTo(rB.gePenalty_t, 12);
+    }
+  });
+});
