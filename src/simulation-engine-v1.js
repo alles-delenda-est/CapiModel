@@ -1,9 +1,17 @@
-// CapiModel v1.0 simulation engine.
-// Spec source of truth: CapiModelSpec_v1.0.md @ commit 58ed874db93f0ffa95421a3cf2f3707608203498
+// CapiModel v1.0a simulation engine.
+// Spec source of truth: CapiModelSpec_v1_0a.md @ commit c466e6b
+// (Patrick's brief referenced SHA 2ac4f4f8b3... which does not exist in the
+//  repository; using c466e6b — current spec/v1.0a tip — as the authoritative pin.)
 // This file implements §1–§9 of the spec. Every non-trivial line of the
 // simulation loop carries a `// Spec §X.Y eq (N)` comment.
 // Naming follows the Greek→Latin map in docs/superpowers/plans/2026-04-26-capimodel-v1-task1.md;
 // do not rename.
+//
+// v1.0a deltas vs v1.0:
+//  1. Two risk-free rates: r_f_portfolio (eq 36 / 58) vs r_f_annuity (eq 53).
+//  2. HLM uniform geometric: ΔU_t = U0 × (1-ρ)^t × ρ for all t (eq 27).
+//  3. Capi pot owned by retirees by ASSET share, not headcount share (eq 53, 53a).
+//  4. Équinoxe split: benefit-side reductions vs tax-side CSG revenue (§5.5).
 
 // ---- §8.1 DREES 2022 pension distribution (€/month bracket bounds) ----
 
@@ -46,7 +54,14 @@ export const DEFAULT_CONFIG = {
   Y0: 2027,
   pi: 0.02,
   w_r: 0.004,
-  r_f: 0.045,
+  // §3.1 v1.0a: r_f split into two distinct rates.
+  // r_f_portfolio (eq 36 fundReturn, eq 58 spread) — diversified Legacy Fund
+  //   return; OECD 60/40 historical median.
+  // r_f_annuity (eq 53 annuityRate) — inflation-linked sovereign hedge rate;
+  //   French OATi 2024–2026.
+  // Setting them equal reproduces the v1.0 carry-trade arbitrage. Don't.
+  r_f_portfolio: 0.045,
+  r_f_annuity: 0.015,
   r_c: 0.045,
   r_d_base: 0.035,
   extraSpread: 0,
@@ -92,6 +107,12 @@ export const DEFAULT_CONFIG = {
   alpha: 1.0,
   lambda: 0.30,
   Tlambda: 15,
+  // §3.6 v1.0a: long-run share of aggregate K_t notionally owned by current
+  // retirees (vs still-accumulating workers). Eq (53a) ramps the actual share
+  // from 0 to this plateau via smoothstep over 30 years starting at
+  // T_capi_start. Without this scaling the model expropriates worker savings
+  // and masks the transition's fiscal cost (the v1.0 bug).
+  capiAssetShareSteadyState: 0.35,
   // §3.7 endogenous rate premium
   rpThreshold1: 150,
   rpSlope1: 0.0002,
@@ -323,7 +344,9 @@ export function runSimulation(userConfig = {}) {
   // ---- Constants per-config (no t dependence) ----
   const w_n   = fisher(cfg.w_r, cfg.pi);                       // §5.1 eq (1)
   const iota  = Math.min(w_n, cfg.pi);                         // §5.1 eq (2)
-  const r_f_n = fisher(cfg.r_f, cfg.pi);                       // §5.1 eq (3)
+  // v1.0a: nominal conversion is on r_f_portfolio (Legacy-Fund return),
+  // NOT r_f_annuity (which is used real in eq 53 for annuity pricing).
+  const r_f_portfolio_n = fisher(cfg.r_f_portfolio, cfg.pi);   // §5.1 eq (3)
   const cm = cfg.constructionMultiplier;
   const g_h_eff = Math.max(0, cfg.g_h - 1.6 * (cm - 1) * 0.01);// §5.1 eq (6a)
   const delta_eff = cfg.delta * clamp(2 - cm, 0.3, 1.7);       // §5.1 eq (6b)
@@ -358,27 +381,55 @@ export function runSimulation(userConfig = {}) {
     const C_s_capi_t = C_s_t * sigma_capi_t;                                    // (16)
     const C_s_payg_t = C_s_t * (1 - sigma_capi_t);                              // (17)
 
-    // ---------- §5.5 Équinoxe ----------
-    const R_t_millions = cfg.R0 * retireeIdx_t;
-    const S0_brackets = cfg.useEquinoxe ? computeS0Brackets(R_t_millions) : 0;  // (18)
-    const S0_total    = cfg.useEquinoxe
-      ? S0_brackets + cfg.S0_irDeduction + cfg.S0_csg : 0;                      // (19)
-    const phaseFactor_t = cfg.useEquinoxe ? equinoxePhaseFactor(t, cfg) : 0;    // (20)
-    const S0_t = S0_total * phaseFactor_t;                                      // (21)
-    const E0_net_t = cfg.E0 - S0_t;                                             // (22)
-
-    // ---------- §5.6 Retirees split ----------
+    // ---------- §5.6 Retirees split (eqs 23, 24) — eq 25 deferred ----------
+    // v1.0a: §5.5 Équinoxe consumes legacyRetirees_t (forward reference in spec).
+    // Compute the headcount split first so §5.5 can scope its components.
     const capiAct_t        = capiActivation(t, cfg);
     const capiRetirees_t   = (1 - cohIdx_t) * retireeIdx_t * capiAct_t;         // (23)
     const legacyRetirees_t = retireeIdx_t - capiRetirees_t;                     // (24)
-    const legacyExp_t      = Math.max(0, E0_net_t * legacyRetirees_t * I_factor_t); // (25)
+
+    // ---------- §5.5 Équinoxe (REVISED v1.0a, scope-split) ----------
+    // Components 1 & 2 (benefit-side, legacy retirees only):
+    //   S0_brackets_t (18) and S0_irDeduction_t (18b) reduce per-retiree legacy benefit.
+    // Component 3 (tax-side, ALL retirees):
+    //   S0_csg_t (18c) becomes revenue S0_csg_revenue_t flowing into nonEmplrNet (eq 38).
+    // Phasing applies uniformly to all three components per §10.11.
+    const phaseFactor_t = cfg.useEquinoxe ? equinoxePhaseFactor(t, cfg) : 0;    // (20)
+
+    // (18): bracket reduction now scaled by legacyRetirees(t) × R0 (millions of
+    // legacy direct-rights retirees), not retireeIdx (which would over-reduce).
+    const S0_brackets_t = cfg.useEquinoxe
+      ? computeS0Brackets(legacyRetirees_t * cfg.R0)
+      : 0;                                                                      // (18)
+    const S0_irDeduction_t = cfg.useEquinoxe
+      ? cfg.S0_irDeduction * legacyRetirees_t
+      : 0;                                                                      // (18b)
+    const S0_csg_t = cfg.useEquinoxe
+      ? cfg.S0_csg * retireeIdx_t
+      : 0;                                                                      // (18c)
+
+    // Apply scope:
+    // (21a): benefit-side total reduction (gets phased, divided by retirees).
+    const S0_legacy_t = (S0_brackets_t + S0_irDeduction_t) * phaseFactor_t;     // (21a)
+    // (21b): per-retiree-equivalent net legacy pension level. Guard against
+    // legacyRetirees → 0 in the long tail.
+    const E0_legacy_t = cfg.E0 - S0_legacy_t / Math.max(legacyRetirees_t, 1e-9); // (21b)
+    // (22): tax-side CSG revenue (phased), added to revenue stream in eq (38).
+    const S0_csg_revenue_t = S0_csg_t * phaseFactor_t;                          // (22)
+
+    // Diagnostics retained for backwards-comparison with v1.0:
+    const S0_total = S0_brackets_t + S0_irDeduction_t + S0_csg_t;
+
+    // ---------- §5.6 (continued): legacyExp_t now uses E0_legacy_t ----------
+    const legacyExp_t = Math.max(0, E0_legacy_t * legacyRetirees_t * I_factor_t); // (25)
 
     // ---------- §5.7 HLM proceeds ----------
-    // SPEC AMBIGUITY 1 (§5.7 eq 27): spec writes (1-ρ)^(t-1) for t≥1, so
-    // ΔU_0 = ΔU_1 = U0×ρ. Implemented literally as written.
-    const delta_U_t = (t === 0)
-      ? cfg.U0 * cfg.rho
-      : cfg.U0 * Math.pow(1 - cfg.rho, t - 1) * cfg.rho;                        // (27)
+    // v1.0a eq (27): uniform geometric form. ΔU_t = U_t × ρ where U_t = U0×(1-ρ)^t.
+    // Mass conservation: U_{t+1} = U_t − ΔU_t exactly. (v1.0 had a piecewise form
+    // ΔU_t = (t==0)?U0·ρ : U0·(1-ρ)^(t-1)·ρ which forced ΔU_0 = ΔU_1 and violated
+    // mass conservation by an extra year-1 cession.)
+    const U_t       = cfg.U0 * Math.pow(1 - cfg.rho, t);                        // (26)
+    const delta_U_t = U_t * cfg.rho;                                            // (27)
     const units_sold = delta_U_t * 1e6;
     const priceDiscount_t = (cfg.hlmDiscount && delta_eff > 0)
       ? Math.min(0.30, delta_eff * units_sold / cfg.baselineTransactions)
@@ -396,10 +447,13 @@ export function runSimulation(userConfig = {}) {
     const debtInterest_t = D_t * r_d_t;                                         // (35)
 
     // ---------- §5.9 Cash flow & employer waterfall ----------
-    const fundReturn_t = F_t * r_f_n;                                           // (36)
+    const fundReturn_t = F_t * r_f_portfolio_n;                                 // (36)
     const abatement_t  = cfg.A0 * Omega_t * empFactor * activePop_t;            // (37)
+    // v1.0a eq (38): S0_csg_revenue_t added as a tax-side revenue stream that
+    // applies to all retiree pension income (legacy + capi). Distinct from the
+    // benefit-side reductions (eqs 21a/21b) which only affect legacy.
     const nonEmplrNet_t = fundReturn_t + H_t_proceeds + abatement_t
-                        + C_s_payg_t - debtInterest_t;                          // (38)
+                        + C_s_payg_t + S0_csg_revenue_t - debtInterest_t;       // (38)
     const deficit_t = legacyExp_t - nonEmplrNet_t;                              // (39)
     const emplrAvail_t = C_e_t * (1 - cfg.phiF);                                // (40)
 
@@ -458,11 +512,27 @@ export function runSimulation(userConfig = {}) {
                       + (t / 10) * cfg.lifeExpAt65_per_decade
                       - (A_R_t - cfg.retirementAgeBase);                        // (52a)
     const T_ret_t = Math.max(15, LE_at_A_R_t);                                  // (52b)
-    const annuityRate_t = cfg.r_f > 0.001
-      ? cfg.r_f / (1 - Math.pow(1 + cfg.r_f, -T_ret_t))
+    // v1.0a eq (53): annuity priced at r_f_annuity (inflation-linked sovereign
+    // hedge rate, ~1.5% real), NOT the Legacy Fund's diversified portfolio yield.
+    // The guarantor must price the annuity at the rate at which they can hedge.
+    const annuityRate_t = cfg.r_f_annuity > 0.001
+      ? cfg.r_f_annuity / (1 - Math.pow(1 + cfg.r_f_annuity, -T_ret_t))
       : 1 / T_ret_t;
+    // v1.0a eq (53a): capi pot is owned by retirees BY ASSET SHARE, not by
+    // headcount share. The v1.0 formula `K_t × annuityRate × headcount_share`
+    // applied a per-individual annuity rate (~7%) to the entire aggregate pot
+    // scaled by the retiree-vs-total head ratio. Retirees actually own only a
+    // fraction of K_t — the rest belongs to still-accumulating workers. The
+    // v1.0 expropriation masked the transition's fiscal cost (cumShortfall=0).
+    // Asset-share ramps from 0 (no capi retirees yet) to capiAssetShareSteadyState
+    // over 30y starting at T_capi_start, proxying the time for the system to reach
+    // actuarial steady-state.
+    const capiAssetShare_t = smoothstep(t, T_capi_start, T_capi_start + 30)
+                           * cfg.capiAssetShareSteadyState;                     // (53a)
+    // capiRetireeShare_t retained as a real demographic quantity (used in
+    // diagnostics) but DOES NOT feed the payout formula in v1.0a.
     const capiRetireeShare_t = retireeIdx_t > 0 ? capiRetirees_t / retireeIdx_t : 0;
-    const potBasedPayout_t   = K_t * annuityRate_t * capiRetireeShare_t;        // (53)
+    const potBasedPayout_t   = K_t * annuityRate_t * capiAssetShare_t;          // (53)
     const capiPayoutDesired_t = Math.max(capiPayoutFloor_t, potBasedPayout_t);  // (54)
     const shortfall_t  = Math.max(0, capiPayoutDesired_t - K_avail_t);
     const capiPayout_t = capiPayoutDesired_t;
@@ -474,7 +544,8 @@ export function runSimulation(userConfig = {}) {
     K_t  = Math.max(0, K_avail_t - capiPayout_t);                               // (57)
 
     // ---------- §5.14 Diagnostics ----------
-    const spread_t = cfg.r_f - (r_d_t - cfg.pi);                                // (58)
+    // v1.0a eq (58): spread measures Legacy-Fund yield vs real sovereign cost.
+    const spread_t = cfg.r_f_portfolio - (r_d_t - cfg.pi);                      // (58)
     CI_t = CI_t + debtInterest_t;                                               // (59)
     const cumDF_t = cumDF_prev / (1 + r_d_t);
     const pvLegacyExp_t  = legacyExp_t  * cumDF_t;
@@ -487,7 +558,7 @@ export function runSimulation(userConfig = {}) {
       // identification
       t, year: cfg.Y0 + t,
       // §5.1 growth factors
-      w_n, iota, r_f_n, g_h_eff, delta_eff,
+      w_n, iota, r_f_portfolio_n, g_h_eff, delta_eff,
       Omega_t, I_factor_t, H_factor_t,
       // §5.2 demography
       retireeIdx: retireeIdx_t,
@@ -501,14 +572,15 @@ export function runSimulation(userConfig = {}) {
       capiActivation: capiAct_t,
       T_capi_start, capiRampSpan,
       C_s_capi_t, C_s_payg_t,
-      // §5.5 Équinoxe
-      S0_brackets, S0_total, phaseFactor_t, S0_t, E0_net_t,
+      // §5.5 Équinoxe (v1.0a: scope-split)
+      S0_brackets_t, S0_irDeduction_t, S0_csg_t, S0_total,
+      phaseFactor_t, S0_legacy_t, S0_csg_revenue_t, E0_legacy_t,
       // §5.6 retirees split & legacy expenditure
       legacyRetirees: legacyRetirees_t,
       capiRetirees: capiRetirees_t,
       legacyExp_t,
       // §5.7 HLM
-      delta_U_t, units_sold, priceDiscount_t, P_eff_t, gain_t, hlmActive_t,
+      U_t, delta_U_t, units_sold, priceDiscount_t, P_eff_t, gain_t, hlmActive_t,
       H_t_proceeds,
       // §5.8 borrowing rate
       GDP_t, D_ext_t, debtRatio_t, r_d_t, debtInterest_t,
@@ -524,7 +596,8 @@ export function runSimulation(userConfig = {}) {
       capiToGdp_t, gePenalty_t, r_c_eff_t, r_cn_eff_t, K_avail_t,
       // §5.13 payouts
       capiPayoutFloor_t, LE_at_A_R_t, T_ret_t, annuityRate_t,
-      capiRetireeShare_t, potBasedPayout_t, capiPayoutDesired_t,
+      capiRetireeShare_t, capiAssetShare_t,
+      potBasedPayout_t, capiPayoutDesired_t,
       shortfall_t, capiPayout_t,
       // §2 stocks (post-update)
       F_t, D_t, K_t, CI_t, CK_t,
