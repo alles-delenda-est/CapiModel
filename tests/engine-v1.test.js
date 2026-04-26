@@ -447,8 +447,12 @@ function assertInvariants(rows, cfg, label = '') {
     expect(r.r_d_t).toBeLessThanOrEqual(0.20 + 1e-12);
     expect(r.gePenalty_t).toBeGreaterThanOrEqual(0);
     expect(r.gePenalty_t).toBeLessThanOrEqual(1);
-    // §6.7 retirement-age invariants
-    expect(r.A_R_t - 22, `${tag} T_career ≥ 38`).toBeGreaterThanOrEqual(38 - 1e-12);
+    // §6.7 retirement-age invariants.
+    // (Spec §6.7 references `T_career(t) ≥ 38`, but `T_career(t)` is a relic in
+    // v1.0 — only `T_career_base` is used in the equations. The substantive
+    // v1.0 invariant is `A_R(t) ≥ retirementAgeFloor`, enforced by clamp 12d.)
+    expect(r.A_R_t, `${tag} A_R ≥ floor`)
+      .toBeGreaterThanOrEqual(cfg.retirementAgeFloor - 1e-12);
     expect(r.T_ret_t, `${tag} T_ret ≥ 15`).toBeGreaterThanOrEqual(15 - 1e-12);
     // §6.5 NPV consistency
     expect(r.cumDF_t).toBeGreaterThan(0);

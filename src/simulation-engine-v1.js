@@ -427,7 +427,10 @@ export function runSimulation(userConfig = {}) {
     }
 
     // ---------- §5.11 Transition levy (smoothed) ----------
-    // SPEC AMBIGUITY 2: spec writes T_capi_start(t); treated as constant.
+    // SPEC AMBIGUITY 2: spec writes T_capi_start(t) suggesting time-variation,
+    // but T_capi_start is a constant in v1.0 per eq (14). v1.1 / v1.2 plan to
+    // expose T_capi_start (and cutoffAge) as user parameters that may vary
+    // over the lifetime of the run; for v1.0 it is treated as a constant.
     // SPEC AMBIGUITY 4: D_t in levyPhaseOut is post-§5.10 value.
     const T_lambda_eff   = Math.max(cfg.Tlambda, T_capi_start);
     const levyActivation = smoothstep(t, T_lambda_eff - 1, T_lambda_eff + 1);
@@ -446,7 +449,10 @@ export function runSimulation(userConfig = {}) {
     const K_avail_t   = K_t * (1 + r_cn_eff_t) + netCapiFlow_t;                 // (50)
 
     // ---------- §5.13 Capi payouts & state guarantee ----------
-    // SPEC AMBIGUITY 3: floor uses E0 (not E0_net_t) — Équinoxe asymmetry.
+    // DELIBERATE ASYMMETRY (not an ambiguity): floor uses E0, not E0_net_t.
+    // Équinoxe is a reform of the legacy PAYG payout structure only — by design
+    // it does not reduce capi pensions. Spec §5.13 eq (51) is correct as written;
+    // do not "harmonise" by substituting E0_net_t.
     const capiPayoutFloor_t = cfg.E0 * capiRetirees_t * I_factor_t;             // (51)
     const LE_at_A_R_t = cfg.lifeExpAt65_Y0 + (65 - cfg.retirementAgeBase)
                       + (t / 10) * cfg.lifeExpAt65_per_decade
