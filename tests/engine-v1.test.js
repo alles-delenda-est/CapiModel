@@ -400,3 +400,122 @@ describe('§12 self-check anchors (default config)', () => {
     expect(rows[0].cohIdx).toBe(1);
   });
 });
+
+// ===== §6 invariant helper =====
+// Asserts ALL §6 invariants on every row of `rows` for config `cfg`.
+// Throws on first violation with a row index in the message.
+function assertInvariants(rows, cfg, label = '') {
+  const eps = 1e-9;
+  for (const r of rows) {
+    const tag = `${label} t=${r.t}`;
+    // §6.1 conservation
+    expect(r.legacyRetirees + r.capiRetirees, `${tag} retirees sum`)
+      .toBeCloseTo(r.retireeIdx, 12);
+    expect(r.C_s_capi_t + r.C_s_payg_t, `${tag} C_s sum`)
+      .toBeCloseTo(r.C_s_t, 9);
+    if (r.deficit_t <= r.emplrAvail_t) {
+      // waterfall not truncated → emplr split sums to C_e
+      expect(r.emplrToLeg_t + r.emplrToCap_t, `${tag} emplr sum`)
+        .toBeCloseTo(r.C_e_t, 9);
+    } else {
+      // truncated: emplrToLeg = emplrAvail, emplrToCap = C_e × phiF
+      expect(r.emplrToLeg_t).toBeCloseTo(r.emplrAvail_t, 9);
+      expect(r.emplrToCap_t).toBeCloseTo(r.C_e_t * cfg.phiF, 9);
+    }
+    // §6.2 stocks ≥ 0
+    expect(r.F_t, `${tag} F`).toBeGreaterThanOrEqual(-eps);
+    expect(r.K_t, `${tag} K`).toBeGreaterThanOrEqual(-eps);
+    expect(r.D_t, `${tag} D`).toBeGreaterThanOrEqual(-eps);
+    expect(r.D_ext_t, `${tag} D_ext`).toBeGreaterThanOrEqual(-eps);
+    // §6.2 flows ≥ 0 (excluding signed: netFlow_t, spread_t, deficit_t)
+    for (const k of [
+      'C_s_t', 'C_s_capi_t', 'C_s_payg_t', 'C_e_t',
+      'emplrAvail_t', 'emplrToLeg_t', 'emplrToCap_t',
+      'fundReturn_t', 'abatement_t', 'H_t_proceeds',
+      'legacyExp_t', 'debtInterest_t', 'levy_t', 'grossLevy_t',
+      'capiPayout_t', 'capiPayoutFloor_t', 'potBasedPayout_t',
+      'capiPayoutDesired_t', 'shortfall_t', 'borrowed_t',
+      'pvLegacyExp_t', 'pvCapiPayout_t',
+    ]) {
+      expect(r[k], `${tag} ${k}`).toBeGreaterThanOrEqual(-eps);
+    }
+    // §6.3 boundaries
+    expect(r.sigma_capi_t).toBeGreaterThanOrEqual(0);
+    expect(r.sigma_capi_t).toBeLessThanOrEqual(1);
+    expect(r.capiActivation).toBeGreaterThanOrEqual(0);
+    expect(r.capiActivation).toBeLessThanOrEqual(1);
+    expect(r.r_d_t).toBeLessThanOrEqual(0.20 + 1e-12);
+    expect(r.gePenalty_t).toBeGreaterThanOrEqual(0);
+    expect(r.gePenalty_t).toBeLessThanOrEqual(1);
+    // §6.7 retirement-age invariants
+    expect(r.A_R_t - 22, `${tag} T_career ≥ 38`).toBeGreaterThanOrEqual(38 - 1e-12);
+    expect(r.T_ret_t, `${tag} T_ret ≥ 15`).toBeGreaterThanOrEqual(15 - 1e-12);
+    // §6.5 NPV consistency
+    expect(r.cumDF_t).toBeGreaterThan(0);
+  }
+  // §6.5 cumDF monotonically non-increasing
+  for (let i = 1; i < rows.length; i++) {
+    expect(rows[i].cumDF_t,
+      `${label} cumDF non-increasing at t=${i}`)
+      .toBeLessThanOrEqual(rows[i - 1].cumDF_t + 1e-15);
+  }
+  // §6.7 mode-specific A_R behaviour
+  const expectedFixed = Math.min(
+    Math.max(cfg.retirementAgeBase, cfg.retirementAgeFloor),
+    cfg.retirementAgeCeil,
+  );
+  if (cfg.retirementAgeMode === 'fixed') {
+    for (const r of rows) {
+      expect(r.A_R_t, `${label} fixed A_R t=${r.t}`).toBeCloseTo(expectedFixed, 12);
+    }
+  } else if (cfg.retirementAgeMode === 'indexed') {
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i].A_R_t,
+        `${label} indexed A_R non-decreasing at t=${i}`)
+        .toBeGreaterThanOrEqual(rows[i - 1].A_R_t - 1e-12);
+    }
+  }
+}
+
+describe('§6 invariants — canned scenarios', () => {
+  it('default config', () => {
+    const cfg = { ...DEFAULT_CONFIG };
+    assertInvariants(runSimulation(cfg), cfg, 'default');
+  });
+  it('indexed retirement-age mode', () => {
+    const cfg = { ...DEFAULT_CONFIG, retirementAgeMode: 'indexed' };
+    assertInvariants(runSimulation(cfg), cfg, 'indexed');
+  });
+  it('enableCapi = false (no capi at all)', () => {
+    const cfg = { ...DEFAULT_CONFIG, enableCapi: false };
+    assertInvariants(runSimulation(cfg), cfg, 'noCapi');
+  });
+  it('cutoffAge = null (universal capi)', () => {
+    const cfg = { ...DEFAULT_CONFIG, cutoffAge: null };
+    assertInvariants(runSimulation(cfg), cfg, 'cutNull');
+  });
+  it('useEquinoxe = false', () => {
+    const cfg = { ...DEFAULT_CONFIG, useEquinoxe: false };
+    assertInvariants(runSimulation(cfg), cfg, 'noEquinoxe');
+  });
+  for (const profile of ['cor_central', 'realistic', 'reformed']) {
+    it(`demoProfile = ${profile}`, () => {
+      const cfg = { ...DEFAULT_CONFIG, demoProfile: profile };
+      assertInvariants(runSimulation(cfg), cfg, profile);
+    });
+  }
+  for (const mode of ['immediate', 'phased-5y', 'phased-10y', 'partial-50', 'partial-75']) {
+    it(`equinoxePhasing = ${mode}`, () => {
+      const cfg = { ...DEFAULT_CONFIG, equinoxePhasing: mode };
+      assertInvariants(runSimulation(cfg), cfg, mode);
+    });
+  }
+  it('phiF = 0.5 (half-floor employer to capi)', () => {
+    const cfg = { ...DEFAULT_CONFIG, phiF: 0.5 };
+    assertInvariants(runSimulation(cfg), cfg, 'phiF=0.5');
+  });
+  it('extraSpread = 0.02 (rate stress)', () => {
+    const cfg = { ...DEFAULT_CONFIG, extraSpread: 0.02 };
+    assertInvariants(runSimulation(cfg), cfg, 'extraSpread');
+  });
+});
