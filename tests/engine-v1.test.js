@@ -12,6 +12,12 @@ import {
   computeS0Brackets,
   computeRD,
   computeGePenalty,
+  retirementAge,
+  sigmaCapi,
+  capiActivation,
+  T_capi_start_of,
+  T_career_base_of,
+  capiRampSpan_of,
 } from '../src/simulation-engine-v1.js';
 
 describe('module scaffold', () => {
@@ -174,5 +180,108 @@ describe('computeGePenalty §5.12 eq (47)', () => {
     const v = computeGePenalty(2.001, knee, floor);
     expect(v).toBeGreaterThan(0);
     expect(v).toBeLessThan(1);
+  });
+});
+
+// §5.4 eq (12) retirement-age trajectory
+describe('retirementAge §5.4 eq (12)', () => {
+  it('fixed mode: A_R(t) constant at base', () => {
+    const cfg = { ...DEFAULT_CONFIG, retirementAgeMode: 'fixed' };
+    expect(retirementAge(0, cfg)).toBe(64);
+    expect(retirementAge(10, cfg)).toBe(64);
+    expect(retirementAge(70, cfg)).toBe(64);
+  });
+  it('indexed mode: A_R(0) = base exactly (§11.1)', () => {
+    const cfg = { ...DEFAULT_CONFIG, retirementAgeMode: 'indexed' };
+    expect(retirementAge(0, cfg)).toBeCloseTo(64, 12);
+  });
+  it('indexed mode: monotonically non-decreasing in t (§6.7)', () => {
+    const cfg = { ...DEFAULT_CONFIG, retirementAgeMode: 'indexed' };
+    let prev = retirementAge(0, cfg);
+    for (let t = 1; t < 70; t++) {
+      const v = retirementAge(t, cfg);
+      expect(v).toBeGreaterThanOrEqual(prev - 1e-12);
+      prev = v;
+    }
+  });
+  it('indexed mode: A_R(t=10) = base + 10/10 × 0.91 × 0.5 = 64.455', () => {
+    const cfg = { ...DEFAULT_CONFIG, retirementAgeMode: 'indexed' };
+    expect(retirementAge(10, cfg)).toBeCloseTo(64.455, 12);
+  });
+  it('clamps at ceiling (extreme indexation)', () => {
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      retirementAgeMode: 'indexed',
+      retirementAgeBase: 69,
+      lifeExpAt65_per_decade: 5,
+    };
+    expect(retirementAge(70, cfg)).toBe(70);
+  });
+  it('clamps at floor when base below floor', () => {
+    const cfg = { ...DEFAULT_CONFIG, retirementAgeBase: 58 };
+    expect(retirementAge(0, cfg)).toBe(60);
+  });
+});
+
+// §5.4 eqs (13, 14) and §5.6 cohort-routing constants
+describe('cohort-routing constants', () => {
+  it('T_career_base = retirementAgeBase − 22', () => {
+    expect(T_career_base_of(DEFAULT_CONFIG)).toBe(42);
+    expect(T_career_base_of({ ...DEFAULT_CONFIG, retirementAgeBase: 67 })).toBe(45);
+  });
+  it('T_capi_start = max(0, retirementAgeBase − cutoffAge); 0 if cutoffAge=null', () => {
+    expect(T_capi_start_of(DEFAULT_CONFIG)).toBe(14);
+    expect(T_capi_start_of({ ...DEFAULT_CONFIG, cutoffAge: null })).toBe(0);
+    expect(T_capi_start_of({ ...DEFAULT_CONFIG, cutoffAge: 70 })).toBe(0);
+  });
+  it('capiRampSpan = max(5, cutoffAge−22) when set; max(5, base−22) when null', () => {
+    expect(capiRampSpan_of(DEFAULT_CONFIG)).toBe(28);
+    expect(capiRampSpan_of({ ...DEFAULT_CONFIG, cutoffAge: 25 })).toBe(5);
+    expect(capiRampSpan_of({ ...DEFAULT_CONFIG, cutoffAge: null })).toBe(42);
+  });
+});
+
+// §5.4 eq (15) σ_capi(t)
+describe('sigmaCapi §5.4 eq (15)', () => {
+  it('enableCapi=false: σ = 0 always', () => {
+    const cfg = { ...DEFAULT_CONFIG, enableCapi: false };
+    expect(sigmaCapi(0, cfg)).toBe(0);
+    expect(sigmaCapi(40, cfg)).toBe(0);
+  });
+  it('cutoffAge=null with enableCapi: σ = 1 always', () => {
+    const cfg = { ...DEFAULT_CONFIG, cutoffAge: null };
+    expect(sigmaCapi(0, cfg)).toBe(1);
+    expect(sigmaCapi(70, cfg)).toBe(1);
+  });
+  it('default (cutoff=50, base=64): σ(0) = 28/42 ≈ 0.6667', () => {
+    expect(sigmaCapi(0, DEFAULT_CONFIG)).toBeCloseTo(28 / 42, 12);
+  });
+  it('reaches 1 by t = 14 (T_career_base − (cutoffAge−22))', () => {
+    expect(sigmaCapi(14, DEFAULT_CONFIG)).toBeCloseTo(1, 12);
+    expect(sigmaCapi(15, DEFAULT_CONFIG)).toBe(1);
+    expect(sigmaCapi(50, DEFAULT_CONFIG)).toBe(1);
+  });
+  it('clamps at 0 for t such that (cutoffAge−22+t)/T_career_base ≤ 0', () => {
+    // With cutoffAge = 22, t=0 gives 0/42 = 0
+    const cfg = { ...DEFAULT_CONFIG, cutoffAge: 22 };
+    expect(sigmaCapi(0, cfg)).toBe(0);
+    expect(sigmaCapi(21, cfg)).toBeCloseTo(0.5, 12);
+  });
+});
+
+// §5.6 capiActivation
+describe('capiActivation §5.6', () => {
+  it('enableCapi=false: 0 always', () => {
+    const cfg = { ...DEFAULT_CONFIG, enableCapi: false };
+    expect(capiActivation(0, cfg)).toBe(0);
+    expect(capiActivation(70, cfg)).toBe(0);
+  });
+  it('zero before T_capi_start', () => {
+    expect(capiActivation(0, DEFAULT_CONFIG)).toBe(0);
+    expect(capiActivation(14, DEFAULT_CONFIG)).toBe(0);
+  });
+  it('one at T_capi_start + capiRampSpan and beyond', () => {
+    expect(capiActivation(42, DEFAULT_CONFIG)).toBe(1);
+    expect(capiActivation(70, DEFAULT_CONFIG)).toBe(1);
   });
 });

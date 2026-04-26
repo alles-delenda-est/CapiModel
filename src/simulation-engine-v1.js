@@ -215,6 +215,58 @@ export function computeGePenalty(capiToGdp, knee, floor) {
   return 1 - (capiToGdp - knee) / (floor - knee);
 }
 
+// §5.4 eq (12): retirement-age trajectory.
+// fixed: A_R(t) = retirementAgeBase always.
+// indexed: A_R(t) rises by half the gain in life expectancy at 65 since Y0.
+// Then clamped to [retirementAgeFloor, retirementAgeCeil] (eq 12d).
+// Note: A_R is real-valued — never round in the loop (§10.2).
+export function retirementAge(t, cfg) {
+  let A_R;
+  if (cfg.retirementAgeMode === 'indexed') {
+    const LE65_t = cfg.lifeExpAt65_Y0 + (t / 10) * cfg.lifeExpAt65_per_decade;     // (12a)
+    const delta_LE_t = LE65_t - cfg.lifeExpAt65_Y0;                                // (12b)
+    A_R = cfg.retirementAgeBase + delta_LE_t * LIFE_EXP_INDEXATION_FRACTION;       // (12c)
+  } else {
+    A_R = cfg.retirementAgeBase;
+  }
+  return clamp(A_R, cfg.retirementAgeFloor, cfg.retirementAgeCeil);                // (12d)
+}
+
+// §5.4 eq (13): baseline career length.
+export function T_career_base_of(cfg) {
+  return cfg.retirementAgeBase - 22;
+}
+
+// §5.4 eq (14): year the first capi cohort retires.
+export function T_capi_start_of(cfg) {
+  if (cfg.cutoffAge == null) return 0;
+  return Math.max(0, cfg.retirementAgeBase - cfg.cutoffAge);
+}
+
+// §5.6: capiRampSpan — duration of the cohort-activation ramp.
+export function capiRampSpan_of(cfg) {
+  if (cfg.cutoffAge == null) return Math.max(5, cfg.retirementAgeBase - 22);
+  return Math.max(5, cfg.cutoffAge - 22);
+}
+
+// §5.4 eq (15): worker-contribution share routed to capitalisation.
+// Note: denominator is T_career_base (constant) per §10.3 — NOT A_R(t),
+// which would make the routing non-monotone under indexed retirement age.
+export function sigmaCapi(t, cfg) {
+  if (!cfg.enableCapi) return 0;
+  if (cfg.cutoffAge == null) return 1;
+  const T_career_base = T_career_base_of(cfg);
+  return clamp((cfg.cutoffAge - 22 + t) / T_career_base, 0, 1);
+}
+
+// §5.6: capiActivation(t) — fraction of post-2027 retirees in the capi system.
+export function capiActivation(t, cfg) {
+  if (!cfg.enableCapi) return 0;
+  const start = T_capi_start_of(cfg);
+  const span = capiRampSpan_of(cfg);
+  return smoothstep(t, start, start + span);
+}
+
 // =================== runSimulation ===================
 // (Filled in by Task 9.)
 
