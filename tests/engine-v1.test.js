@@ -623,8 +623,12 @@ function sampleConfig(rng) {
   return {
     pi:   u(0.005, 0.05),
     w_r:  u(-0.005, 0.015),
-    r_f:  u(0.01, 0.07),
-    r_c:  u(0.01, 0.07),
+    // v1.0a: split r_f. Portfolio drawn from the v1.0 range; annuity from a
+    // realistic OATi-equivalent range. Constrained so portfolio > annuity
+    // (carry-trade arbitrage avoidance).
+    r_f_portfolio: u(0.025, 0.07),
+    r_f_annuity:   u(0.005, 0.025),
+    r_c:           u(0.01, 0.07),
     r_d_base: u(0.02, 0.06),
     cutoffAge: pick(cutoffChoices),
     retirementAgeBase: u(62, 68),
