@@ -366,7 +366,9 @@ describe('runSimulation skeleton', () => {
       'capiToGdp_t', 'gePenalty_t', 'r_c_eff_t', 'K_avail_t',
       'capiPayoutFloor_t', 'potBasedPayout_t', 'capiPayoutDesired_t',
       'shortfall_t', 'capiPayout_t',
-      'S0_brackets', 'S0_total', 'S0_t', 'phaseFactor_t', 'E0_net_t',
+      'S0_brackets_t', 'S0_irDeduction_t', 'S0_csg_t', 'S0_total',
+      'S0_legacy_t', 'S0_csg_revenue_t', 'phaseFactor_t', 'E0_legacy_t',
+      'capiAssetShare_t', 'U_t',
       'legacyExp_t', 'dependencyRatio_t',
       'cumDF_t', 'pvLegacyExp_t', 'pvCapiPayout_t',
       'pvLegacyCum_t', 'pvCapiPayoutCum_t',
@@ -389,9 +391,9 @@ describe('runSimulation skeleton', () => {
 // §12 reference output — three values invariant under any v1.0 implementation
 describe('§12 self-check anchors (default config)', () => {
   const rows = runSimulation();
-  it('S0_brackets ≈ 17.7 Md€/yr at t=0 (pre-phasing)', () => {
-    expect(rows[0].S0_brackets).toBeGreaterThan(17.0);
-    expect(rows[0].S0_brackets).toBeLessThan(18.5);
+  it('S0_brackets_t ≈ 17.7 Md€/yr at t=0 (pre-phasing; v1.0a: scaled by legacyRetirees(0)=1)', () => {
+    expect(rows[0].S0_brackets_t).toBeGreaterThan(17.0);
+    expect(rows[0].S0_brackets_t).toBeLessThan(18.5);
   });
   it('r_d(0) = r_d_base = 0.035  (debtRatio(0)=115% < threshold1=150%)', () => {
     expect(rows[0].r_d_t).toBeCloseTo(0.035, 12);

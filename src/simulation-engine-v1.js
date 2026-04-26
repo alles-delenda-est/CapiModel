@@ -381,20 +381,47 @@ export function runSimulation(userConfig = {}) {
     const C_s_capi_t = C_s_t * sigma_capi_t;                                    // (16)
     const C_s_payg_t = C_s_t * (1 - sigma_capi_t);                              // (17)
 
-    // ---------- §5.5 Équinoxe ----------
-    const R_t_millions = cfg.R0 * retireeIdx_t;
-    const S0_brackets = cfg.useEquinoxe ? computeS0Brackets(R_t_millions) : 0;  // (18)
-    const S0_total    = cfg.useEquinoxe
-      ? S0_brackets + cfg.S0_irDeduction + cfg.S0_csg : 0;                      // (19)
-    const phaseFactor_t = cfg.useEquinoxe ? equinoxePhaseFactor(t, cfg) : 0;    // (20)
-    const S0_t = S0_total * phaseFactor_t;                                      // (21)
-    const E0_net_t = cfg.E0 - S0_t;                                             // (22)
-
-    // ---------- §5.6 Retirees split ----------
+    // ---------- §5.6 Retirees split (eqs 23, 24) — eq 25 deferred ----------
+    // v1.0a: §5.5 Équinoxe consumes legacyRetirees_t (forward reference in spec).
+    // Compute the headcount split first so §5.5 can scope its components.
     const capiAct_t        = capiActivation(t, cfg);
     const capiRetirees_t   = (1 - cohIdx_t) * retireeIdx_t * capiAct_t;         // (23)
     const legacyRetirees_t = retireeIdx_t - capiRetirees_t;                     // (24)
-    const legacyExp_t      = Math.max(0, E0_net_t * legacyRetirees_t * I_factor_t); // (25)
+
+    // ---------- §5.5 Équinoxe (REVISED v1.0a, scope-split) ----------
+    // Components 1 & 2 (benefit-side, legacy retirees only):
+    //   S0_brackets_t (18) and S0_irDeduction_t (18b) reduce per-retiree legacy benefit.
+    // Component 3 (tax-side, ALL retirees):
+    //   S0_csg_t (18c) becomes revenue S0_csg_revenue_t flowing into nonEmplrNet (eq 38).
+    // Phasing applies uniformly to all three components per §10.11.
+    const phaseFactor_t = cfg.useEquinoxe ? equinoxePhaseFactor(t, cfg) : 0;    // (20)
+
+    // (18): bracket reduction now scaled by legacyRetirees(t) × R0 (millions of
+    // legacy direct-rights retirees), not retireeIdx (which would over-reduce).
+    const S0_brackets_t = cfg.useEquinoxe
+      ? computeS0Brackets(legacyRetirees_t * cfg.R0)
+      : 0;                                                                      // (18)
+    const S0_irDeduction_t = cfg.useEquinoxe
+      ? cfg.S0_irDeduction * legacyRetirees_t
+      : 0;                                                                      // (18b)
+    const S0_csg_t = cfg.useEquinoxe
+      ? cfg.S0_csg * retireeIdx_t
+      : 0;                                                                      // (18c)
+
+    // Apply scope:
+    // (21a): benefit-side total reduction (gets phased, divided by retirees).
+    const S0_legacy_t = (S0_brackets_t + S0_irDeduction_t) * phaseFactor_t;     // (21a)
+    // (21b): per-retiree-equivalent net legacy pension level. Guard against
+    // legacyRetirees → 0 in the long tail.
+    const E0_legacy_t = cfg.E0 - S0_legacy_t / Math.max(legacyRetirees_t, 1e-9); // (21b)
+    // (22): tax-side CSG revenue (phased), added to revenue stream in eq (38).
+    const S0_csg_revenue_t = S0_csg_t * phaseFactor_t;                          // (22)
+
+    // Diagnostics retained for backwards-comparison with v1.0:
+    const S0_total = S0_brackets_t + S0_irDeduction_t + S0_csg_t;
+
+    // ---------- §5.6 (continued): legacyExp_t now uses E0_legacy_t ----------
+    const legacyExp_t = Math.max(0, E0_legacy_t * legacyRetirees_t * I_factor_t); // (25)
 
     // ---------- §5.7 HLM proceeds ----------
     // v1.0a eq (27): uniform geometric form. ΔU_t = U_t × ρ where U_t = U0×(1-ρ)^t.
@@ -422,8 +449,11 @@ export function runSimulation(userConfig = {}) {
     // ---------- §5.9 Cash flow & employer waterfall ----------
     const fundReturn_t = F_t * r_f_portfolio_n;                                 // (36)
     const abatement_t  = cfg.A0 * Omega_t * empFactor * activePop_t;            // (37)
+    // v1.0a eq (38): S0_csg_revenue_t added as a tax-side revenue stream that
+    // applies to all retiree pension income (legacy + capi). Distinct from the
+    // benefit-side reductions (eqs 21a/21b) which only affect legacy.
     const nonEmplrNet_t = fundReturn_t + H_t_proceeds + abatement_t
-                        + C_s_payg_t - debtInterest_t;                          // (38)
+                        + C_s_payg_t + S0_csg_revenue_t - debtInterest_t;       // (38)
     const deficit_t = legacyExp_t - nonEmplrNet_t;                              // (39)
     const emplrAvail_t = C_e_t * (1 - cfg.phiF);                                // (40)
 
@@ -542,8 +572,9 @@ export function runSimulation(userConfig = {}) {
       capiActivation: capiAct_t,
       T_capi_start, capiRampSpan,
       C_s_capi_t, C_s_payg_t,
-      // §5.5 Équinoxe
-      S0_brackets, S0_total, phaseFactor_t, S0_t, E0_net_t,
+      // §5.5 Équinoxe (v1.0a: scope-split)
+      S0_brackets_t, S0_irDeduction_t, S0_csg_t, S0_total,
+      phaseFactor_t, S0_legacy_t, S0_csg_revenue_t, E0_legacy_t,
       // §5.6 retirees split & legacy expenditure
       legacyRetirees: legacyRetirees_t,
       capiRetirees: capiRetirees_t,
