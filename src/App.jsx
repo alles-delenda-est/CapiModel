@@ -1,10 +1,11 @@
-import { useState, useMemo, useCallback, useRef } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
+  LineChart, Line, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine, ComposedChart,
 } from 'recharts'
-import { runSimulation, extractKPIs, PRESETS } from './simulation-engine.js'
+import { runSimulation, DEFAULT_CONFIG } from './simulation-engine-v1.js'
+import { PRESETS, extractKPIs } from './v1-presets.js'
 import useHashNavigation from './hooks/useHashNavigation.js'
 import Navigation from './components/Navigation.jsx'
 import EnhancedSlider from './components/EnhancedSlider.jsx'
@@ -14,39 +15,35 @@ import IntroPage from './pages/IntroPage.jsx'
 import SimplifiedView from './pages/SimplifiedView.jsx'
 import HypothesesPage from './pages/HypothesesPage.jsx'
 
-// --- Tooltip descriptions for each parameter (layman-friendly) ---
+// --- Tooltip descriptions for each parameter (v1.0a) ---
 const TIPS = {
   pi: "Le taux d'inflation annuel. Mesure la hausse générale des prix. La BCE vise 2% par an.",
-  w_r: "La croissance annuelle des salaires au-delà de l'inflation. En France, historiquement ~0.5-0.7% ces dernières années.",
-  N: "Le nombre d'années simulées à partir de 2026.",
-  E0: "Le montant total des pensions versées aujourd'hui, toutes caisses confondues (base, complémentaire, réversion). Source : DREES.",
-  r_c: "Le rendement réel (après inflation) des comptes de capitalisation individuels. Un portefeuille diversifié 60/40 rapporte historiquement ~3-3.5% réel.",
-  r_f: "Le rendement réel des actifs du fonds legacy (CDC). Similaire à un portefeuille institutionnel diversifié.",
-  r_d_base: "Le taux nominal auquel l'État emprunte (OAT 10 ans). La France emprunte actuellement à ~3-3.5%.",
-  endogenousRd: "Si activé, le taux d'emprunt augmente automatiquement quand la dette/PIB dépasse certains seuils, reflétant la prime de risque exigée par les marchés.",
-  extraSpread: "Un surcoût additionnel sur le taux d'emprunt, pour tester des scénarios de stress financier.",
-  rpThreshold1: "Ratio dette/PIB en dessous duquel les marchés n'exigent aucune prime de risque. Les États-Unis et l'Italie empruntent sans crise à >100%.",
-  rpSlope1: "Combien le taux d'emprunt augmente pour chaque point de % de dette/PIB au-dessus du seuil 1. En points de base (1 bp = 0.01%).",
-  rpThreshold3: "Ratio dette/PIB au-delà duquel les marchés commencent à paniquer. Zone de crise souveraine.",
-  rpSlope3: "Vitesse d'augmentation du taux en zone de crise. Beaucoup plus agressive qu'en zone normale.",
-  rho: "La fraction du parc HLM vendue chaque année. 5% = ~265 000 logements/an sur 5.3 millions.",
-  hlmDiscount: "Applique une décote aux prix HLM pour refléter l'impact sur le marché immobilier d'un volume de ventes important.",
-  delta: "Sensibilité du prix HLM au volume vendu. Plus c'est élevé, plus les prix baissent quand on vend beaucoup.",
-  P0: "Prix moyen de marché d'un logement social. Varie fortement entre l'Île-de-France (~250k€) et la province (~120k€).",
-  g_h: "La hausse annuelle des prix immobiliers au-delà de l'inflation.",
-  tauS: "Le taux de cotisation retraite prélevé sur le salaire brut des employés. Dans cette réforme, 100% va à la capitalisation.",
-  tauE: "Le taux de cotisation retraite payé par l'employeur. Sert d'abord à couvrir les pensions legacy, le surplus va à la capitalisation.",
-  phiF: "Part minimum des cotisations employeur réservée à la capitalisation, même pendant la phase de déficit legacy.",
-  lambda: "Fraction des flux de capitalisation prélevée pour accélérer le remboursement de la dette de transition.",
-  Tlambda: "Année (après la réforme) à partir de laquelle le prélèvement sur la capitalisation s'active.",
-  useEquinoxe: "Réduction progressive des pensions élevées par tranche selon la proposition du Parti Équinoxe (plafonnée à 20 % au-delà de 4 000 €/mois). Alternative : réduction uniforme au-dessus d'un seuil fixe.",
-  kappa: "Taux de réduction appliqué aux pensions au-dessus du seuil (mode step function uniquement).",
-  threshold: "Seuil mensuel de pension brute au-dessus duquel la réduction s'applique (mode step function).",
-  F0: "Valeur des actifs CDC (hors Livret A) transférés au fonds legacy le jour de la réforme.",
-  Tpk: "Nombre d'années avant que les dépenses legacy atteignent leur pic. Reflète l'arrivée à la retraite de travailleurs ayant des droits PAYG partiels.",
-  Thl: "Vitesse à laquelle les dépenses legacy déclinent après le pic. Plus court = transition plus rapide.",
-  cutoffAge: "Âge limite en 2026 pour intégrer le régime de capitalisation. Les personnes au-delà conservent 100% de leurs droits en répartition. « Aucun » = tout le monde bascule (comportement original du document technique).",
-  existingDebtGrowth: "Taux nominal de croissance de la dette française existante (3 200 Md€). À 0% la dette est figée (irréaliste). À ~2,7% elle suit le PIB nominal, maintenant constant le ratio dette/PIB pré-réforme. Au-delà, le ratio augmente et peut déclencher la prime de risque endogène.",
+  w_r: "La croissance annuelle des salaires au-delà de l'inflation (anchored sur ~0,4%/an INSEE 2014–2024).",
+  r_f_portfolio: "Rendement réel du fonds legacy (CDC/FRR/Agirc-Arrco). Portefeuille institutionnel diversifié 60/40, médiane historique OCDE ~4,5% réel.",
+  r_f_annuity: "Taux réel auquel l'État peut couvrir une rente indexée sur l'inflation (≈ OATi 2024–2026, ~1,5% réel). v1.0a sépare ce taux de r_f_portfolio pour résoudre l'arbitrage carry-trade.",
+  r_c: "Rendement réel du pot de capitalisation. Anchored sur Norvège GPFG / Ontario Teachers' (~4,5% réel).",
+  r_d_base: "Taux nominal de l'OAT 10 ans pré-réforme (~3,5% début 2026).",
+  extraSpread: "Surcoût additionnel sur le taux d'emprunt, pour tester un stress financier.",
+  cutoffAge: "Âge maximum en 2027 pour intégrer le régime de capitalisation. « Aucun » = bascule universelle.",
+  retirementAgeBase: "Âge effectif de départ à la retraite (post-réforme 2023, France ≈ 64).",
+  retirementAgeMode: "Indexation : « fixe » garde l'âge constant ; « indexé » l'augmente d'1/2 du gain d'espérance de vie à 65 ans (logique NDC suédoise/italienne).",
+  useEquinoxe: "Active la réforme Équinoxe (réduction progressive des pensions élevées + restauration CSG/CRDS taux plein).",
+  enableCapi: "Active le régime de capitalisation (sinon : 100% PAYG).",
+  demoProfile: "Scénario démographique : COR central, réaliste (TFR ≤1,65), ou réformé (TFR 1,9 + migration).",
+  employmentRateTarget: "Cible long-terme du taux d'emploi 15–64 (OCDE médiane ≈ 0,76).",
+  employmentTransitionYears: "Durée de la rampe smoothstep vers la cible d'emploi.",
+  constructionMultiplier: "Levier de libéralisation du foncier : >1 = libéralisation (impacte g_h et la décote HLM).",
+  rho: "Fraction du parc HLM vendue chaque année (5% = ~265 000 logements/an).",
+  delta: "Sensibilité du prix HLM au volume vendu.",
+  hlmDiscount: "Applique une décote volume aux prix HLM.",
+  lambda: "Fraction des flux de capi prélevée pour rembourser la dette de transition.",
+  alpha: "Fraction du surplus annuel dirigée vers le remboursement de dette (1 = total).",
+  Tlambda: "Année à partir de laquelle le prélèvement de transition s'active (smoothing ±1 an).",
+  phiF: "Plancher employeur vers la capitalisation (0 = waterfall complet vers legacy d'abord).",
+  deltaTauxPatronal: "Baisse optionnelle du taux de cotisation employeur.",
+  T_hlm: "Durée du programme de cession HLM (5 ans de taper en fin).",
+  capiAssetShareSteadyState: "Part actuarielle de long terme du pot capi détenue par les retraités (vs travailleurs en accumulation). Eq (53a) v1.0a remplace le partage par tête (qui exproprait les travailleurs).",
+  equinoxePhasing: "Profil temporel de mise en œuvre Équinoxe : immediate, phased-5y/-10y, partial-50/-75.",
 }
 
 function Toggle({ label, checked, onChange, tip }) {
@@ -59,76 +56,75 @@ function Toggle({ label, checked, onChange, tip }) {
 }
 
 // --- Format helpers ---
-const fmtN = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '\u2019')
+const fmtN = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '’')
 const fmtMd = v => `${fmtN(v)} Md`
 const fmtPct = v => `${(v * 100).toFixed(2)}%`
 const fmtYear = v => v ? `${v}` : 'Jamais'
 
-// --- URL parameter encoding/decoding ---
-// Keys that may hold `null` as a meaningful value (distinct from default numeric).
-const NULLABLE_KEYS = new Set(['cutoffAge'])
-
-function decodeParamValue(k, v) {
-  if (NULLABLE_KEYS.has(k) && (v === 'null' || v === '')) return null
-  if (v === 'true') return true
-  if (v === 'false') return false
-  const n = parseFloat(v)
-  return Number.isNaN(n) ? v : n
-}
-
-function paramsToURL(params) {
-  const defs = PRESETS.default.params
-  const diff = {}
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== defs[k]) diff[k] = v === null ? 'null' : v
-  }
-  if (Object.keys(diff).length === 0) return ''
-  return '?' + new URLSearchParams(diff).toString()
-}
-
-function paramsFromURL() {
+// --- Detect legacy v0.11 share-URL parameters and notify (Task 3 §Routing) ---
+function hasLegacyShareUrl() {
   const sp = new URLSearchParams(window.location.search)
-  if (sp.size === 0) return null
-  const preset = sp.get('preset')
-  if (preset && PRESETS[preset]) {
-    const base = { ...PRESETS[preset].params }
-    sp.delete('preset')
-    for (const [k, v] of sp.entries()) {
-      if (k in base) base[k] = decodeParamValue(k, v)
-    }
-    return base
-  }
-  const base = { ...PRESETS.default.params }
-  for (const [k, v] of sp.entries()) {
-    if (k in base) base[k] = decodeParamValue(k, v)
-  }
-  return base
+  return sp.has('existingDebtGrowth') || sp.has('r_f') || sp.has('tauS') ||
+         sp.has('tauE') || sp.has('Tpk') || sp.has('Thl') || sp.has('preset')
 }
 
-// --- Table column definitions (always: 8 key cols; expert-only: remaining 14) ---
+// --- v1.0a row schema → chart-friendly fields ---
+function rowToChart(r) {
+  return {
+    year: r.year,
+    // Revenues into nonEmplrNet (eq 38)
+    fundReturn: r.fundReturn_t,
+    hlmProceeds: r.H_t_proceeds,
+    abatement: r.abatement_t,
+    emplrToLeg: r.emplrToLeg_t,
+    csgRevenue: r.S0_csg_revenue_t,    // v1.0a NEW chart row
+    // Expenditure
+    legacyExp: r.legacyExp_t,
+    capiPayout: r.capiPayout_t,
+    totalPensionExp: r.legacyExp_t + r.capiPayout_t,
+    // Stocks & rates
+    debt: r.D_t,
+    r_d: r.r_d_t * 100,
+    capi: r.K_t,
+    capiReal: r.K_t / Math.pow(1 + 0.02, r.t),
+    spread: r.spread_t * 100,
+    // Flows for the bar chart
+    emplC_s_toCapi: r.C_s_capi_t,
+    emplC_s_toPayg: r.C_s_payg_t,
+    emplrToLeg_bar: r.emplrToLeg_t,
+    emplrToCap_bar: r.emplrToCap_t,
+    levy: r.levy_t,
+    // NPV
+    pvLegacyCum: r.pvLegacyCum_t,
+    pvCapiPayoutCum: r.pvCapiPayoutCum_t,
+    gdp: r.GDP_t,
+  }
+}
+
+// --- Table columns (v1.0a field names) ---
 const TABLE_COLUMNS = [
-  { key: 'year',      label: 'Année',     title: 'Année calendaire (2026 = année 0 de la réforme)',                                                     always: true,  render: r => r.year },
-  { key: 'debt',      label: 'Dette',     title: 'Encours de la dette de transition en fin d\'année (Md€).',                                             always: true,  render: r => fmtN(r.debt) },
-  { key: 'debtRatio', label: 'Dette/PIB', title: 'Ratio dette totale (pré-existante + transition) / PIB.',                                               always: true,  render: r => `${r.debtRatio.toFixed(1)}%` },
-  { key: 'legacyExp', label: 'Dép. legacy', title: 'Dépenses annuelles de pensions payées par le système legacy (répartition).',                        always: true,  render: r => r.legacyExp.toFixed(1) },
-  { key: 'capiPayout',label: 'Dép. capi',  title: 'Dépenses annuelles de pensions payées depuis le pot de capitalisation.',                             always: true,  render: r => r.capiPayout.toFixed(1) },
-  { key: 'capiReal',  label: 'Capi réel',  title: 'Valeur réelle du pot en euros 2026 (déflatée par l\'inflation cumulée).',                            always: true,  render: r => fmtN(r.capiReal) },
-  { key: 'r_d',       label: 'r_d (%)',    title: 'Taux souverain appliqué à la dette. Fixe ou endogène selon le ratio dette/PIB.',                     always: true,  render: r => (r.r_d * 100).toFixed(2) },
-  { key: 'spread',    label: 'Spread',     title: 'Écart r_f − (r_d − π) : rendement réel du fonds − coût réel de la dette.',                          always: true,  render: r => `${(r.spread * 100).toFixed(2)}%` },
-  { key: 'cohIdx',    label: 'φ_t',        title: 'Indice de cohorte legacy : fraction du cohort pré-réforme encore en vie.',                          always: false, render: r => r.cohIdx.toFixed(3) },
-  { key: 'totalPensionExp', label: 'Total pens.', title: 'Total des pensions versées = legacy + capi.',                                                 always: false, render: r => r.totalPensionExp.toFixed(1) },
-  { key: 'fundReturn',label: 'Rend. fonds', title: 'Rendement nominal annuel du fonds legacy (CDC) : fonds × r_f_nominal.',                            always: false, render: r => r.fundReturn.toFixed(1) },
-  { key: 'hlmProceeds',label: 'HLM',        title: 'Produit net annuel des ventes de logements HLM.',                                                  always: false, render: r => r.hlmProceeds.toFixed(1) },
-  { key: 'abatement', label: 'Abatt.',     title: 'Récupération des abattements fiscaux existants sur cotisations salariales.',                        always: false, render: r => r.abatement.toFixed(1) },
-  { key: 'emplC_s',   label: 'Sal.→capi', title: 'Cotisations salariales dirigées vers le pot de capitalisation.',                                    always: false, render: r => r.emplC_s.toFixed(1) },
-  { key: 'emplrToLeg',label: 'Empl.→leg', title: 'Part de la cotisation employeur allouée au legacy pour couvrir le déficit annuel.',                  always: false, render: r => r.emplrToLeg.toFixed(1) },
-  { key: 'emplrToCap',label: 'Empl.→cap', title: 'Part de la cotisation employeur allouée au pot de capitalisation.',                                  always: false, render: r => r.emplrToCap.toFixed(1) },
-  { key: 'debtInterest', label: 'Int. dette', title: 'Intérêts payés cette année sur la dette de transition = dette × r_d.',                           always: false, render: r => r.debtInterest.toFixed(1) },
-  { key: 'netFlow',   label: 'Flux net',   title: 'Solde annuel du fonds legacy : ressources − dépenses legacy − intérêts.',                          always: false, render: r => r.netFlow.toFixed(1) },
-  { key: 'borrowed',  label: 'Emprunt',    title: 'Emprunt souverain nouveau émis cette année pour combler un flux net négatif.',                       always: false, render: r => r.borrowed.toFixed(1) },
-  { key: 'repaid',    label: 'Rembours.',  title: 'Remboursement volontaire de dette cette année si surplus.',                                          always: false, render: r => r.repaid.toFixed(1) },
-  { key: 'levy',      label: 'Prélèv.',   title: 'Prélèvement de transition : fraction λ des flux entrant en capi, détournée pour rembourser la dette.',always: false, render: r => r.levy.toFixed(1) },
-  { key: 'capi',      label: 'Capi nom.', title: 'Valeur nominale du pot de capitalisation en fin d\'année, en Md€ courants.',                         always: false, render: r => fmtN(r.capi) },
+  { key: 'year',        label: 'Année',     always: true,  render: r => r.year },
+  { key: 'D_t',         label: 'Dette',     always: true,  render: r => fmtN(r.D_t) },
+  { key: 'debtRatio_t', label: 'Dette/PIB', always: true,  render: r => `${r.debtRatio_t.toFixed(1)}%` },
+  { key: 'legacyExp_t', label: 'Dép. legacy', always: true, render: r => r.legacyExp_t.toFixed(1) },
+  { key: 'capiPayout_t', label: 'Dép. capi', always: true, render: r => r.capiPayout_t.toFixed(1) },
+  { key: 'capiReal',    label: 'Capi réel', always: true,  render: r => fmtN(r.K_t / Math.pow(1.02, r.t)) },
+  { key: 'r_d_t',       label: 'r_d (%)',   always: true,  render: r => (r.r_d_t * 100).toFixed(2) },
+  { key: 'spread_t',    label: 'Spread',    always: true,  render: r => `${(r.spread_t * 100).toFixed(2)}%` },
+  { key: 'cohIdx',      label: 'φ_t',       always: false, render: r => r.cohIdx.toFixed(3) },
+  { key: 'capiAssetShare_t', label: 'Asset share', always: false, render: r => r.capiAssetShare_t.toFixed(3) },
+  { key: 'fundReturn_t', label: 'Rend. fonds', always: false, render: r => r.fundReturn_t.toFixed(1) },
+  { key: 'H_t_proceeds', label: 'HLM',     always: false, render: r => r.H_t_proceeds.toFixed(1) },
+  { key: 'abatement_t', label: 'Abatt.',   always: false, render: r => r.abatement_t.toFixed(1) },
+  { key: 'S0_csg_revenue_t', label: 'CSG (rec.)', always: false, render: r => r.S0_csg_revenue_t.toFixed(1) },
+  { key: 'C_s_capi_t',  label: 'Sal.→capi', always: false, render: r => r.C_s_capi_t.toFixed(1) },
+  { key: 'emplrToLeg_t', label: 'Empl.→leg', always: false, render: r => r.emplrToLeg_t.toFixed(1) },
+  { key: 'emplrToCap_t', label: 'Empl.→cap', always: false, render: r => r.emplrToCap_t.toFixed(1) },
+  { key: 'debtInterest_t', label: 'Int. dette', always: false, render: r => r.debtInterest_t.toFixed(1) },
+  { key: 'netFlow_t',   label: 'Flux net', always: false, render: r => r.netFlow_t.toFixed(1) },
+  { key: 'borrowed_t',  label: 'Emprunt',  always: false, render: r => r.borrowed_t.toFixed(1) },
+  { key: 'levy_t',      label: 'Prélèv.',  always: false, render: r => r.levy_t.toFixed(1) },
+  { key: 'K_t',         label: 'Capi nom.', always: false, render: r => fmtN(r.K_t) },
 ]
 
 const CHART_TABS = [
@@ -141,33 +137,25 @@ const CHART_TABS = [
 // --- Main App ---
 export default function App() {
   const { currentPage, navigateTo } = useHashNavigation('simulateur')
-  const initialParams = paramsFromURL() || PRESETS.default.params
-  const [params, setParams] = useState(initialParams)
-  const [activePreset, setActivePreset] = useState(paramsFromURL() ? null : 'default')
+  const [params, setParams] = useState({ ...DEFAULT_CONFIG })
+  const [activePreset, setActivePreset] = useState('v1_default')
   const [showParams, setShowParams] = useState(true)
   const [showTable, setShowTable] = useState(true)
   const [showAllRows, setShowAllRows] = useState(false)
-  const [mcBands, setMcBands] = useState(null)
-  const [mcRuns, setMcRuns] = useState(1000)
-  const [mcRunning, setMcRunning] = useState(false)
-  const [mcProgress, setMcProgress] = useState('')
   const [expertMode, setExpertMode] = useState(false)
   const [activeChartTab, setActiveChartTab] = useState('depenses')
-  const [depensesUnit, setDepensesUnit] = useState('eur')
   const [showAllColumns, setShowAllColumns] = useState(false)
-  const workerRef = useRef(null)
+  const [legacyUrlNoticeDismissed, setLegacyUrlNoticeDismissed] = useState(false)
+  const showLegacyUrlNotice = useMemo(hasLegacyShareUrl, [])
 
   const setParam = useCallback((key, value) => {
     setParams(prev => ({ ...prev, [key]: value }))
     setActivePreset(null)
-    setMcBands(null)
   }, [])
 
   const applyPreset = useCallback((key) => {
     setParams({ ...PRESETS[key].params })
     setActivePreset(key)
-    setMcBands(null)
-    window.history.replaceState(null, '', window.location.pathname + window.location.hash)
   }, [])
 
   const { results, kpis } = useMemo(() => {
@@ -176,102 +164,36 @@ export default function App() {
     return { results, kpis }
   }, [params])
 
-  useMemo(() => {
-    const url = paramsToURL(params)
-    const hash = window.location.hash
-    window.history.replaceState(null, '', (url || window.location.pathname) + hash)
-  }, [params])
-
-  const runMC = useCallback(() => {
-    setMcRunning(true)
-    setMcProgress('Initialisation...')
-    setMcBands(null)
-    if (workerRef.current) workerRef.current.terminate()
-    const worker = new Worker(new URL('./monte-carlo-worker.js', import.meta.url), { type: 'module' })
-    workerRef.current = worker
-    worker.onmessage = (e) => {
-      if (e.data.type === 'progress') setMcProgress(`${e.data.completed} / ${e.data.total}`)
-      else if (e.data.type === 'result') {
-        setMcBands(e.data.bands); setMcRunning(false); setMcProgress(''); worker.terminate()
-      }
-    }
-    worker.postMessage({ params, runs: mcRuns })
-  }, [params, mcRuns])
-
   const exportCSV = useCallback(() => {
-    const headers = ['Année', 'Dép. legacy', 'Dép. capi', 'Total pens.', 'Rend. fonds', 'HLM',
-      'Abatt.', 'Sal.→capi', 'Empl.→leg', 'Empl.→cap', 'Int. dette', 'Flux net',
-      'Emprunt', 'Rembours.', 'Prélèv.', 'Dette', 'Capi nom.', 'Capi réel', 'r_d (%)', 'Spread (%)']
+    const headers = ['Année','Dép. legacy','Dép. capi','Total pens.','Rend. fonds','HLM','Abatt.','CSG (rec.)',
+      'Sal.→capi','Empl.→leg','Empl.→cap','Int. dette','Flux net','Emprunt','Prélèv.','Dette','Capi nom.','Capi réel','r_d (%)','Spread (%)']
     const rows = results.map(r => [
-      r.year, r.legacyExp.toFixed(1), r.capiPayout.toFixed(1), r.totalPensionExp.toFixed(1),
-      r.fundReturn.toFixed(1), r.hlmProceeds.toFixed(1), r.abatement.toFixed(1),
-      r.emplC_s.toFixed(1), r.emplrToLeg.toFixed(1), r.emplrToCap.toFixed(1),
-      r.debtInterest.toFixed(1), r.netFlow.toFixed(1), r.borrowed.toFixed(1),
-      r.repaid.toFixed(1), r.levy.toFixed(1), r.debt.toFixed(1),
-      r.capi.toFixed(0), r.capiReal.toFixed(0), (r.r_d * 100).toFixed(2), (r.spread * 100).toFixed(2)
+      r.year, r.legacyExp_t.toFixed(1), r.capiPayout_t.toFixed(1),
+      (r.legacyExp_t + r.capiPayout_t).toFixed(1),
+      r.fundReturn_t.toFixed(1), r.H_t_proceeds.toFixed(1), r.abatement_t.toFixed(1),
+      r.S0_csg_revenue_t.toFixed(1),
+      r.C_s_capi_t.toFixed(1), r.emplrToLeg_t.toFixed(1), r.emplrToCap_t.toFixed(1),
+      r.debtInterest_t.toFixed(1), r.netFlow_t.toFixed(1), r.borrowed_t.toFixed(1),
+      r.levy_t.toFixed(1), r.D_t.toFixed(1),
+      r.K_t.toFixed(0), (r.K_t / Math.pow(1.02, r.t)).toFixed(0),
+      (r.r_d_t * 100).toFixed(2), (r.spread_t * 100).toFixed(2),
     ])
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = 'cdc_simulation.csv'; a.click()
+    const a = document.createElement('a'); a.href = url; a.download = 'capimodel_v1.0a_simulation.csv'; a.click()
     URL.revokeObjectURL(url)
   }, [results])
 
-  const chartData = useMemo(() => {
-    return results.map((r, i) => {
-      const mc = mcBands?.[i] || {}
-      return {
-        year: r.year,
-        legacyExp: r.legacyExp, fundReturn: r.fundReturn, hlmProceeds: r.hlmProceeds,
-        abatement: r.abatement, emplrToLeg: r.emplrToLeg,
-        debt: r.debt, r_d: r.r_d * 100,
-        capi: r.capi, capiReal: r.capiReal,
-        spread: r.spread * 100,
-        emplC_s: r.emplC_s,
-        emplC_s_toCapi: r.emplC_s_toCapi,
-        emplC_s_toPayg: r.emplC_s_toPayg,
-        emplrToLeg_bar: r.emplrToLeg, emplrToCap_bar: r.emplrToCap, levy: r.levy,
-        capi_p5_p95: mc.capi_p5 !== undefined ? [mc.capi_p5, mc.capi_p95] : undefined,
-        capi_p25_p75: mc.capi_p25 !== undefined ? [mc.capi_p25, mc.capi_p75] : undefined,
-        capi_p50: mc.capi_p50 !== undefined ? mc.capi_p50 : undefined,
-        capiReal_p5_p95: mc.capiReal_p5 !== undefined ? [mc.capiReal_p5, mc.capiReal_p95] : undefined,
-        capiReal_p25_p75: mc.capiReal_p25 !== undefined ? [mc.capiReal_p25, mc.capiReal_p75] : undefined,
-        debt_p5_p95: mc.debt_p5 !== undefined ? [mc.debt_p5, mc.debt_p95] : undefined,
-        debt_p25_p75: mc.debt_p25 !== undefined ? [mc.debt_p25, mc.debt_p75] : undefined,
-        debt_p50: mc.debt_p50,
-        capiPayout: r.capiPayout, totalPensionExp: r.totalPensionExp,
-        pvLegacyCum: r.pvLegacyCum, pvCapiPayoutCum: r.pvCapiPayoutCum,
-        gdp: r.gdp,
-      }
-    })
-  }, [results, mcBands])
-
-  const depensesData = useMemo(() => {
-    if (depensesUnit === 'eur') return chartData
-    return chartData.map(r => {
-      const g = r.gdp || 1
-      return {
-        year: r.year,
-        gdp: r.gdp,
-        fundReturn: (r.fundReturn / g) * 100,
-        hlmProceeds: (r.hlmProceeds / g) * 100,
-        abatement: (r.abatement / g) * 100,
-        emplrToLeg: (r.emplrToLeg / g) * 100,
-        legacyExp: (r.legacyExp / g) * 100,
-        capiPayout: (r.capiPayout / g) * 100,
-        totalPensionExp: (r.totalPensionExp / g) * 100,
-      }
-    })
-  }, [chartData, depensesUnit])
-  const depensesUnitLabel = depensesUnit === 'eur' ? 'Md€' : '% PIB'
+  const chartData = useMemo(() => results.map(rowToChart), [results])
 
   const p = params
 
   return (
     <div className="app">
       <header className="header">
-        <h1>Simulateur CDC — Transition Retraites PAYG → Capitalisation</h1>
-        <p className="subtitle">Proof of concept</p>
+        <h1>CapiModel v1.0a — Transition Retraites PAYG → Capitalisation</h1>
+        <p className="subtitle">Simulateur — moteur v1.0a</p>
       </header>
 
       <Navigation currentPage={currentPage} navigateTo={navigateTo} />
@@ -281,9 +203,22 @@ export default function App() {
       {currentPage === 'hypotheses' && <HypothesesPage />}
       {currentPage === 'simulateur' && <>
 
+      {showLegacyUrlNotice && !legacyUrlNoticeDismissed && (
+        <section className="section" style={{ background: '#fef3c7', border: '1px solid #f59e0b' }}>
+          <p style={{ margin: 0 }}>
+            <strong>URL legacy détectée.</strong> Cette URL contient des paramètres v0.11
+            (par ex. <code>existingDebtGrowth</code>, <code>r_f</code>) qui ne sont plus
+            supportés par le moteur v1.0a. Le simulateur s'est ouvert avec les valeurs par
+            défaut v1.0a. Voir notes de migration dans la page « Hypothèses ».
+            <button onClick={() => setLegacyUrlNoticeDismissed(true)}
+              style={{ marginLeft: 12 }}>OK</button>
+          </p>
+        </section>
+      )}
+
       {/* PRESETS */}
       <section className="section preset-section">
-        <h2>Scénarios</h2>
+        <h2>Scénarios v1.0a</h2>
         <div className="preset-grid">
           {Object.entries(PRESETS).map(([key, preset]) => (
             <button key={key} className={`preset-btn ${activePreset === key ? 'active' : ''}`}
@@ -306,158 +241,248 @@ export default function App() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem', marginBottom: '0.5rem' }}>
               <div className="mode-toggle">
                 <button className={`mode-toggle-btn${!expertMode ? ' active' : ''}`} onClick={() => setExpertMode(false)}>Mode simple</button>
-                <button className={`mode-toggle-btn${expertMode ? ' active' : ''}`} onClick={() => setExpertMode(true)}>Mode expert</button>
+                <button className={`mode-toggle-btn${expertMode ? ' active' : ''}`} onClick={() => setExpertMode(true)}>Mode expert (Tier B)</button>
               </div>
             </div>
             <div className="controls-row">
-            <CollapsibleSection title="Règle de transition" level="critical" defaultOpen={true}>
-              <CutoffSelector
-                label="Âge limite capitalisation (2026)"
-                value={p.cutoffAge}
-                onChange={v => setParam('cutoffAge', v)}
-                options={[
-                  { value: null, label: 'Aucun' },
-                  { value: 60, label: '60 ans' },
-                  { value: 55, label: '55 ans' },
-                  { value: 50, label: '50 ans' },
-                ]}
-                tip={TIPS.cutoffAge}
-              />
-              <EnhancedSlider id="existingDebtGrowth" label="Croissance dette existante"
-                value={p.existingDebtGrowth} onChange={v => setParam('existingDebtGrowth', v)}
-                min={0} max={0.06} step={0.001} unit="" decimals={3} tip={TIPS.existingDebtGrowth}
-                defaultValue={PRESETS.default.params.existingDebtGrowth}
-                warningAbove={0.035} dangerAbove={0.05} />
-            </CollapsibleSection>
 
-            <CollapsibleSection title="Macro" level="critical" defaultOpen={true}>
-              <EnhancedSlider id="pi" label="Inflation π" value={p.pi} onChange={v => setParam('pi', v)}
-                min={0} max={0.06} step={0.001} unit="" decimals={3} tip={TIPS.pi}
-                defaultValue={PRESETS.default.params.pi} warningAbove={0.04} dangerAbove={0.05} />
-              <EnhancedSlider id="w_r" label="Croissance salariale réelle w_r" value={p.w_r}
-                onChange={v => setParam('w_r', v)} min={0} max={0.03} step={0.001} unit="" decimals={3} tip={TIPS.w_r}
-                defaultValue={PRESETS.default.params.w_r} />
-              <EnhancedSlider id="N" label="Horizon N" value={p.N} onChange={v => setParam('N', v)}
-                min={20} max={80} step={1} unit="ans" decimals={0} tip={TIPS.N}
-                defaultValue={PRESETS.default.params.N} />
-              <EnhancedSlider id="E0" label="Dépenses initiales E₀" value={p.E0}
-                onChange={v => setParam('E0', v)} min={280} max={400} step={5} unit="Md€" decimals={0} tip={TIPS.E0}
-                defaultValue={PRESETS.default.params.E0} />
-            </CollapsibleSection>
+              {/* ===== TIER A — visible by default ===== */}
 
-            <CollapsibleSection title="Rendements" level="critical" defaultOpen={true}>
-              <EnhancedSlider id="r_c" label="Rendement capitalisation r_c" value={p.r_c}
-                onChange={v => setParam('r_c', v)} min={0.01} max={0.07} step={0.005} unit="" decimals={3} tip={TIPS.r_c}
-                defaultValue={PRESETS.default.params.r_c} warningBelow={0.02} dangerBelow={0.01} />
-              <EnhancedSlider id="r_f" label="Rendement fonds legacy r_f" value={p.r_f}
-                onChange={v => setParam('r_f', v)} min={0.01} max={0.06} step={0.005} unit="" decimals={3} tip={TIPS.r_f}
-                defaultValue={PRESETS.default.params.r_f} warningBelow={0.02} dangerBelow={0.01} />
-            </CollapsibleSection>
+              <CollapsibleSection title="Macroéconomie" level="critical" defaultOpen={true}>
+                <EnhancedSlider id="pi" label="Inflation π" value={p.pi} onChange={v => setParam('pi', v)}
+                  min={0.005} max={0.05} step={0.001} unit="" decimals={3} tip={TIPS.pi}
+                  defaultValue={DEFAULT_CONFIG.pi} />
+                <EnhancedSlider id="w_r" label="Croissance salariale réelle w_r" value={p.w_r} onChange={v => setParam('w_r', v)}
+                  min={-0.005} max={0.015} step={0.001} unit="" decimals={3} tip={TIPS.w_r}
+                  defaultValue={DEFAULT_CONFIG.w_r} />
+                <EnhancedSlider id="r_d_base" label="Taux OAT r_d_base" value={p.r_d_base} onChange={v => setParam('r_d_base', v)}
+                  min={0.02} max={0.06} step={0.0025} unit="" decimals={4} tip={TIPS.r_d_base}
+                  defaultValue={DEFAULT_CONFIG.r_d_base} />
+                <EnhancedSlider id="extraSpread" label="Spread additionnel" value={p.extraSpread} onChange={v => setParam('extraSpread', v)}
+                  min={0} max={0.02} step={0.001} unit="" decimals={3} tip={TIPS.extraSpread}
+                  defaultValue={DEFAULT_CONFIG.extraSpread} />
+              </CollapsibleSection>
 
-            {expertMode && (<CollapsibleSection title="Emprunt souverain" level="normal">
-              <EnhancedSlider id="r_d_base" label="Taux de base r_d" value={p.r_d_base}
-                onChange={v => setParam('r_d_base', v)} min={0.01} max={0.07} step={0.001} unit="" decimals={3} tip={TIPS.r_d_base}
-                defaultValue={PRESETS.default.params.r_d_base} warningAbove={0.05} dangerAbove={0.06} />
-              <Toggle label="Taux endogène (prime de risque)" checked={p.endogenousRd}
-                onChange={v => setParam('endogenousRd', v)} tip={TIPS.endogenousRd} />
-              <EnhancedSlider id="extraSpread" label="Spread additionnel" value={p.extraSpread}
-                onChange={v => setParam('extraSpread', v)} min={0} max={0.02} step={0.001} unit="" decimals={3} tip={TIPS.extraSpread}
-                defaultValue={PRESETS.default.params.extraSpread} />
-              <EnhancedSlider id="rpThreshold1" label="Seuil 1 — pas de prime (% PIB)" value={p.rpThreshold1}
-                onChange={v => setParam('rpThreshold1', v)} min={100} max={250} step={10} unit="%" decimals={0} tip={TIPS.rpThreshold1}
-                defaultValue={PRESETS.default.params.rpThreshold1} />
-              <EnhancedSlider id="rpSlope1" label="Pente 1 (bps/pp)" value={p.rpSlope1 * 10000}
-                onChange={v => setParam('rpSlope1', v / 10000)} min={0} max={10} step={0.5} unit="bps" decimals={1} tip={TIPS.rpSlope1}
-                defaultValue={PRESETS.default.params.rpSlope1 * 10000} />
-              <EnhancedSlider id="rpThreshold3" label="Seuil 3 — crise (% PIB)" value={p.rpThreshold3}
-                onChange={v => setParam('rpThreshold3', v)} min={200} max={500} step={10} unit="%" decimals={0} tip={TIPS.rpThreshold3}
-                defaultValue={PRESETS.default.params.rpThreshold3} />
-              <EnhancedSlider id="rpSlope3" label="Pente 3 (bps/pp)" value={p.rpSlope3 * 10000}
-                onChange={v => setParam('rpSlope3', v / 10000)} min={5} max={30} step={1} unit="bps" decimals={0} tip={TIPS.rpSlope3}
-                defaultValue={PRESETS.default.params.rpSlope3 * 10000} />
-            </CollapsibleSection>)}
+              <CollapsibleSection title="Rendements" level="critical" defaultOpen={true}>
+                <EnhancedSlider id="r_f_portfolio" label="Rendement fonds legacy r_f_portfolio" value={p.r_f_portfolio}
+                  onChange={v => setParam('r_f_portfolio', v)} min={0.02} max={0.06} step={0.0025} unit="" decimals={4} tip={TIPS.r_f_portfolio}
+                  defaultValue={DEFAULT_CONFIG.r_f_portfolio} warningBelow={0.025} dangerBelow={0.02} />
+                <EnhancedSlider id="r_c" label="Rendement capitalisation r_c" value={p.r_c}
+                  onChange={v => setParam('r_c', v)} min={0.01} max={0.07} step={0.005} unit="" decimals={3} tip={TIPS.r_c}
+                  defaultValue={DEFAULT_CONFIG.r_c} warningBelow={0.025} dangerBelow={0.015} />
+              </CollapsibleSection>
 
-            {expertMode && (<CollapsibleSection title="HLM" level="normal">
-              <EnhancedSlider id="rho" label="Taux de liquidation ρ" value={p.rho}
-                onChange={v => setParam('rho', v)} min={0} max={0.15} step={0.01} unit="" decimals={2} tip={TIPS.rho}
-                defaultValue={PRESETS.default.params.rho} warningAbove={0.10} />
-              <Toggle label="Décote volume HLM" checked={p.hlmDiscount}
-                onChange={v => setParam('hlmDiscount', v)} tip={TIPS.hlmDiscount} />
-              <EnhancedSlider id="delta" label="Élasticité prix δ" value={p.delta}
-                onChange={v => setParam('delta', v)} min={0} max={0.5} step={0.05} unit="" decimals={2} tip={TIPS.delta}
-                defaultValue={PRESETS.default.params.delta} />
-              <EnhancedSlider id="P0" label="Prix marché P₀" value={p.P0}
-                onChange={v => setParam('P0', v)} min={100} max={250} step={5} unit="k€" decimals={0} tip={TIPS.P0}
-                defaultValue={PRESETS.default.params.P0} />
-              <EnhancedSlider id="g_h" label="Croissance prix g_h" value={p.g_h}
-                onChange={v => setParam('g_h', v)} min={0} max={0.03} step={0.005} unit="" decimals={3} tip={TIPS.g_h}
-                defaultValue={PRESETS.default.params.g_h} />
-            </CollapsibleSection>)}
+              <CollapsibleSection title="Démographie & travail" level="critical" defaultOpen={true}>
+                <div className="toggle-row" title={TIPS.demoProfile}>
+                  <label style={{ minWidth: 120 }}>Scénario démographique</label>
+                  <select value={p.demoProfile} onChange={e => setParam('demoProfile', e.target.value)}>
+                    <option value="cor_central">COR central</option>
+                    <option value="realistic">Réaliste</option>
+                    <option value="reformed">Réformé</option>
+                  </select>
+                </div>
+                <EnhancedSlider id="employmentRateTarget" label="Cible taux d'emploi" value={p.employmentRateTarget}
+                  onChange={v => setParam('employmentRateTarget', v)} min={0.55} max={0.85} step={0.005} unit="" decimals={3} tip={TIPS.employmentRateTarget}
+                  defaultValue={DEFAULT_CONFIG.employmentRateTarget} />
+                <EnhancedSlider id="employmentTransitionYears" label="Durée transition emploi" value={p.employmentTransitionYears}
+                  onChange={v => setParam('employmentTransitionYears', v)} min={3} max={25} step={1} unit="ans" decimals={0} tip={TIPS.employmentTransitionYears}
+                  defaultValue={DEFAULT_CONFIG.employmentTransitionYears} />
+                <EnhancedSlider id="constructionMultiplier" label="Multiplicateur construction" value={p.constructionMultiplier}
+                  onChange={v => setParam('constructionMultiplier', v)} min={0.5} max={2.0} step={0.05} unit="" decimals={2} tip={TIPS.constructionMultiplier}
+                  defaultValue={DEFAULT_CONFIG.constructionMultiplier} />
+              </CollapsibleSection>
 
-            {expertMode && (<CollapsibleSection title="Cotisations" level="normal">
-              <EnhancedSlider id="tauS" label="Taux salarié τˢ" value={p.tauS}
-                onChange={v => setParam('tauS', v)} min={0.05} max={0.20} step={0.005} unit="" decimals={3} tip={TIPS.tauS}
-                defaultValue={PRESETS.default.params.tauS} />
-              <EnhancedSlider id="tauE" label="Taux employeur τᵉ" value={p.tauE}
-                onChange={v => setParam('tauE', v)} min={0.05} max={0.25} step={0.005} unit="" decimals={3} tip={TIPS.tauE}
-                defaultValue={PRESETS.default.params.tauE} />
-              <EnhancedSlider id="phiF" label="Floor employeur φ_f" value={p.phiF}
-                onChange={v => setParam('phiF', v)} min={0} max={0.5} step={0.05} unit="" decimals={2} tip={TIPS.phiF}
-                defaultValue={PRESETS.default.params.phiF} />
-            </CollapsibleSection>)}
+              <CollapsibleSection title="Âge de retraite (NEW v1.0)" level="critical" defaultOpen={true}>
+                <EnhancedSlider id="retirementAgeBase" label="Âge de retraite (base)" value={p.retirementAgeBase}
+                  onChange={v => setParam('retirementAgeBase', v)} min={60} max={70} step={0.5} unit="ans" decimals={1} tip={TIPS.retirementAgeBase}
+                  defaultValue={DEFAULT_CONFIG.retirementAgeBase} />
+                <div className="toggle-row" title={TIPS.retirementAgeMode}>
+                  <label style={{ minWidth: 120 }}>Mode</label>
+                  <label><input type="radio" name="retirementAgeMode"
+                    checked={p.retirementAgeMode === 'fixed'}
+                    onChange={() => setParam('retirementAgeMode', 'fixed')} /> fixe</label>
+                  <label style={{ marginLeft: 12 }}><input type="radio" name="retirementAgeMode"
+                    checked={p.retirementAgeMode === 'indexed'}
+                    onChange={() => setParam('retirementAgeMode', 'indexed')} /> indexé sur LE65</label>
+                </div>
+              </CollapsibleSection>
 
-            {expertMode && (<CollapsibleSection title="Prélèvement transition" level="advanced">
-              <EnhancedSlider id="lambda" label="Taux prélèvement λ" value={p.lambda}
-                onChange={v => setParam('lambda', v)} min={0} max={0.50} step={0.05} unit="" decimals={2} tip={TIPS.lambda}
-                defaultValue={PRESETS.default.params.lambda} warningAbove={0.30} />
-              <EnhancedSlider id="Tlambda" label="Activation T_λ" value={p.Tlambda}
-                onChange={v => setParam('Tlambda', v)} min={0} max={30} step={1} unit="ans" decimals={0} tip={TIPS.Tlambda}
-                defaultValue={PRESETS.default.params.Tlambda} />
-            </CollapsibleSection>)}
+              <CollapsibleSection title="Capitalisation" level="critical" defaultOpen={true}>
+                <Toggle label="Activer capitalisation" checked={p.enableCapi}
+                  onChange={v => setParam('enableCapi', v)} tip={TIPS.enableCapi} />
+                <CutoffSelector
+                  label="Âge limite capi (en 2027)"
+                  value={p.cutoffAge}
+                  onChange={v => setParam('cutoffAge', v)}
+                  options={[
+                    { value: null, label: 'Aucun' },
+                    { value: 60, label: '60 ans' },
+                    { value: 55, label: '55 ans' },
+                    { value: 50, label: '50 ans' },
+                    { value: 45, label: '45 ans' },
+                    { value: 40, label: '40 ans' },
+                    { value: 35, label: '35 ans' },
+                  ]}
+                  tip={TIPS.cutoffAge}
+                />
+                <EnhancedSlider id="alpha" label="Fraction surplus → dette α" value={p.alpha}
+                  onChange={v => setParam('alpha', v)} min={0} max={1} step={0.05} unit="" decimals={2}
+                  defaultValue={DEFAULT_CONFIG.alpha} />
+                <EnhancedSlider id="lambda" label="Prélèvement transition λ" value={p.lambda}
+                  onChange={v => setParam('lambda', v)} min={0} max={0.5} step={0.025} unit="" decimals={3} tip={TIPS.lambda}
+                  defaultValue={DEFAULT_CONFIG.lambda} warningAbove={0.30} />
+                <EnhancedSlider id="Tlambda" label="Activation T_λ" value={p.Tlambda}
+                  onChange={v => setParam('Tlambda', v)} min={5} max={30} step={1} unit="ans" decimals={0} tip={TIPS.Tlambda}
+                  defaultValue={DEFAULT_CONFIG.Tlambda} />
+                <EnhancedSlider id="phiF" label="Plancher employeur φ_f" value={p.phiF}
+                  onChange={v => setParam('phiF', v)} min={0} max={0.5} step={0.025} unit="" decimals={3} tip={TIPS.phiF}
+                  defaultValue={DEFAULT_CONFIG.phiF} />
+                <EnhancedSlider id="deltaTauxPatronal" label="Baisse cot. patronale" value={p.deltaTauxPatronal}
+                  onChange={v => setParam('deltaTauxPatronal', v)} min={0} max={0.05} step={0.005} unit="" decimals={3} tip={TIPS.deltaTauxPatronal}
+                  defaultValue={DEFAULT_CONFIG.deltaTauxPatronal} />
+              </CollapsibleSection>
 
-            {expertMode && (<CollapsibleSection title="Réductions pensions" level="advanced">
-              <Toggle label="Rééquilibrage Équinoxe (vs. réduction uniforme)"
-                checked={p.useEquinoxe} onChange={v => setParam('useEquinoxe', v)} tip={TIPS.useEquinoxe} />
-              {!p.useEquinoxe && (
-                <>
-                  <EnhancedSlider id="kappa" label="Taux réduction κ" value={p.kappa}
-                    onChange={v => setParam('kappa', v)} min={0} max={0.25} step={0.01} unit="" decimals={2} tip={TIPS.kappa}
-                    defaultValue={PRESETS.default.params.kappa} />
-                  <EnhancedSlider id="threshold" label="Seuil (€/mois)" value={p.threshold}
-                    onChange={v => setParam('threshold', v)} min={1500} max={3000} step={50} unit="€" decimals={0} tip={TIPS.threshold}
-                    defaultValue={PRESETS.default.params.threshold} />
-                </>
+              <CollapsibleSection title="HLM" level="critical" defaultOpen={true}>
+                <EnhancedSlider id="rho" label="Taux liquidation ρ" value={p.rho}
+                  onChange={v => setParam('rho', v)} min={0} max={0.10} step={0.005} unit="" decimals={3} tip={TIPS.rho}
+                  defaultValue={DEFAULT_CONFIG.rho} warningAbove={0.07} />
+                <Toggle label="Décote volume HLM" checked={p.hlmDiscount}
+                  onChange={v => setParam('hlmDiscount', v)} tip={TIPS.hlmDiscount} />
+                <EnhancedSlider id="delta" label="Élasticité prix δ" value={p.delta}
+                  onChange={v => setParam('delta', v)} min={0} max={0.5} step={0.025} unit="" decimals={3} tip={TIPS.delta}
+                  defaultValue={DEFAULT_CONFIG.delta} />
+                <EnhancedSlider id="T_hlm" label="Durée programme T_hlm" value={p.T_hlm}
+                  onChange={v => setParam('T_hlm', v)} min={10} max={30} step={1} unit="ans" decimals={0}
+                  defaultValue={DEFAULT_CONFIG.T_hlm} />
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Équinoxe" level="critical" defaultOpen={true}>
+                <Toggle label="Activer Équinoxe" checked={p.useEquinoxe}
+                  onChange={v => setParam('useEquinoxe', v)} tip={TIPS.useEquinoxe} />
+                {p.useEquinoxe && (
+                  <div className="toggle-row" title={TIPS.equinoxePhasing}>
+                    <label style={{ minWidth: 120 }}>Phasage</label>
+                    <select value={p.equinoxePhasing} onChange={e => setParam('equinoxePhasing', e.target.value)}>
+                      <option value="immediate">Immédiat</option>
+                      <option value="phased-5y">Phasé 5 ans</option>
+                      <option value="phased-10y">Phasé 10 ans</option>
+                      <option value="partial-50">Partiel 50%</option>
+                      <option value="partial-75">Partiel 75%</option>
+                    </select>
+                  </div>
+                )}
+              </CollapsibleSection>
+
+              {/* ===== TIER B — expert menu ===== */}
+
+              {expertMode && (
+                <CollapsibleSection title="Tier B — Couverture annuité (v1.0a)" level="advanced">
+                  <EnhancedSlider id="r_f_annuity" label="Taux couverture annuité r_f_annuity" value={p.r_f_annuity}
+                    onChange={v => setParam('r_f_annuity', v)} min={0.005} max={0.030} step={0.001} unit="" decimals={3} tip={TIPS.r_f_annuity}
+                    defaultValue={DEFAULT_CONFIG.r_f_annuity} />
+                  <EnhancedSlider id="capiAssetShareSteadyState" label="Part actuarielle retraités (steady state)"
+                    value={p.capiAssetShareSteadyState} onChange={v => setParam('capiAssetShareSteadyState', v)}
+                    min={0.20} max={0.50} step={0.025} unit="" decimals={3} tip={TIPS.capiAssetShareSteadyState}
+                    defaultValue={DEFAULT_CONFIG.capiAssetShareSteadyState} />
+                </CollapsibleSection>
               )}
-            </CollapsibleSection>)}
 
-            {expertMode && (<CollapsibleSection title="CDC / Fonds" level="advanced">
-              <EnhancedSlider id="F0" label="Actifs CDC F₀" value={p.F0}
-                onChange={v => setParam('F0', v)} min={100} max={300} step={10} unit="Md€" decimals={0} tip={TIPS.F0}
-                defaultValue={PRESETS.default.params.F0} />
-              <EnhancedSlider id="Tpk" label="Pic cohorte T_pk" value={p.Tpk}
-                onChange={v => setParam('Tpk', v)} min={3} max={15} step={1} unit="ans" decimals={0} tip={TIPS.Tpk}
-                defaultValue={PRESETS.default.params.Tpk} />
-              <EnhancedSlider id="Thl" label="Demi-vie cohorte T_hl" value={p.Thl}
-                onChange={v => setParam('Thl', v)} min={10} max={40} step={1} unit="ans" decimals={0} tip={TIPS.Thl}
-                defaultValue={PRESETS.default.params.Thl} />
-            </CollapsibleSection>)}
+              {expertMode && (
+                <CollapsibleSection title="Tier B — Prime de risque endogène" level="advanced">
+                  <EnhancedSlider id="rpThreshold1" label="Seuil 1 (% PIB)" value={p.rpThreshold1}
+                    onChange={v => setParam('rpThreshold1', v)} min={100} max={250} step={10} unit="%" decimals={0}
+                    defaultValue={DEFAULT_CONFIG.rpThreshold1} />
+                  <EnhancedSlider id="rpSlope1" label="Pente 1 (bps/pp)" value={p.rpSlope1 * 10000}
+                    onChange={v => setParam('rpSlope1', v / 10000)} min={0} max={10} step={0.5} unit="bps" decimals={1}
+                    defaultValue={DEFAULT_CONFIG.rpSlope1 * 10000} />
+                  <EnhancedSlider id="rpThreshold2" label="Seuil 2 (% PIB)" value={p.rpThreshold2}
+                    onChange={v => setParam('rpThreshold2', v)} min={150} max={350} step={10} unit="%" decimals={0}
+                    defaultValue={DEFAULT_CONFIG.rpThreshold2} />
+                  <EnhancedSlider id="rpSlope2" label="Pente 2 (bps/pp)" value={p.rpSlope2 * 10000}
+                    onChange={v => setParam('rpSlope2', v / 10000)} min={1} max={15} step={0.5} unit="bps" decimals={1}
+                    defaultValue={DEFAULT_CONFIG.rpSlope2 * 10000} />
+                  <EnhancedSlider id="rpThreshold3" label="Seuil 3 (% PIB)" value={p.rpThreshold3}
+                    onChange={v => setParam('rpThreshold3', v)} min={200} max={500} step={10} unit="%" decimals={0}
+                    defaultValue={DEFAULT_CONFIG.rpThreshold3} />
+                  <EnhancedSlider id="rpSlope3" label="Pente 3 (bps/pp)" value={p.rpSlope3 * 10000}
+                    onChange={v => setParam('rpSlope3', v / 10000)} min={5} max={30} step={1} unit="bps" decimals={0}
+                    defaultValue={DEFAULT_CONFIG.rpSlope3 * 10000} />
+                  <EnhancedSlider id="r_d_cap" label="Plafond r_d" value={p.r_d_cap}
+                    onChange={v => setParam('r_d_cap', v)} min={0.10} max={0.30} step={0.01} unit="" decimals={2}
+                    defaultValue={DEFAULT_CONFIG.r_d_cap} />
+                </CollapsibleSection>
+              )}
+
+              {expertMode && (
+                <CollapsibleSection title="Tier B — Pénalité GE & bornes retraite" level="advanced">
+                  <EnhancedSlider id="geKneeRatio" label="Capi/PIB knee" value={p.geKneeRatio}
+                    onChange={v => setParam('geKneeRatio', v)} min={0.5} max={4.0} step={0.1} unit="x" decimals={2}
+                    defaultValue={DEFAULT_CONFIG.geKneeRatio} />
+                  <EnhancedSlider id="geFloorRatio" label="Capi/PIB floor" value={p.geFloorRatio}
+                    onChange={v => setParam('geFloorRatio', v)} min={2.0} max={8.0} step={0.1} unit="x" decimals={2}
+                    defaultValue={DEFAULT_CONFIG.geFloorRatio} />
+                  <EnhancedSlider id="retirementAgeFloor" label="Plancher âge retraite" value={p.retirementAgeFloor}
+                    onChange={v => setParam('retirementAgeFloor', v)} min={55} max={65} step={0.5} unit="ans" decimals={1}
+                    defaultValue={DEFAULT_CONFIG.retirementAgeFloor} />
+                  <EnhancedSlider id="retirementAgeCeil" label="Plafond âge retraite" value={p.retirementAgeCeil}
+                    onChange={v => setParam('retirementAgeCeil', v)} min={65} max={75} step={0.5} unit="ans" decimals={1}
+                    defaultValue={DEFAULT_CONFIG.retirementAgeCeil} />
+                </CollapsibleSection>
+              )}
+
+              {expertMode && (
+                <CollapsibleSection title="Tier B — Cotisations & calibration" level="advanced">
+                  <EnhancedSlider id="tau_s" label="Taux salarié τ_s" value={p.tau_s}
+                    onChange={v => setParam('tau_s', v)} min={0.05} max={0.20} step={0.005} unit="" decimals={3}
+                    defaultValue={DEFAULT_CONFIG.tau_s} />
+                  <EnhancedSlider id="tau_e" label="Taux employeur τ_e" value={p.tau_e}
+                    onChange={v => setParam('tau_e', v)} min={0.05} max={0.25} step={0.005} unit="" decimals={3}
+                    defaultValue={DEFAULT_CONFIG.tau_e} />
+                  <div className="toggle-row" title="Bases de calibration — modifiables pour scénarios « si Y0 = 2030 »">
+                    <label style={{ minWidth: 120 }}>existingDebt (Md€)</label>
+                    <input type="number" value={p.existingDebt} step={50}
+                      onChange={e => setParam('existingDebt', parseFloat(e.target.value))} />
+                  </div>
+                  <div className="toggle-row">
+                    <label style={{ minWidth: 120 }}>baseGDP (Md€)</label>
+                    <input type="number" value={p.baseGDP} step={50}
+                      onChange={e => setParam('baseGDP', parseFloat(e.target.value))} />
+                  </div>
+                  <div className="toggle-row">
+                    <label style={{ minWidth: 120 }}>R0 (M)</label>
+                    <input type="number" value={p.R0} step={0.5}
+                      onChange={e => setParam('R0', parseFloat(e.target.value))} />
+                  </div>
+                  <div className="toggle-row">
+                    <label style={{ minWidth: 120 }}>W0 (Md€)</label>
+                    <input type="number" value={p.W0} step={20}
+                      onChange={e => setParam('W0', parseFloat(e.target.value))} />
+                  </div>
+                  <div className="toggle-row">
+                    <label style={{ minWidth: 120 }}>E0 (Md€)</label>
+                    <input type="number" value={p.E0} step={5}
+                      onChange={e => setParam('E0', parseFloat(e.target.value))} />
+                  </div>
+                  <div className="toggle-row">
+                    <label style={{ minWidth: 120 }}>F0 (Md€)</label>
+                    <input type="number" value={p.F0} step={10}
+                      onChange={e => setParam('F0', parseFloat(e.target.value))} />
+                  </div>
+                  <div className="toggle-row">
+                    <label style={{ minWidth: 120 }}>S0_irDeduction</label>
+                    <input type="number" value={p.S0_irDeduction} step={1}
+                      onChange={e => setParam('S0_irDeduction', parseFloat(e.target.value))} />
+                  </div>
+                  <div className="toggle-row">
+                    <label style={{ minWidth: 120 }}>S0_csg</label>
+                    <input type="number" value={p.S0_csg} step={1}
+                      onChange={e => setParam('S0_csg', parseFloat(e.target.value))} />
+                  </div>
+                </CollapsibleSection>
+              )}
+
             </div>
           </>
-        )}
-
-        {expertMode && (
-        <div className="mc-controls">
-          <button className="mc-btn" onClick={runMC} disabled={mcRunning}>
-            {mcRunning ? 'Simulation en cours...' : 'Lancer Monte Carlo'}
-          </button>
-          <select className="mc-select" value={mcRuns} onChange={e => setMcRuns(parseInt(e.target.value))}>
-            <option value={100}>100 runs</option>
-            <option value={500}>500 runs</option>
-            <option value={1000}>1 000 runs</option>
-          </select>
-          {mcProgress && <span className="mc-progress">{mcProgress}</span>}
-          {mcBands && <span className="mc-progress" style={{ color: 'var(--color-success)' }}>Monte Carlo affiché</span>}
-        </div>
         )}
       </section>
 
@@ -467,13 +492,13 @@ export default function App() {
         <div className="kpi-grid">
           <div className="kpi-card">
             <h3>Dette pic</h3>
-            <div className={`kpi-value ${kpis.peakDebt > 2000 ? 'kpi-bad' : kpis.peakDebt > 1500 ? 'kpi-warn' : 'kpi-ok'}`}>
+            <div className={`kpi-value ${kpis.peakDebt > 5500 ? 'kpi-bad' : kpis.peakDebt > 4000 ? 'kpi-warn' : 'kpi-ok'}`}>
               {fmtMd(kpis.peakDebt)} €</div>
             <div className="kpi-sub">Année {kpis.peakDebtYear}</div>
           </div>
           <div className="kpi-card">
             <h3>Année sans dette</h3>
-            <div className={`kpi-value ${!kpis.debtFreeYear ? 'kpi-bad' : kpis.debtFreeYear > 2070 ? 'kpi-warn' : 'kpi-ok'}`}>
+            <div className={`kpi-value ${!kpis.debtFreeYear ? 'kpi-bad' : kpis.debtFreeYear > 2090 ? 'kpi-warn' : 'kpi-ok'}`}>
               {fmtYear(kpis.debtFreeYear)}</div>
           </div>
           <div className="kpi-card">
@@ -485,19 +510,19 @@ export default function App() {
             <div className="kpi-value">{fmtMd(kpis.finalCapi)} €</div>
           </div>
           <div className="kpi-card">
-            <h3>Pot capi (réel 2026€)</h3>
+            <h3>Pot capi (réel 2027€)</h3>
             <div className="kpi-value">{fmtMd(kpis.finalCapiReal)} €</div>
           </div>
           <div className="kpi-card">
             <h3>Spread σ min</h3>
             <div className={`kpi-value ${kpis.minSpread <= 0 ? 'kpi-bad' : kpis.minSpread < 0.01 ? 'kpi-warn' : 'kpi-ok'}`}>
               {fmtPct(kpis.minSpread)}</div>
-            <div className="kpi-sub">Rendement placements − coût de la dette</div>
+            <div className="kpi-sub">r_f_portfolio − (r_d − π)</div>
           </div>
           <div className="kpi-card">
             <h3>Économies pension S₀</h3>
             <div className="kpi-value">{kpis.S0.toFixed(1)} Md€/an</div>
-            <div className="kpi-sub">{p.useEquinoxe ? 'Rééquilibrage Équinoxe' : 'Réduction uniforme'}</div>
+            <div className="kpi-sub">Équinoxe (brackets + IR + CSG, t=0)</div>
           </div>
           <div className="kpi-card">
             <h3>Position nette</h3>
@@ -533,7 +558,7 @@ export default function App() {
                 <thead>
                   <tr>
                     {TABLE_COLUMNS.filter(c => c.always || showAllColumns).map(c => (
-                      <th key={c.key} title={c.title}>{c.label}</th>
+                      <th key={c.key}>{c.label}</th>
                     ))}
                   </tr>
                 </thead>
@@ -574,39 +599,42 @@ export default function App() {
 
         {/* Tab: Dépenses */}
         <div style={{ visibility: activeChartTab === 'depenses' ? 'visible' : 'hidden', height: activeChartTab === 'depenses' ? 'auto' : 0, overflow: 'hidden' }}>
-          <div className="mode-toggle" style={{ marginBottom: '0.75rem' }}>
-            <button className={`mode-toggle-btn${depensesUnit === 'eur' ? ' active' : ''}`} onClick={() => setDepensesUnit('eur')}>Md€</button>
-            <button className={`mode-toggle-btn${depensesUnit === 'gdp' ? ' active' : ''}`} onClick={() => setDepensesUnit('gdp')}>% PIB</button>
-          </div>
           <div className="chart-container">
-            <h3>Bilan du fonds legacy — Dépenses vs. Revenus ({depensesUnitLabel})</h3>
-            <p className="chart-note">Aire empilée = revenus du fonds. Au-dessus de la ligne rouge = excédent (remboursement dette).</p>
-            <ResponsiveContainer width="100%" height={320}>
-              <ComposedChart data={depensesData} margin={{ bottom: 20 }}>
+            <h3>Bilan du fonds legacy — Dépenses vs. Revenus (Md€)</h3>
+            <p className="chart-note">
+              Aire empilée = revenus du fonds. La nouvelle aire violet pâle « Recette Équinoxe CSG/CRDS »
+              (v1.0a, eq 22) est la composante tax-side restaurée sur tous les retraités.
+              Au-dessus de la ligne rouge = excédent (remboursement dette).
+            </p>
+            <ResponsiveContainer width="100%" height={340}>
+              <ComposedChart data={chartData} margin={{ bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
-                <YAxis width={55} label={{ value: depensesUnitLabel, angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
-                <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} ${depensesUnitLabel}`} />
+                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8 }} />
+                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8 }} tick={{ fontSize: 14 }} />
+                <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} />
                 <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
                 <Area type="monotone" dataKey="fundReturn" stackId="income" fill="#60a5fa" stroke="#3b82f6" name="Rendement fonds" />
                 <Area type="monotone" dataKey="hlmProceeds" stackId="income" fill="#34d399" stroke="#10b981" name="HLM" />
                 <Area type="monotone" dataKey="abatement" stackId="income" fill="#fbbf24" stroke="#f59e0b" name="Abattement fiscal" />
+                {/* v1.0a NEW chart row — colour chosen from Équinoxe family (cool violet)
+                    distinguishable from emplrToLeg's saturated #8b5cf6. */}
+                <Area type="monotone" dataKey="csgRevenue" stackId="income" fill="#c4b5fd" stroke="#7c3aed" name="Recette Équinoxe CSG/CRDS" />
                 <Area type="monotone" dataKey="emplrToLeg" stackId="income" fill="#a78bfa" stroke="#8b5cf6" name="Cotis. employeur → legacy" />
                 <Line type="monotone" dataKey="legacyExp" stroke="#ef4444" strokeWidth={3} name="Dépenses legacy" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
           <div className="chart-container">
-            <h3>Dépenses retraites — Legacy (PAYG) vs. Capitalisation ({depensesUnitLabel})</h3>
+            <h3>Dépenses retraites — Legacy (PAYG) vs. Capitalisation (Md€)</h3>
             <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={depensesData} margin={{ bottom: 20 }}>
+              <ComposedChart data={chartData} margin={{ bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
-                <YAxis width={55} label={{ value: depensesUnitLabel, angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
-                <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} ${depensesUnitLabel}`} />
+                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8 }} />
+                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8 }} tick={{ fontSize: 14 }} />
+                <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} />
                 <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
-                <Area type="monotone" dataKey="legacyExp" stackId="pensions" fill="#fca5a5" stroke="#ef4444" name="Pensions legacy (PAYG)" />
-                <Area type="monotone" dataKey="capiPayout" stackId="pensions" fill="#86efac" stroke="#059669" name="Pensions capitalisation" />
+                <Area type="monotone" dataKey="legacyExp" stackId="pensions" fill="#fca5a5" stroke="#ef4444" name="Pensions legacy" />
+                <Area type="monotone" dataKey="capiPayout" stackId="pensions" fill="#86efac" stroke="#059669" name="Pensions capi" />
                 <Line type="monotone" dataKey="totalPensionExp" stroke="#1e293b" strokeWidth={2} strokeDasharray="5 5" name="Total pensions" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -616,25 +644,18 @@ export default function App() {
         {/* Tab: Dette & Taux */}
         <div style={{ visibility: activeChartTab === 'dette' ? 'visible' : 'hidden', height: activeChartTab === 'dette' ? 'auto' : 0, overflow: 'hidden' }}>
           <div className="chart-container">
-            <h3>Trajectoire dette souveraine (Md€) + taux d'emprunt effectif</h3>
+            <h3>Trajectoire dette + taux d'emprunt effectif</h3>
             <ResponsiveContainer width="100%" height={320}>
               <ComposedChart data={chartData} margin={{ bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
-                <YAxis yAxisId="left" width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
-                <YAxis yAxisId="right" orientation="right" label={{ value: 'r_d (%)', angle: 90, position: 'insideRight', style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
+                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8 }} />
+                <YAxis yAxisId="left" width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8 }} tick={{ fontSize: 14 }} />
+                <YAxis yAxisId="right" orientation="right" label={{ value: 'r_d (%)', angle: 90, position: 'insideRight' }} tick={{ fontSize: 14 }} />
                 <Tooltip />
                 <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
-                {kpis.peakDebtYear && <ReferenceLine yAxisId="left" x={kpis.peakDebtYear} stroke="var(--color-danger)" strokeDasharray="4 4" label={{ value: 'Pic', position: 'top', fontSize: 11, fill: 'var(--color-danger)' }} />}
-                {kpis.debtFreeYear && <ReferenceLine yAxisId="left" x={kpis.debtFreeYear} stroke="var(--color-success)" strokeDasharray="4 4" label={{ value: 'Remb.', position: 'top', fontSize: 11, fill: 'var(--color-success)' }} />}
-                {mcBands && (
-                  <>
-                    <Area yAxisId="left" type="monotone" dataKey="debt_p5_p95" fill="#fecaca" stroke="none" name="IC 90%" opacity={0.4} />
-                    <Area yAxisId="left" type="monotone" dataKey="debt_p25_p75" fill="#fca5a5" stroke="none" name="IC 50%" opacity={0.4} />
-                  </>
-                )}
+                {kpis.peakDebtYear && <ReferenceLine yAxisId="left" x={kpis.peakDebtYear} stroke="var(--color-danger)" strokeDasharray="4 4" />}
+                {kpis.debtFreeYear && <ReferenceLine yAxisId="left" x={kpis.debtFreeYear} stroke="var(--color-success)" strokeDasharray="4 4" />}
                 <Line yAxisId="left" type="monotone" dataKey="debt" stroke="#dc2626" strokeWidth={3} name="Dette (Md€)" dot={false} />
-                {mcBands && <Line yAxisId="left" type="monotone" dataKey="debt_p50" stroke="#dc2626" strokeWidth={1} strokeDasharray="4 4" name="Médiane MC" dot={false} />}
                 <Line yAxisId="right" type="monotone" dataKey="r_d" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" name="r_d effectif (%)" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -648,36 +669,24 @@ export default function App() {
             <ResponsiveContainer width="100%" height={320}>
               <ComposedChart data={chartData} margin={{ bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
-                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
-                <Tooltip formatter={(v) => {
-                  if (Array.isArray(v)) return `[${fmtN(v[0])}, ${fmtN(v[1])}] Md€`
-                  return `${typeof v === 'number' ? fmtN(v) : v} Md€`
-                }} />
+                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8 }} />
+                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8 }} tick={{ fontSize: 14 }} />
+                <Tooltip formatter={(v) => `${typeof v === 'number' ? fmtN(v) : v} Md€`} />
                 <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
-                {mcBands && (
-                  <>
-                    <Area type="monotone" dataKey="capi_p5_p95" fill="#bbf7d0" stroke="none" name="IC 90% nom." opacity={0.3} />
-                    <Area type="monotone" dataKey="capi_p25_p75" fill="#86efac" stroke="none" name="IC 50% nom." opacity={0.3} />
-                    <Area type="monotone" dataKey="capiReal_p5_p95" fill="#bfdbfe" stroke="none" name="IC 90% réel" opacity={0.3} />
-                    <Area type="monotone" dataKey="capiReal_p25_p75" fill="#93c5fd" stroke="none" name="IC 50% réel" opacity={0.3} />
-                  </>
-                )}
                 <Line type="monotone" dataKey="capi" stroke="#059669" strokeWidth={3} name="Nominal" dot={false} />
-                <Line type="monotone" dataKey="capiReal" stroke="#2563eb" strokeWidth={3} name="Réel (€ 2026)" dot={false} />
-                {mcBands && <Line type="monotone" dataKey="capi_p50" stroke="#059669" strokeWidth={1} strokeDasharray="4 4" name="Médiane MC" dot={false} />}
+                <Line type="monotone" dataKey="capiReal" stroke="#2563eb" strokeWidth={3} name="Réel (€ 2027)" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
           <div className="chart-container">
-            <h3>Spread σ = r_f − (r_d − π) en points de %</h3>
+            <h3>Spread σ = r_f_portfolio − (r_d − π) en points de %</h3>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={chartData} margin={{ bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
-                <YAxis width={50} label={{ value: '%', angle: -90, position: 'insideLeft', dx: -4, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
+                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8 }} />
+                <YAxis width={50} label={{ value: '%', angle: -90, position: 'insideLeft', dx: -4 }} tick={{ fontSize: 14 }} />
                 <Tooltip formatter={(v) => `${v.toFixed(2)}%`} />
-                <ReferenceLine y={0} stroke="#dc2626" strokeWidth={2} strokeDasharray="8 4" label={{ value: 'σ=0', fill: '#dc2626', fontSize: 13 }} />
+                <ReferenceLine y={0} stroke="#dc2626" strokeWidth={2} strokeDasharray="8 4" />
                 <Line type="monotone" dataKey="spread" stroke="#7c3aed" strokeWidth={2} name="Spread σ (%)" dot={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -691,8 +700,8 @@ export default function App() {
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={chartData.filter((_, i) => i % 2 === 0)} margin={{ bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
-                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
+                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8 }} />
+                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8 }} tick={{ fontSize: 14 }} />
                 <Tooltip formatter={(v) => `${v.toFixed(1)} Md€`} />
                 <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
                 <Bar dataKey="emplC_s_toCapi" stackId="a" fill="#3b82f6" name="Salarié → capi" />
@@ -704,12 +713,12 @@ export default function App() {
             </ResponsiveContainer>
           </div>
           <div className="chart-container">
-            <h3>VAN cumulée — Engagements legacy vs. paiements capitalisation (Md€, actualisés à r_d)</h3>
+            <h3>VAN cumulée — Engagements legacy vs. paiements capi (Md€)</h3>
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart data={chartData} margin={{ bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8, style: { fontSize: 13, fill: 'var(--text-secondary)' } }} />
-                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} tick={{ fontSize: 14 }} />
+                <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8 }} />
+                <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8 }} tick={{ fontSize: 14 }} />
                 <Tooltip formatter={(v) => `${typeof v === 'number' ? fmtN(v) : v} Md€`} />
                 <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
                 <Line type="monotone" dataKey="pvLegacyCum" stroke="#ef4444" strokeWidth={3} name="VAN engagements legacy" dot={false} />
@@ -724,8 +733,8 @@ export default function App() {
       </>}
 
       <footer className="footer">
-        Équations 1–34 · cdc_legacy_fund_model.md v5 ·
-        <a href="https://github.com/alles-delenda-est/cdc-pension-simulator" style={{ color: 'var(--color-primary-light)', marginLeft: 4 }}>Source</a>
+        CapiModel v1.0a · Spec @c466e6b ·
+        <a href="https://github.com/alles-delenda-est/CapiModel" style={{ color: 'var(--color-primary-light)', marginLeft: 4 }}>Source</a>
       </footer>
     </div>
   )
