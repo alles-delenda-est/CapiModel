@@ -1,9 +1,17 @@
-// CapiModel v1.0 simulation engine.
-// Spec source of truth: CapiModelSpec_v1.0.md @ commit 58ed874db93f0ffa95421a3cf2f3707608203498
+// CapiModel v1.0a simulation engine.
+// Spec source of truth: CapiModelSpec_v1_0a.md @ commit c466e6b
+// (Patrick's brief referenced SHA 2ac4f4f8b3... which does not exist in the
+//  repository; using c466e6b — current spec/v1.0a tip — as the authoritative pin.)
 // This file implements §1–§9 of the spec. Every non-trivial line of the
 // simulation loop carries a `// Spec §X.Y eq (N)` comment.
 // Naming follows the Greek→Latin map in docs/superpowers/plans/2026-04-26-capimodel-v1-task1.md;
 // do not rename.
+//
+// v1.0a deltas vs v1.0:
+//  1. Two risk-free rates: r_f_portfolio (eq 36 / 58) vs r_f_annuity (eq 53).
+//  2. HLM uniform geometric: ΔU_t = U0 × (1-ρ)^t × ρ for all t (eq 27).
+//  3. Capi pot owned by retirees by ASSET share, not headcount share (eq 53, 53a).
+//  4. Équinoxe split: benefit-side reductions vs tax-side CSG revenue (§5.5).
 
 // ---- §8.1 DREES 2022 pension distribution (€/month bracket bounds) ----
 
@@ -46,7 +54,14 @@ export const DEFAULT_CONFIG = {
   Y0: 2027,
   pi: 0.02,
   w_r: 0.004,
-  r_f: 0.045,
+  // §3.1 v1.0a: r_f split into two distinct rates.
+  // r_f_portfolio (eq 36 fundReturn, eq 58 spread) — diversified Legacy Fund
+  //   return; OECD 60/40 historical median.
+  // r_f_annuity (eq 53 annuityRate) — inflation-linked sovereign hedge rate;
+  //   French OATi 2024–2026.
+  // Setting them equal reproduces the v1.0 carry-trade arbitrage. Don't.
+  r_f_portfolio: 0.045,
+  r_f_annuity: 0.015,
   r_c: 0.045,
   r_d_base: 0.035,
   extraSpread: 0,
@@ -92,6 +107,12 @@ export const DEFAULT_CONFIG = {
   alpha: 1.0,
   lambda: 0.30,
   Tlambda: 15,
+  // §3.6 v1.0a: long-run share of aggregate K_t notionally owned by current
+  // retirees (vs still-accumulating workers). Eq (53a) ramps the actual share
+  // from 0 to this plateau via smoothstep over 30 years starting at
+  // T_capi_start. Without this scaling the model expropriates worker savings
+  // and masks the transition's fiscal cost (the v1.0 bug).
+  capiAssetShareSteadyState: 0.35,
   // §3.7 endogenous rate premium
   rpThreshold1: 150,
   rpSlope1: 0.0002,
@@ -323,7 +344,9 @@ export function runSimulation(userConfig = {}) {
   // ---- Constants per-config (no t dependence) ----
   const w_n   = fisher(cfg.w_r, cfg.pi);                       // §5.1 eq (1)
   const iota  = Math.min(w_n, cfg.pi);                         // §5.1 eq (2)
-  const r_f_n = fisher(cfg.r_f, cfg.pi);                       // §5.1 eq (3)
+  // v1.0a: nominal conversion is on r_f_portfolio (Legacy-Fund return),
+  // NOT r_f_annuity (which is used real in eq 53 for annuity pricing).
+  const r_f_portfolio_n = fisher(cfg.r_f_portfolio, cfg.pi);   // §5.1 eq (3)
   const cm = cfg.constructionMultiplier;
   const g_h_eff = Math.max(0, cfg.g_h - 1.6 * (cm - 1) * 0.01);// §5.1 eq (6a)
   const delta_eff = cfg.delta * clamp(2 - cm, 0.3, 1.7);       // §5.1 eq (6b)
@@ -396,7 +419,7 @@ export function runSimulation(userConfig = {}) {
     const debtInterest_t = D_t * r_d_t;                                         // (35)
 
     // ---------- §5.9 Cash flow & employer waterfall ----------
-    const fundReturn_t = F_t * r_f_n;                                           // (36)
+    const fundReturn_t = F_t * r_f_portfolio_n;                                 // (36)
     const abatement_t  = cfg.A0 * Omega_t * empFactor * activePop_t;            // (37)
     const nonEmplrNet_t = fundReturn_t + H_t_proceeds + abatement_t
                         + C_s_payg_t - debtInterest_t;                          // (38)
@@ -458,8 +481,11 @@ export function runSimulation(userConfig = {}) {
                       + (t / 10) * cfg.lifeExpAt65_per_decade
                       - (A_R_t - cfg.retirementAgeBase);                        // (52a)
     const T_ret_t = Math.max(15, LE_at_A_R_t);                                  // (52b)
-    const annuityRate_t = cfg.r_f > 0.001
-      ? cfg.r_f / (1 - Math.pow(1 + cfg.r_f, -T_ret_t))
+    // v1.0a eq (53): annuity priced at r_f_annuity (inflation-linked sovereign
+    // hedge rate, ~1.5% real), NOT the Legacy Fund's diversified portfolio yield.
+    // The guarantor must price the annuity at the rate at which they can hedge.
+    const annuityRate_t = cfg.r_f_annuity > 0.001
+      ? cfg.r_f_annuity / (1 - Math.pow(1 + cfg.r_f_annuity, -T_ret_t))
       : 1 / T_ret_t;
     const capiRetireeShare_t = retireeIdx_t > 0 ? capiRetirees_t / retireeIdx_t : 0;
     const potBasedPayout_t   = K_t * annuityRate_t * capiRetireeShare_t;        // (53)
@@ -474,7 +500,8 @@ export function runSimulation(userConfig = {}) {
     K_t  = Math.max(0, K_avail_t - capiPayout_t);                               // (57)
 
     // ---------- §5.14 Diagnostics ----------
-    const spread_t = cfg.r_f - (r_d_t - cfg.pi);                                // (58)
+    // v1.0a eq (58): spread measures Legacy-Fund yield vs real sovereign cost.
+    const spread_t = cfg.r_f_portfolio - (r_d_t - cfg.pi);                      // (58)
     CI_t = CI_t + debtInterest_t;                                               // (59)
     const cumDF_t = cumDF_prev / (1 + r_d_t);
     const pvLegacyExp_t  = legacyExp_t  * cumDF_t;
@@ -487,7 +514,7 @@ export function runSimulation(userConfig = {}) {
       // identification
       t, year: cfg.Y0 + t,
       // §5.1 growth factors
-      w_n, iota, r_f_n, g_h_eff, delta_eff,
+      w_n, iota, r_f_portfolio_n, g_h_eff, delta_eff,
       Omega_t, I_factor_t, H_factor_t,
       // §5.2 demography
       retireeIdx: retireeIdx_t,

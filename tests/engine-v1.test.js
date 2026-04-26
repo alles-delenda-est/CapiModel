@@ -370,7 +370,7 @@ describe('runSimulation skeleton', () => {
       'legacyExp_t', 'dependencyRatio_t',
       'cumDF_t', 'pvLegacyExp_t', 'pvCapiPayout_t',
       'pvLegacyCum_t', 'pvCapiPayoutCum_t',
-      'Omega_t', 'I_factor_t', 'H_factor_t', 'iota', 'w_n', 'r_f_n',
+      'Omega_t', 'I_factor_t', 'H_factor_t', 'iota', 'w_n', 'r_f_portfolio_n',
       'g_h_eff', 'delta_eff', 'empRateNow', 'empFactor',
     ];
     for (const k of expectedKeys) {
