@@ -179,6 +179,32 @@ export function computeS0Brackets(R_t) {
   return (R_t / 10) * totalAvgRP * 12 / 1000;
 }
 
+// §5.8 eq (34): endogenous nominal borrowing rate as piecewise-linear premium
+// over `r_d_base`, plus `extraSpread`, capped at `r_d_cap = 0.20`.
+// `debtRatioPct = (D_ext_t + D_t) / GDP_t × 100`  (eq 33).
+export function computeRD(debtRatioPct, cfg) {
+  const {
+    rpThreshold1, rpSlope1,
+    rpThreshold2, rpSlope2,
+    rpThreshold3, rpSlope3,
+    r_d_base, extraSpread, r_d_cap,
+  } = cfg;
+  let premium;
+  if (debtRatioPct <= rpThreshold1) {
+    premium = 0;
+  } else if (debtRatioPct <= rpThreshold2) {
+    premium = (debtRatioPct - rpThreshold1) * rpSlope1;
+  } else if (debtRatioPct <= rpThreshold3) {
+    premium = (rpThreshold2 - rpThreshold1) * rpSlope1
+            + (debtRatioPct - rpThreshold2) * rpSlope2;
+  } else {
+    premium = (rpThreshold2 - rpThreshold1) * rpSlope1
+            + (rpThreshold3 - rpThreshold2) * rpSlope2
+            + (debtRatioPct - rpThreshold3) * rpSlope3;
+  }
+  return Math.min(r_d_base + premium + extraSpread, r_d_cap);
+}
+
 // =================== runSimulation ===================
 // (Filled in by Task 9.)
 

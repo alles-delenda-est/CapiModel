@@ -10,6 +10,7 @@ import {
   interpLinear,
   equinoxeRate,
   computeS0Brackets,
+  computeRD,
 } from '../src/simulation-engine-v1.js';
 
 describe('module scaffold', () => {
@@ -117,17 +118,32 @@ describe('computeS0Brackets §5.5 eq (18)', () => {
     expect(computeS0Brackets(0)).toBe(0);
   });
 
-  it('low deciles (D1–D7) contribute zero (all ≤ 1800 €/mo)', () => {
-    // Implementation check: integral over [0, 1680] is 0 since r(p)=0 there.
-    // Indirect check: a hand-computed-ish value for D8 alone.
-    // D8 = [1680, 2050]. Closed-form ∫ r(p)·p dp:
-    //   [1680,1800] r=0     → 0
-    //   [1800,2000] r=0.001 → 0.001 · (2000²−1800²)/2 = 380
-    //   [2000,2050] r=0.004 → 0.004 · (2050²−2000²)/2 = 405
-    // Sum = 785; width = 370; avg = 2.121622...
-    // S0 contribution from D8 alone = (R/10) · avg · 12 / 1000 = 0.0216 · avg
-    // Approx (50-step midpoint) is within ~0.02 of closed-form on D8.
-    // Skip — covered indirectly by ≈17.7 anchor.
-    expect(true).toBe(true);
+});
+
+// §5.8 eq (34) endogenous rate piecewise-linear premium + extraSpread, capped.
+describe('computeRD §5.8 eq (34)', () => {
+  const cfg = DEFAULT_CONFIG;
+  it('below threshold1 (115%): r_d = r_d_base = 0.035', () => {
+    expect(computeRD(115, cfg)).toBeCloseTo(0.035, 12);
+  });
+  it('at threshold1 (150%): no premium yet', () => {
+    expect(computeRD(150, cfg)).toBeCloseTo(0.035, 12);
+  });
+  it('at threshold2 (200%): +50pp × 2bps = +100bps → 0.045', () => {
+    expect(computeRD(200, cfg)).toBeCloseTo(0.045, 12);
+  });
+  it('at threshold3 (300%): +100bps + 100pp×4bps = +500bps → 0.085', () => {
+    expect(computeRD(300, cfg)).toBeCloseTo(0.085, 12);
+  });
+  it('above threshold3: incremental 10bps/pp', () => {
+    expect(computeRD(310, cfg)).toBeCloseTo(0.085 + 0.01, 12);
+  });
+  it('cap applies at r_d_cap = 0.20', () => {
+    expect(computeRD(10000, cfg)).toBe(0.20);
+  });
+  it('extraSpread is additive then capped', () => {
+    const stress = { ...cfg, extraSpread: 0.01 };
+    expect(computeRD(115, stress)).toBeCloseTo(0.045, 12);
+    expect(computeRD(10000, stress)).toBe(0.20);
   });
 });
