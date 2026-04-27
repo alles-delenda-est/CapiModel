@@ -57,14 +57,100 @@ const v1_stress = {
   },
 };
 
-// TODO: port the v0.11 paquet-partiel presets (equinoxeOnly, labourHousingOnly,
-// equinoxeAndLabour) to v1.0a. Deferred per Task 3 brief because under v1.0a
-// active-pop dynamics they may need recalibration. Out of scope for Task 3.
+// =====================================================================
+// Paquet partiel presets (Task 4) — pedagogical scenarios showing that
+// partial reform is insufficient under v1.0a's active-pop dynamics.
+// Disposition documented per preset; verified against v1.0a engine.
+// =====================================================================
+
+/**
+ * equinoxeOnly — DESIGNED CATASTROPHIC (under realistic demographics).
+ * Pedagogical: shows that benefit-side reductions alone (Équinoxe) cannot
+ * close the gap when demographic pressure is the binding constraint.
+ *
+ * v1.0a verified disposition: peak transition debt ≈ 1.5 M Md€,
+ * peak total debt ≈ 2.9 M Md€, transition debt-free 2033 but pre-existing
+ * debt + interest dominate. Catastrophic-by-design retained per Task 4
+ * brief option (a).
+ */
+const equinoxeOnly = {
+  label: 'Équinoxe seul',
+  description: 'Réforme Équinoxe sans capi/HLM/travail. Démographie réaliste. Pédagogique : montre l\'insuffisance d\'une réforme côté prestations seule.',
+  params: {
+    ...DEFAULT_CONFIG,
+    demoProfile: 'realistic',
+    enableCapi: false,
+    hlmDiscount: false,
+    delta: 0,
+    rho: 0,
+    lambda: 0,
+    employmentRate0: 0.69,
+    employmentRateTarget: 0.69,
+  },
+};
+
+/**
+ * labourHousingOnly — DESIGNED CATASTROPHIC (under realistic demographics).
+ * Pedagogical: shows that fiscal/labour packages alone (capi + HLM + labour
+ * reform) cannot close the gap without Équinoxe AND demographic relief.
+ *
+ * v1.0a verified disposition: peak transition debt ≈ 10 M Md€, peak total
+ * debt ≈ 20 M Md€, no debt-free year. Catastrophic-by-design retained per
+ * Task 4 brief option (a).
+ */
+const labourHousingOnly = {
+  label: 'Travail + Logement seul',
+  description: 'Capi + HLM + réforme du travail sans Équinoxe. Démographie réaliste. Pédagogique : montre que la combinaison fiscale ne suffit pas seule.',
+  params: {
+    ...DEFAULT_CONFIG,
+    demoProfile: 'realistic',
+    useEquinoxe: false,
+    employmentRateTarget: 0.759,
+    employmentTransitionYears: 8,
+    cutoffAge: 50,
+    hlmDiscount: true,
+    delta: 0.3,
+    rho: 0.05,
+    T_hlm: 20,
+    lambda: 0.30,
+  },
+};
+
+/**
+ * equinoxeAndLabour — RECALIBRATED to cor_central demographics (option b).
+ * Pedagogical: shows that the combination Équinoxe + labour reform IS
+ * sufficient WHEN demographic projections match COR central scenario
+ * (TFR ~1.7 + sustained migration). Falls into a credible regime rather
+ * than a catastrophic one.
+ *
+ * v1.0a verified disposition under cor_central: peak transition debt
+ * ≈ 3.2 k Md€, peak total ≈ 22 k Md€, transition debt-free 2033.
+ * Recalibrated per Task 4 brief option (b) because the v0.11 form
+ * (with realistic demographics) blew up to peak total 412 k Md€.
+ */
+const equinoxeAndLabour = {
+  label: 'Équinoxe + Travail',
+  description: 'Équinoxe + réforme du travail (sans capi/HLM). Démographie COR central (recalibrée v1.0a). Montre que cette combinaison soutient le système si les projections COR centrales se réalisent.',
+  params: {
+    ...DEFAULT_CONFIG,
+    demoProfile: 'cor_central',
+    enableCapi: false,
+    hlmDiscount: false,
+    delta: 0,
+    rho: 0,
+    lambda: 0,
+    employmentRateTarget: 0.759,
+    employmentTransitionYears: 8,
+  },
+};
 
 export const PRESETS = {
   v1_default,
   v1_optimiste,
   v1_stress,
+  equinoxeOnly,
+  labourHousingOnly,
+  equinoxeAndLabour,
 };
 
 /**
