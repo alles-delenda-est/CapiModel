@@ -4,8 +4,8 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine, ComposedChart,
 } from 'recharts'
-import { runSimulation, DEFAULT_CONFIG } from './simulation-engine-v1.js'
-import { PRESETS, extractKPIs } from './v1-presets.js'
+import { runSimulation, DEFAULT_CONFIG } from './simulation-engine.js'
+import { PRESETS, extractKPIs } from './presets.js'
 import useHashNavigation from './hooks/useHashNavigation.js'
 import Navigation from './components/Navigation.jsx'
 import EnhancedSlider from './components/EnhancedSlider.jsx'

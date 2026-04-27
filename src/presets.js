@@ -1,8 +1,9 @@
 // v1.0a presets and KPI extractor.
-// Lives outside the engine (src/simulation-engine-v1.js, immutable Task 1
-// deliverable). Adding a new file rather than touching the engine.
+// Lives outside the engine (src/simulation-engine.js, immutable Task 1
+// deliverable post-Task-4 rename — was simulation-engine-v1.js before v0.11
+// retirement). Adding a new file rather than touching the engine.
 
-import { DEFAULT_CONFIG } from './simulation-engine-v1.js';
+import { DEFAULT_CONFIG } from './simulation-engine.js';
 
 /**
  * v1_default — all §3 defaults exactly as the spec specifies them.

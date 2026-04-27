@@ -8,8 +8,8 @@
 //
 // Run: node scripts/calibrate-stage5.js
 
-import { runSimulation, DEFAULT_CONFIG } from '../src/simulation-engine-v1.js'
-import { extractKPIs } from '../src/v1-presets.js'
+import { runSimulation, DEFAULT_CONFIG } from '../src/simulation-engine.js'
+import { extractKPIs } from '../src/presets.js'
 
 // Stage 4 base: v1.0a default + realistic demo + Équinoxe + capi/HLM, but
 // employment held flat (matches walkthrough Stage 3 in TransitionWalkthrough.jsx).

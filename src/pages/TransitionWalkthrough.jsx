@@ -5,8 +5,8 @@ import {
 } from 'recharts'
 import {
   runSimulation, DEFAULT_CONFIG, DEMOGRAPHIC_PROFILES,
-} from '../simulation-engine-v1.js'
-import { extractKPIs } from '../v1-presets.js'
+} from '../simulation-engine.js'
+import { extractKPIs } from '../presets.js'
 import ChartTooltip from '../components/ChartTooltip.jsx'
 import './TransitionWalkthrough.css'
 

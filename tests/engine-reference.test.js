@@ -16,7 +16,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { runSimulation } from '../src/simulation-engine-v1.js';
+import { runSimulation } from '../src/simulation-engine.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = resolve(__dirname, 'fixtures/v1.0a-default-trace.json');

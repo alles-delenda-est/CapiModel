@@ -1,6 +1,5 @@
-import { DEFAULT_CONFIG, DEMOGRAPHIC_PROFILES, DREES_DECILES, equinoxeRate } from '../simulation-engine-v1.js'
-import { extractKPIs } from '../v1-presets.js'
-import { runSimulation } from '../simulation-engine-v1.js'
+import { DEFAULT_CONFIG, DEMOGRAPHIC_PROFILES, DREES_DECILES, equinoxeRate, runSimulation } from '../simulation-engine.js'
+import { extractKPIs } from '../presets.js'
 import './HypothesesPage.css'
 
 // Sample points illustrating the Équinoxe step function

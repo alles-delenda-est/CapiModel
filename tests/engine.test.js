@@ -22,7 +22,7 @@ import {
   activePopFactor,
   cohIdx,
   runSimulation,
-} from '../src/simulation-engine-v1.js';
+} from '../src/simulation-engine.js';
 
 describe('module scaffold', () => {
   it('exports DEFAULT_CONFIG with expected horizon and Y0', () => {

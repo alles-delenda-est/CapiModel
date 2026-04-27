@@ -4,7 +4,10 @@ import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, ComposedChart,
   XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Legend,
 } from 'recharts'
-import { runSimulation, extractKPIs, PRESETS } from '../simulation-engine.js'
+// v1.0a: was simulation-engine.js (v0.11) + bundled PRESETS/extractKPIs.
+// Now imports from the renamed engine + presets module.
+import { runSimulation } from '../simulation-engine.js'
+import { extractKPIs, PRESETS } from '../presets.js'
 import './IntroPage.css'
 
 // French number formatter
@@ -134,17 +137,20 @@ function ScrollChart({ chartKey, chartData, peakDebtYear, debtFreeYear }) {
 export default function IntroPage({ navigateTo }) {
   // Run baseline scenario to show dynamic numbers
   const baseline = useMemo(() => {
-    const results = runSimulation(PRESETS.default.params)
+    const results = runSimulation(PRESETS.v1_default.params)
     const kpis = extractKPIs(results)
     return { results, kpis }
   }, [])
 
   const k = baseline.kpis
 
+  // v1.0a: row-field renames vs v0.11. `repaid` is not exposed in v1.0a row
+  // schema, so we approximate it as max(0, netFlow_t) — the system's annual
+  // repayment capacity in surplus years. Sufficient for this didactic chart.
   const chartDataFull = useMemo(() => baseline.results.map(r => ({
-    year: r.year, debt: r.debt, shareWorkersCapi: r.shareWorkersCapi,
-    hlmProceeds: r.hlmProceeds, legacyExp: r.legacyExp, capiPayout: r.capiPayout,
-    levy: r.levy, repaid: r.repaid,
+    year: r.year, debt: r.D_t, shareWorkersCapi: r.sigma_capi_t,
+    hlmProceeds: r.H_t_proceeds, legacyExp: r.legacyExp_t, capiPayout: r.capiPayout_t,
+    levy: r.levy_t, repaid: Math.max(0, r.netFlow_t),
   })), [baseline.results])
 
   const [activeCard, setActiveCard] = useState('horse-demo')
