@@ -1,75 +1,99 @@
-# CDC Pension Transition Simulator
+# CapiModel v1.0a — Pension-Transition Simulator
 
 **Live demo:** https://capi-model.vercel.app
 
 ## What it does
 
-An interactive browser-based simulator modelling France's transition from pay-as-you-go (PAYG / répartition) pensions to full capitalisation, financed by CDC assets, HLM social housing sales, and employer contributions. The model implements 34+ coupled equations over a 70-year horizon (2026–2096), tracking the legacy fund balance, the sovereign debt trajectory, and individual capitalisation pot accumulation.
+An interactive browser-based simulator modelling France's transition from pay-as-you-go (PAYG / répartition) pensions to full capitalisation, financed by Caisse des Dépôts assets, FRR + Agirc-Arrco reserves, HLM social-housing cessions, and employer contributions. The model implements **60 numbered equations** over a 70-year horizon (Y0 = 2027, runs to 2096) per `CapiModelSpec_v1.0a.md`, tracking three coupled stocks (legacy fund `F_t`, sovereign transition debt `D_t`, capitalisation pot `K_t`) plus a fourth tracker for pre-reform sovereign debt (`D^{ext}_t`) that grows with GDP.
 
-## Reform mechanism
+## Reform mechanism (v1.0a)
 
-- **Employee contributions** (11.3 % of gross wages) flow to individual capitalisation accounts, but **only for workers below a configurable age cutoff in 2026** (default: 50). Older cohorts keep 100 % of their PAYG rights. The capi share of the salaried contribution ramps up linearly each year as older cohorts retire.
-- **Employer contributions** (16.5 %) cover legacy pension deficits first; any surplus flows to capitalisation.
-- **CDC assets** (€220 bn, excluding Livret A) seed the legacy fund.
-- **HLM housing sales** (~5 %/year of ~5.3 M units) generate capital gains for the legacy fund, with a volume-dependent price discount to model market absorption.
-- **Pension reductions** via the Equinoxe progressive curve cut legacy expenditure by ~26 Md€/year.
-- **Transition levy** (30 % of capitalisation inflows) accelerates debt repayment, activating only once the first capi-eligible cohorts begin contributing (year 16 with the 50-year cutoff).
-- **Residual annual deficits** are covered by sovereign borrowing (OAT issuance).
+- **Initial reserves** (`F0` = **340** Md€) — Day-1 transfer to the legacy fund: CDC proprietary balance sheet (~220 Md€) + FRR + Agirc-Arrco reserves (~120 Md€). *Note: Agirc-Arrco reserves are technically the property of a private paritaire scheme; their inclusion assumes a political decision to nationalise them as part of the reform package (spec §1).*
+- **Employee contributions** (`τ_s` = 11.3 % of gross wages) flow to individual capitalisation, **but only for workers below `cutoffAge` in 2027** (default 50). Older cohorts keep 100 % of their PAYG rights. The capi share of salaried contributions ramps up linearly anchored to the baseline career length (eq 15).
+- **Employer contributions** (`τ_e` = 16.5 %) cover legacy pension deficits first via a waterfall (eqs 39–40); any surplus flows to capi.
+- **HLM cessions** — `ρ` = 5 %/yr of the ~5.3 M HLM units over 20 years (smooth taper last 5), with a volume-dependent price discount (eq 28). 95 % of capital gains remitted to the legacy fund (eq 30). Uniform geometric form `ΔU_t = U₀ × (1−ρ)^t × ρ` for all `t` (mass-conservation invariant — fixed in v1.0a).
+- **Équinoxe pension reform** has three components, applied by scope (spec §5.5, **revised in v1.0a**):
+  1. *Brackets-side reduction* (eq 18, legacy retirees only) — progressive cut on pensions above 1 800 €/mo, capped at 20 % above 4 000 €/mo. ~17.7 Md€/yr at t=0.
+  2. *IR-deduction abolition* (eq 18b, legacy only) — 5 Md€/yr at t=0, decays with cohort.
+  3. *CSG/CRDS restoration* (eq 18c → 22, **all retirees** including capi) — 5 Md€/yr at t=0, grows with retireeIdx(t). Surfaces as `S0_csg_revenue_t` in eq 38.
+- **Retirement age** (`A_R(t)`, **NEW in v1.0**, spec §5.4): two modes — `fixed` (constant at `retirementAgeBase` = 64) or `indexed` (rises by half the gain in life expectancy at 65, mirroring Swedish/Italian NDC). Hard floor 60, hard ceiling 70. Existing 2027 retirees are immune (§10.5).
+- **Transition levy** (`λ` = 30 % of capi inflows) accelerates debt repayment, smoothly activated around year 15 (eq 44).
+- **Residual annual deficits** are covered by sovereign borrowing at the **endogenous rate** `r_d(t)`, with a piecewise-linear premium kicking in at 150 % debt/GDP (eq 34, capped at 20 %).
 
-## Transition rule (v2 additions)
+## Key features (v1.0a)
 
-The v1 document assumed every worker instantly switched to capitalisation in 2026 and that the pre-reform French sovereign debt (≈3,200 Md€) was frozen for 70 years. Both are now configurable:
+- **Tier A simulator UI** — 24 user-facing sliders / selectors covering macroeconomic, workforce, retirement-age, capi-routing, HLM, and Équinoxe parameters per spec §3 (App.jsx).
+- **Tier B expert menu** — annuity hedge rate (`r_f_annuity`), capi-actuarial-share plateau (`capiAssetShareSteadyState`), endogenous-rate premium tuning, GE-penalty boundaries, calibration constants.
+- **Two distinct risk-free rates** — `r_f_portfolio` (4.5 % real, Legacy Fund's diversified 60/40 yield) used in eq 36/58; `r_f_annuity` (1.5 % real, OATi-equivalent hedging cost) used in eq 53. Resolves a v1.0 carry-trade pricing arbitrage.
+- **Active-population factor** drives both the wage bill (eq 9) and GDP (eq 31) — without this, the model overstates labour-force capacity in pessimistic demographic scenarios.
+- **Capi pension payouts by asset share, not headcount** (eq 53a, **NEW v1.0a**) — `capiAssetShare_t` ramps from 0 to `capiAssetShareSteadyState` (default 0.35) over 30 years, anchored to mature DC system precedents (Australia super, Chile AFP). Replaces the v1.0 expropriation bug.
+- **Endogenous borrowing rate** — sovereign risk premium rises with combined `D^{ext}_t + D_t` debt/GDP via piecewise-linear thresholds (150 / 200 / 300 %), capped at 20 %.
+- **General-equilibrium return penalty** — capi return scales linearly to zero between `geKneeRatio` (default 2× GDP) and `geFloorRatio` (4× GDP), modelling equity-premium compression at macroeconomic scale.
+- **State guarantee on capi pensions** — when the pot can't cover the desired payout, the state borrows the shortfall (eq 55) and tracks it cumulatively in `CK_t`.
+- **6 presets**: 3 baseline (`v1_default`, `v1_optimiste`, `v1_stress`) + 3 paquet partiel pedagogical scenarios (`equinoxeOnly`, `labourHousingOnly`, `equinoxeAndLabour`).
+- **5-stage walkthrough** (`#/walkthrough`) — builds the reform piece by piece against `realistic` demographics, demonstrating that no single fiscal reform closes the gap without demographic relief.
+- **Hypotheses page** (`#/hypotheses`) — every §3 parameter listed with default + kind (S/C/M) + rationale, plus the v1.0a corrections note and the §10.14 R0/E0 asymmetry note.
+- **Reference-trace regression** (`tests/fixtures/v1.0a-default-trace.json`) — 70-year × every-field default-preset baseline. Engine changes that alter default output fail loudly (§11.3 contract).
 
-| Parameter | Meaning | Default | Effect |
-|---|---|---:|---|
-| `cutoffAge` | Age in 2026 above which workers stay 100 % PAYG | 50 | Reduces peak transition debt by ~32–38 % and cumulative interest by ~47 % vs. the universal immediate switch |
-| `existingDebtGrowth` | Nominal growth rate of pre-reform French debt | 2.7 % | Keeps the pre-reform debt/GDP ratio roughly constant at ~114 %. At 3.5 % (stress preset) the ratio crosses 150 % → 200 % and the endogenous risk premium activates on *all* sovereign debt |
+## Default scenario results (`v1_default` preset, v1.0a)
 
-Setting `cutoffAge = null` and `existingDebtGrowth = 0` reproduces the v1 document bit-exactly (the `Original v5` preset).
+All values are derived from `tests/fixtures/v1.0a-default-trace.json` (the §11.3 reference trace, captured in PR #4). If display ever diverges from this fixture, that's an engine regression — escalate rather than patching the doc.
 
-## Key features
+| KPI | Value | Source field |
+|---|---|---|
+| Peak sovereign transition debt | **5 470 Md€** in **2059** | `D_t` max |
+| Debt-free year (transition) | **2082** | first year `D_t < 1` after t > 5 |
+| Cumulative interest cost (70 y) | **5 948 Md€** | `CI_t[69]` |
+| Capitalisation pot, real (2027 €), Y69 | **12 944 Md€** | `K_t[69] / (1+π)^69` |
+| Capitalisation pot, nominal, Y69 | **50 756 Md€** | `K_t[69]` |
+| Final legacy fund balance | **1 709 Md€** | `F_t[69]` |
+| Cumulative capi shortfall | **0 Md€** | `CK_t[69]` |
+| `S0_brackets_t` at t=0 (pre-phasing) | **17.68 Md€/yr** | `S0_brackets_t[0]` |
+| `S0_csg_revenue_t` at t=0 | **5.00 Md€/yr** | `S0_csg_revenue_t[0]` |
+| `r_d(t)` minimum | **3.50 %** | `r_d_t` min |
+| `r_d(t)` maximum | **4.45 %** | `r_d_t` max |
 
-- **4 preset scenarios**: Hypothèses de base, Original v5, Optimiste, Stress Test
-- **~27 adjustable parameters** with tooltip explanations, grouped into collapsible sections with criticality levels (critical / normal / advanced)
-- **Endogenous borrowing rate**: sovereign risk premium rises with the combined (existing + transition) debt/GDP ratio via a piecewise-linear model (thresholds at 150 %, 200 %, 300 %, calibrated to France/US/Italy precedent)
-- **General Equilibrium Return Penalty**: the capitalization fund's real return scales down dynamically, capping at inflation as the fund reaches 2× GDP, to model equity premium compression at macroeconomic scale.
-- **State Guarantee (Garantie de l'État)**: if the capitalization fund is depleted under stress scenarios, the state automatically absorbs the pension shortfall via new sovereign debt, maintaining continuous pension coverage and enforcing the macroeconomic Breyer identity.
-- **HLM volume-dependent price discount**: accounts for market absorption constraints
-- **Equinoxe progressive pension reductions**: continuous curve above €1,800/month, replacing the original step-function design
-- **Monte Carlo simulation** (100–1,000 runs): correlated stochastic shocks to returns, inflation, wages, and borrowing rates via Web Worker, producing fan charts with confidence intervals
-- **7+ charts**: legacy fund balance, pension split (PAYG vs capi), sovereign debt trajectory + endogenous rate, capitalisation pot, spread σ, contribution flows (now split into salarié→capi / salarié→PAYG / employer→capi / employer→PAYG), cumulative NPV
-- **Full data table** with CSV export
-- **URL parameter sharing**: all settings encoded in the URL for reproducibility (with dedicated handling for `null` values)
+## Walkthrough — 5-stage transition narrative (`#/walkthrough`)
 
-## Default scenario results (Hypothèses de base, v2)
+Each stage extends `v1_default` with stage-specific overrides, against `realistic` demographics. The walkthrough demonstrates that **demography is the binding constraint** — Stages 1–4 (status quo through full fiscal+labour reform) all stay in catastrophic regime, only Stage 5 (switching to `reformed`) closes the system.
 
-| KPI | Value |
-|---|---|
-| Peak sovereign debt (transition) | ~1,229 Md€ (2041) |
-| Debt-free year | ~2055 |
-| Cumulative interest cost | ~664 Md€ |
-| Capitalisation pot (real 2026€, Year 70) | ~32 Tn€ |
-| Spread σ minimum | +1.50 % (healthy) |
-| Pension savings (Equinoxe) | ~26 Md€/year |
+| # | Stage | Peak transition debt | Peak total debt¹ | Debt-free year | Disposition |
+|---|---|---|---|---|---|
+| 1 | Statu quo (realistic demographics) | 4 383 k Md€ (2096) | 8 758 k Md€ | never | catastrophic |
+| 2 | + Équinoxe (3 components) | 1 479 k Md€ (2096) | 2 954 k Md€ | 2033 (transition) | catastrophic by total² |
+| 3 | + Capi + HLM | 10 056 k Md€ (2096) | 20 135 k Md€ | never | catastrophic |
+| 4 | + Labour reform (employment +10 % over 8 y) | 12.2 k Md€ (2077) | 52.6 k Md€ | never | borderline catastrophic |
+| 5 | + Demographic reform (`reformed` profile) | **4.4 k Md€ (2056)** | **24.4 k Md€** | **2076** | **clean** |
 
-*The cutoff-at-50 transition rule is the dominant driver of the peak-debt reduction vs. v1 (~1,900 Md€ previously).*
+¹ Peak total debt = max(`D_ext_t + D_t + CI_t`) — combined sovereign exposure including pre-reform debt and cumulative interest. The walkthrough auto-switches its chart to log scale when this exceeds 100 k Md€.
+
+² Stage 2 hits transition debt-free in 2033 because Équinoxe savings rapidly close the legacy gap, but `D_ext_t` continues to grow with GDP and `CI_t` accumulates from the early years — so peak total debt remains catastrophic. This is informative about which metric to trust.
 
 ## Technical stack
 
-React 19 + Vite 7 + Recharts. Single-page application, no backend. The `dist/` folder is fully self-contained and can be served from any static host or opened directly from the filesystem. Auto-deployed to Vercel (`capi-model.vercel.app`) on every push to `main`.
+React 19 + Vite 7 + Recharts. Single-page application, no backend. Auto-deployed to Vercel on every push to `main`. Tests run via Vitest (`npm test`, currently 125/125 passing including 1000-config property-based suite).
 
 ## Key assumptions and limitations
 
-- **Cohort index is parametric, not actuarial** — smoothstep ramp to a 1.18× boomer peak at Year 8, then 18-year half-life exponential decay with a smooth envelope to extinction at Year 70, rather than INSEE mortality tables
-- **Retiree count is COR-calibrated but parametric** — `retireeIdx` follows a smoothstep curve to a 1.30× peak at Year 34 (~2060, aligned with the COR central scenario) then plateaus at 1.25× long-run, floored by `cohIdx`. A full COR lookup table (or INSEE mortality tables) remains an option to implement for higher fidelity.
-- **Capitalisation payouts use a linked kernel** — `capiPayout = E0 × max(0, retireeIdx − cohIdx) × idxFact`, capped at the available pot; any unmet desired payout is surfaced as a cumulative shortfall KPI
-- **No behavioural responses** — retirement timing, labour supply, and precautionary savings effects are excluded
-- **Wage bill grows uniformly** — no cyclical or unemployment shocks in the deterministic run (Monte Carlo has year-persistent regime shifts)
-- **Single national HLM price** — no Île-de-France vs province differentiation
-- **`existingDebtGrowth` is a policy assumption, not a shock** — it reflects the state's capacity to stabilise its pre-reform debt trajectory, not a random draw
+- **Demographic kernel is parametric, 45-year extinction.** Smoothstep envelope (eqs 7a–c) with `T_extinct = 45` aligned to COR June 2025 central-scenario mortality tables. Actuarial replacement using exact INSEE/COR tables is a v1.1 candidate (§10.4).
+- **No behavioural responses.** Retirement-timing decisions (beyond `retirementAge*`), labour-supply elasticity, precautionary savings — all out of scope.
+- **`E0` doesn't respond to retirement age** (§10.7) — raising retirement age in v1.0a moves only timing, not benefit amount. Real systems also adjust accrual; v1.1 candidate.
+- **Cohort kernel parameters decoupled from `A_R(t)`** (§10.6) — known limitation; with INSEE T60 actuarial replacement they would couple.
+- **Survivors-only cohort implicit in `legacyRetirees(t)`** (§10.14) — `R0` is direct-rights only (DREES), `E0` is all-régime; the asymmetry is documented and intended. v1.1 fix would split `legacyRetirees(t)` into direct-rights and survivors-only sub-cohorts.
+- **No regional heterogeneity** — single national HLM price, single national labour market.
+- **No demographic feedback loops** — TFR responding to economic conditions, mortality responding to retirement age — out of scope.
+
+## v1.1 wishlist (spec §10.13)
+
+Currently hardcoded; v1.1 candidates for user-tunable exposure:
+- `r_c` (sensitivity slider, range [0.025, 0.06])
+- `lifeExpAt65_per_decade` (« Avancées de la science médicale », range [0.5, 1.5])
+- `LIFE_EXP_INDEXATION_FRACTION` (range [0, 1])
+- `r_d_base` (rate-environment stress)
 
 ## Source documents
 
-- `cdc_legacy_fund_model.md` — Full model specification (34 equations + v2 annexe)
-- `critique.md` — Structured critique identifying weaknesses and recommended fixes, all implemented
-- `CLAUDE.md` — Repo/build/deploy reference for automated tooling
+- `CapiModelSpec_v1.0a.md` — Full model specification (60 equations + invariants + calibration sources)
+- `THEORY.md` — Operating theory and engineering philosophy
+- `tests/fixtures/v1.0a-default-trace.json` — Canonical 70-year × every-field reference trace (§11.3 contract)
+- `critique.md` — Structured critique
