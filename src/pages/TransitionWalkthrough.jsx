@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
 import {
   runSimulation, DEFAULT_CONFIG, DEMOGRAPHIC_PROFILES,
@@ -15,8 +15,12 @@ import './TransitionWalkthrough.css'
 //
 // Stages are defined by extending v1_default with stage-specific overrides.
 // All five stages run once at component mount; charts layer prior stages
-// as 0.25-opacity ghosts. Log-scale auto-switches at 100,000 Md€ peak
-// total debt (existing + transition + cumulative interest), per Task 4 brief.
+// as 0.25-opacity ghosts. Charts truncate the x-axis at the first year
+// where total debt ratio (existingDebt + D) / GDP exceeds 500%, with an
+// annotation marking the divergence point ("modèle non applicable"). KPI
+// cards always reflect the full 70-year simulation, regardless of chart
+// truncation. Series that are zero throughout the rendered horizon are
+// omitted from chart and legend (e.g. "Pensions capi" in stages 1–2).
 // =====================================================================
 
 const BASE = DEFAULT_CONFIG
@@ -40,27 +44,29 @@ const STAGE_1 = {
 //  + CSG/CRDS restoration (full v1.0a three-component split).
 const STAGE_2 = { ...STAGE_1, useEquinoxe: true }
 
-// Stage 3 — Capi + HLM: cohort transition for under-50s + HLM cessions
-//  + transition levy. v0.11 had two separate stages here (capi_brut +
-//  hlm_cdc); v1.0a consolidates them into one per the Task 4 brief.
+// Stage 3 — Model change: capi cohort transition (under-50s) + labour
+//  reform (employment +10% over 8 years). HLM/CdC funding NOT yet active.
+//  Pedagogically isolates the transition cost: even with capi + labour,
+//  the legacy fund needs additional financing or debt explodes.
 const STAGE_3 = {
   ...STAGE_2,
   enableCapi: true,
   cutoffAge: 50,
+  employmentRateTarget: 0.759,
+  employmentTransitionYears: 8,
+}
+
+// Stage 4 — Transition financing: stage 3 + HLM cessions (5%/yr × 20 yrs,
+//  decote ≤30%) + transition levy (30% on capi flows, redirected to
+//  legacy debt repayment). The HLM proceeds + levy flip the debt
+//  trajectory from divergent to bounded.
+const STAGE_4 = {
+  ...STAGE_3,
   hlmDiscount: true,
   delta: 0.3,
   rho: 0.05,
   T_hlm: 20,
   lambda: 0.30,
-}
-
-// Stage 4 — Labour reform: employment rate target +10% over 8 years.
-//  v1.0a uses employmentRateTarget directly; v0.11 had R_ramp + R_ramp_years.
-//  0.69 × 1.10 = 0.759 (employment +10% from baseline).
-const STAGE_4 = {
-  ...STAGE_3,
-  employmentRateTarget: 0.759,
-  employmentTransitionYears: 8,
 }
 
 // Stage 5 — Demographic reform: switch to reformed demographic profile
@@ -78,9 +84,8 @@ function dependencyRatioChange(rows) {
   return (r43 / r0) - 1
 }
 
-// Peak total debt across the horizon = max(D_ext + D + CI). This is the
-// metric the Task 4 brief uses for chip-colour assignment AND for log-scale
-// auto-switch (threshold 100,000 Md€).
+// Peak total debt across the horizon = max(D_ext + D + CI). Used for
+// stage-chip colour assignment ("catastrophic" vs "clean").
 function peakTotalDebt(rows) {
   let peak = 0
   for (const r of rows) {
@@ -90,7 +95,15 @@ function peakTotalDebt(rows) {
   return peak
 }
 
-const LOG_SCALE_THRESHOLD = 100_000  // Md€
+// Catastrophic chip colour applies above this peak-total-debt level.
+const CATASTROPHIC_PEAK_DEBT = 100_000  // Md€
+
+// Chart x-axis truncates at the first year where (existingDebt + D)/GDP
+// exceeds this threshold. Verified empirically: stages 1–3 cross 500%
+// well before t=69 (years 2069/2075/2062, peak ratios 37,700%/12,800%/
+// 99,600% respectively); stages 4 and 5 never cross (peaks 272% / 180%)
+// and render to full horizon naturally.
+const TRUNCATION_THRESHOLD_PCT = 500
 
 // Format helpers ------------------------------------------------------
 
@@ -140,10 +153,10 @@ export default function TransitionWalkthrough({ navigateTo }) {
   // Run all five stages once. Stable across renders.
   const sims = useMemo(() => {
     const stages = [
-      { id: 'status_quo', params: STAGE_1 },
-      { id: 'equinoxe',   params: STAGE_2 },
-      { id: 'capi_hlm',   params: STAGE_3 },
-      { id: 'labor',      params: STAGE_4 },
+      { id: 'status_quo',  params: STAGE_1 },
+      { id: 'equinoxe',    params: STAGE_2 },
+      { id: 'capi_labor',  params: STAGE_3 },
+      { id: 'hlm_cdc',     params: STAGE_4 },
       { id: 'demographie', params: STAGE_5 },
     ]
     return stages.map(s => {
@@ -165,7 +178,7 @@ export default function TransitionWalkthrough({ navigateTo }) {
   // catastrophic, Stage 5 clean) so no v0.11→v1.0a category flip occurred.
   const stageCategory = (i) => {
     const s = sims[i]
-    if (s.peakTotalDebt > LOG_SCALE_THRESHOLD) return 'catastrophic'
+    if (s.peakTotalDebt > CATASTROPHIC_PEAK_DEBT) return 'catastrophic'
     if (s.kpis.debtFreeYear == null) return 'catastrophic'
     return 'clean'
   }
@@ -194,8 +207,9 @@ export default function TransitionWalkthrough({ navigateTo }) {
       title: 'Statu quo avec démographie réaliste',
       changeHeadline: 'Aucune réforme',
       narrative: `Le système par répartition est maintenu tel quel. La courbe démographique réaliste retient un pic des retraités à ${DEMOGRAPHIC_PROFILES.realistic.peakMult.toFixed(2)}× le niveau de 2027 et un plateau à ${DEMOGRAPHIC_PROFILES.realistic.longRunMult.toFixed(2)}×, plus défavorable que les projections du COR (1,30× / 1,25×). Le ratio de dépendance change de ${fmtPctPP(sims[0].depRatioChange)} entre 2027 et 2070 — au-delà de la projection COR centrale (+42% vers +48% selon la source).`,
-      chartExplain1: 'Les pensions versées (zone rouge + verte) croissent avec le nombre de retraités. Le financement courant (ligne bleue) suit la masse salariale. L’écart entre les deux alimente la dette de transition.',
-      chartExplain2: 'Sans réforme et avec une démographie défavorable, la dette publique (zones bleues + ambre) explose. L’axe est en échelle logarithmique pour rester lisible.',
+      chart1Subtitle: 'Le statu quo : la faillite inévitable',
+      chartExplain1: 'Les pensions versées (zone rouge) croissent avec le nombre de retraités. Le financement courant, c-à-d les cotisations (ligne bleue), suit la masse salariale. L’écart entre les deux grandit, le recours à la dette avec lui.',
+      chartExplain2: 'Sans réforme et avec une démographie défavorable, la dette publique (zones bleues + ambre) explose. Afin de rester lisible, ce graphique s’arrête dès que la dette atteint 500% du PIB, un record absolu à ma connaissance, et de très loin. Bien avant d’arriver là la France ne pourrait plus payer les retraites.',
       debtLabel: 'Trajectoire dette actuelle',
     },
     {
@@ -203,37 +217,41 @@ export default function TransitionWalkthrough({ navigateTo }) {
       label: 'Équinoxe',
       title: 'Rééquilibrage Équinoxe (3 composantes)',
       changeHeadline: 'Réduction progressive des pensions élevées + restauration CSG/CRDS',
-      narrative: 'Trois composantes (v1.0a) s’appliquent simultanément&nbsp;: (1) un barème progressif sur les pensions au-dessus de 1 800 €/mois (plafonné à 20% au-delà de 4 000 €) — ~17,7 Md€/an d’économies sur les pensions legacy uniquement&nbsp;; (2) abolition de l’abattement IR de 10% — ~5 Md€/an, legacy uniquement&nbsp;; (3) restauration de la CSG/CRDS taux plein sur tous les retraités (legacy ET capi) — ~5 Md€/an de recette fiscale. Total t=0&nbsp;: ~22,7 Md€/an d’économies côté prestation + ~5 Md€/an de recette côté impôt. Les trois trajectoires divergent dans le temps. Voir spec §5.5 pour le détail.',
-      chartExplain1: 'La zone des pensions (rouge) recule par rapport à l’étape 1 (grisée) : Équinoxe réduit les prestations legacy. Le financement (bleu) inclut la recette CSG/CRDS qui croît avec retireeIdx(t).',
-      chartExplain2: 'La dette de transition s’annule rapidement, mais la dette préexistante (zone bleu foncé) continue de croître avec le PIB et les intérêts cumulés (ambre) restent.',
+      narrative: 'Le rééquilibrage Équinoxe consiste en trois composantes : (1) des baisses progressives sur les pensions au-dessus de 1 800 €/mois (plafonné à 20% au-delà de 4 000 €) — ~17,7 Md€/an d’économies ; (2) abolition de l’abattement IR de 10% — ~5 Md€/an ; (3) restauration de la CSG/CRDS taux plein sur tous les retraités — ~5 Md€/an de recette fiscale. Total t=0 : ~22,7 Md€/an d’économies côté prestation + ~5 Md€/an de recette côté impôt.',
+      chart1Subtitle: 'Réformer le modèle actuel : retarder (de peu) l’échéance',
+      chartExplain1: 'La zone des pensions (rouge) diminue par rapport au statu quo (grisée) grâce au rééquilibrage Équinoxe. Le financement (bleu) augmente légèrement avec les recettes additionnelles de CSG/CRDS.',
+      chartExplain2: 'Néanmoins, la facture reste hors de nos moyens. Ce graphique aussi s’arrête dès que la dette atteint 500% du PIB.',
       debtLabel: 'Trajectoire dette avec Équinoxe',
     },
     {
-      id: 'capi_hlm',
-      label: 'Capi + HLM',
-      title: 'Capitalisation des cotisations + cessions HLM',
-      changeHeadline: 'Cohorte des moins de 50 ans en capitalisation + 5%/an de cessions HLM',
-      narrative: 'Les actifs âgés de 50 ans ou moins en 2027 basculent progressivement vers un régime par capitalisation (rendement réel 4,5%, voir spec §3.6). Les cotisations employeur restent prioritairement affectées au financement du passif legacy ; le surplus va à la capi. En parallèle, 5% du parc HLM est cédé chaque année pendant 20 ans (décote plafonnée à 30%, plus-values nettes captées par la CdC). Un prélèvement de transition de 30% sur les flux capi s’active environ 15 ans après la réforme pour rembourser la dette. v1.0a corrige le partage par tête en partage par actifs (spec §5.13)&nbsp;: les pensions capi reflètent la part actuarielle réelle des retraités dans le pot, ce qui augmente la pression sur le système (insuffisance capi visible).',
-      chartExplain1: 'Les pensions capitalisation (vert) apparaissent au-dessus des pensions legacy (rouge). Le financement intègre les produits HLM, le prélèvement de transition, et la CSG/CRDS Équinoxe.',
-      chartExplain2: 'Les pensions capi ne couvrent pas la totalité du besoin : la garantie d’État compense l’insuffisance par emprunt (CK_t cumulé). La trajectoire reste catastrophique dans cette étape.',
+      id: 'capi_labor',
+      label: 'Capi + Travail',
+      title: 'Changement de modèle : capitalisation + marché du travail',
+      changeHeadline: 'Bascule des moins de 50 ans en capitalisation + hausse du taux d’emploi (+10% sur 8 ans)',
+      narrative: 'Les actifs âgés de 50 ans ou moins en 2027 basculent progressivement vers un régime par capitalisation (rendement réel 4,5%, voir spec §3.6). En parallèle, une réforme du marché du travail porte le taux d’emploi 15-64 de 0,69 à 0,759 (+10%) sur 8 ans, augmentant la masse salariale et donc les cotisations. À ce stade, aucun mécanisme de financement de la transition n’est encore activé : le besoin de financement double pendant la période de bascule (paiements legacy + accumulation capi), et la dette explose. Cette étape isole la nécessité d’un financement dédié à la transition.',
+      chart1Subtitle: 'Changement de modèle : l’espoir sur l’horizon',
+      chartExplain1: 'Si même des réformes du modèle actuel qui peuvent être considérées comme politiquement très ambitieuses ne peuvent que retarder l’échéance, il ne reste qu’à changer de modèle. Ce que nous (et beaucoup d’économistes !) proposons est, en gardant la partie plutôt sociale (AVS, etc.), à l’instar de presque tous nos voisins, de basculer sur la capitalisation. Par contre, toute seule cela ne marche pas : il y aura une période de paiement à double qui fera flamber la dette. Ce que nous présentons ici est donc l’introduction de la capitalisation avec aussi des réformes du marché du travail afin d’augmenter le nombre des cotisants.',
+      chartExplain2: 'Sans financement dédié à la transition, la dette publique explose encore plus rapidement que dans le statu quo : aux dépenses legacy s’ajoutent les cotisations capitalisées qui ne sont plus disponibles pour les retraités actuels. Ce graphique s’arrête lui aussi dès que la dette atteint 500% du PIB.',
     },
     {
-      id: 'labor',
-      label: 'Marché du travail',
-      title: 'Réforme du marché du travail',
-      changeHeadline: 'Hausse du taux d’emploi de +10% sur 8 ans',
-      narrative: 'Réforme du droit du travail (abolition CDI, allègement licenciement, refonte des transferts aux chômeurs/étudiants). Seul l’effet sur la participation au marché du travail est modélisé : le taux d’emploi 15-64 monte de 0,69 à 0,759 (+10%) sur 8 ans (cible OCDE médiane). Cela augmente la masse salariale, donc les cotisations, et le PIB. Les effets sur les salaires individuels et les économies budgétaires directes ne sont pas modélisés.',
-      chartExplain1: 'Le financement courant (bleu) augmente avec la masse salariale. Les pensions legacy diminuent légèrement par rapport à l’étape 3 (effet indirect via active-pop dans la courbe E0_legacy_t).',
-      chartExplain2: 'La dette de transition reste contenue (la dette préexistante continue de tracker le PIB) mais le système ne se désendette toujours pas dans l’horizon de 70 ans. La démographie reste le facteur limitant.',
+      id: 'hlm_cdc',
+      label: 'HLM + CdC',
+      title: 'Financement de la transition par cessions HLM',
+      changeHeadline: 'Cessions HLM (5%/an × 20 ans) + prélèvement de transition de 30% sur les flux capi',
+      narrative: 'Refonte du modèle social du logement : remplacement du parc HLM (opaque, susceptible d’abus d’attribution) par des allocations directes aux foyers les plus démunis, qu’ils choisissent leur logement sur le marché libre. 5% du parc HLM est cédé chaque année pendant 20 ans (décote plafonnée à 30%) ; les plus-values nettes sont captées par la CdC et fléchées vers le financement de la transition. En parallèle, un prélèvement de 30% sur les flux capi s’active progressivement (≈15 ans après la réforme) pour rembourser la dette accumulée pendant la bascule.',
+      chart1Subtitle: 'Financement de la transition',
+      chartExplain1: 'La France possède des actifs, actuellement peu performants, qui peuvent être mis à contribution. Nous proposons une refonte du modèle social de logement en transformant le système actuel — opaque et susceptible de copinage et d’autres abus — par des versements libres aux foyers les plus démunis, pour qu’ils puissent payer le loyer du bien qu’ils veulent, et non pas attendre 3 ans pour un appartement vétuste. Cela fait, nous revendons le « parc social » et mettons les bénéfices à contribution pour financer les retraites legacy pendant la transition.',
+      chartExplain2: 'En vertu de l’apport additionnel du fonds au début de la transition, la dette totale baisse de manière significative. Cela devient déjà faisable.',
     },
     {
       id: 'demographie',
       label: 'Démographie',
       title: 'Réforme démographique',
       changeHeadline: 'Profil démographique réformé (TFR 1,9 + migration +120k/an)',
-      narrative: `Mesures structurelles sur la natalité et l’immigration qualifiée, plus l’allongement effectif de la vie active. Le profil démographique passe du scénario réaliste au scénario réformé : ratio de dépendance ${fmtPctPP(sims[4].depRatioChange)} entre 2027 et 2070 (vs ${fmtPctPP(sims[0].depRatioChange)} au statu quo). C’est la combinaison qui rend le système soutenable&nbsp;: les réformes fiscales et budgétaires des étapes précédentes ne suffisent pas seules.`,
-      chartExplain1: 'Les pensions diminuent par rapport à l’étape 4 grâce au profil démographique moins défavorable. Le financement reste comparable.',
-      chartExplain2: 'La dette se résorbe entièrement dans l’horizon. Le ratio dette/PIB repasse sous le niveau pré-réforme.',
+      narrative: `Mesures structurelles sur la natalité et l’immigration qualifiée, plus l’allongement effectif de la vie active. Le profil démographique passe du scénario réaliste au scénario réformé : ratio de dépendance ${fmtPctPP(sims[4].depRatioChange)} entre 2027 et 2070 (vs ${fmtPctPP(sims[0].depRatioChange)} au statu quo). C’est la combinaison qui rend le système soutenable : les réformes fiscales et budgétaires des étapes précédentes ne suffisent pas seules.`,
+      chart1Subtitle: 'Réforme du modèle et du contexte',
+      chartExplain1: 'Pour assurer notre avenir il faut aller plus loin et entamer des réformes démographiques. Les vingt dernières années ont été marquées par un fort recul du soutien de la famille. Nous suivrons la doctrine en implémentant une politique de soutien de la famille, afin d’augmenter les cotisants (ou amorcer leur baisse !).',
+      chartExplain2: 'La dette se résorbe entièrement dans l’horizon. La trajectoire est désormais soutenable.',
     },
   ]
 
@@ -241,16 +259,35 @@ export default function TransitionWalkthrough({ navigateTo }) {
   const cur = sims[currentStage]
   const prev = currentStage > 0 ? sims[currentStage - 1] : null
 
-  // Auto-switch chart 2 to log scale when current stage's peak total debt
-  // exceeds 100k Md€ (Task 4 brief §B.5).
-  const useLogScale = cur.peakTotalDebt > LOG_SCALE_THRESHOLD
+  // Build layered chart data + per-stage truncation + per-series activity.
+  //
+  // Truncation: drop years after (existingDebt + D)/GDP first crosses
+  // TRUNCATION_THRESHOLD_PCT for the current stage. Applied uniformly to
+  // every series rendered (current stage + ghost overlays from prior stages)
+  // because they all read from the same sliced chartData.
+  //
+  // seriesActive[i][key]: true iff the series has at least one non-zero
+  // value within the rendered slice. Used to omit zero-throughout series
+  // (e.g. capiPayout in stages 1–2) from the chart and the legend.
+  const { chartData, seriesActive, truncationYear } = useMemo(() => {
+    // Per-stage truncation year (null → no truncation).
+    const truncationYearForStage = (stageIdx) => {
+      const r = sims[stageIdx].results
+      for (let yi = 0; yi < r.length; yi++) {
+        const ratio = (r[yi].D_ext_t + r[yi].D_t) / r[yi].GDP_t * 100
+        if (ratio > TRUNCATION_THRESHOLD_PCT) return r[yi].year
+      }
+      return null
+    }
+    const truncationYear = truncationYearForStage(currentStage)
+    const allRows = sims[0].results
+    const lastIdx = truncationYear == null
+      ? allRows.length - 1
+      : allRows.findIndex(r => r.year === truncationYear)
 
-  // Build layered chart data — render stages 0..currentStage, the current
-  // stage at full opacity, prior stages at 0.25 opacity.
-  const chartData = useMemo(() => {
-    const years = sims[0].results.map(r => r.year)
-    return years.map((year, yi) => {
-      const point = { year }
+    const data = []
+    for (let yi = 0; yi <= lastIdx; yi++) {
+      const point = { year: allRows[yi].year }
       for (let i = 0; i <= currentStage; i++) {
         const r = sims[i].results[yi]
         point[`legacyExp_${i}`] = r.legacyExp_t
@@ -264,11 +301,23 @@ export default function TransitionWalkthrough({ navigateTo }) {
         point[`existingDebt_${i}`] = r.D_ext_t
         point[`transitionDebt_${i}`] = r.D_t
         point[`cumInterest_${i}`] = r.CI_t
-        // debtRatio_t is already in % — keep as-is.
-        point[`debtRatio_${i}`] = r.debtRatio_t
       }
-      return point
-    })
+      data.push(point)
+    }
+
+    const EPS = 1e-6
+    const seriesKeys = ['legacyExp', 'capiPayout', 'funding',
+      'existingDebt', 'transitionDebt', 'cumInterest']
+    const seriesActive = {}
+    for (let i = 0; i <= currentStage; i++) {
+      seriesActive[i] = {}
+      for (const k of seriesKeys) {
+        const dk = `${k}_${i}`
+        seriesActive[i][k] = data.some(p => Math.abs(p[dk]) > EPS)
+      }
+    }
+
+    return { chartData: data, seriesActive, truncationYear }
   }, [currentStage, sims])
 
   const deltas = prev
@@ -299,8 +348,7 @@ export default function TransitionWalkthrough({ navigateTo }) {
       <div className="ct-box">
         <div className="ct-year">Année {label}</div>
         {filtered.map((e, idx) => {
-          const isRatio = e.dataKey?.startsWith('debtRatio')
-          const unit = isRatio ? '% PIB' : 'Md€'
+          const unit = 'Md€'
           return (
             <div key={idx} className="ct-row">
               <span className="ct-dot" style={{ background: e.color }} />
@@ -348,6 +396,9 @@ export default function TransitionWalkthrough({ navigateTo }) {
       <section className="tw-section">
         <div className="tw-chart-block">
           <h3>Pensions versées vs. financement</h3>
+          {STAGES[currentStage].chart1Subtitle && (
+            <div className="tw-chart-subtitle">{STAGES[currentStage].chart1Subtitle}</div>
+          )}
           <p className="tw-chart-explain">{STAGES[currentStage].chartExplain1}</p>
           <ResponsiveContainer width="100%" height={360}>
             <ComposedChart data={chartData} margin={{ bottom: 20 }}>
@@ -356,26 +407,43 @@ export default function TransitionWalkthrough({ navigateTo }) {
               <YAxis width={60} tick={{ fontSize: 13 }} label={{ value: 'Md€/an', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} />
               <Tooltip content={tooltipChart1} />
               <Legend wrapperStyle={{ fontSize: 13 }} iconType="plainline" />
+              {truncationYear != null && (
+                <ReferenceLine x={truncationYear} stroke="#6b7280" strokeDasharray="4 3"
+                  label={{ value: 'Scénario impossible — modèle non applicable',
+                    position: 'insideTopRight', fill: '#374151', fontSize: 12 }} />
+              )}
               {Array.from({ length: currentStage + 1 }).flatMap((_, i) => {
                 const o = stageOpacity(i, currentStage)
                 const isCurrent = i === currentStage
-                return [
-                  <Area key={`le_${i}`} type="monotone" dataKey={`legacyExp_${i}`} stackId={`pensions_${i}`}
-                    fill="#dc2626" fillOpacity={o * 0.35} stroke="#dc2626" strokeOpacity={o}
-                    strokeWidth={isCurrent ? 2 : 1} dot={false} isAnimationActive={false}
-                    name={isCurrent ? 'Pensions legacy' : undefined}
-                    legendType={isCurrent ? 'plainline' : 'none'} />,
-                  <Area key={`cp_${i}`} type="monotone" dataKey={`capiPayout_${i}`} stackId={`pensions_${i}`}
-                    fill="#34d399" fillOpacity={o * 0.35} stroke="#059669" strokeOpacity={o}
-                    strokeWidth={isCurrent ? 2 : 1} dot={false} isAnimationActive={false}
-                    name={isCurrent ? 'Pensions capi' : undefined}
-                    legendType={isCurrent ? 'plainline' : 'none'} />,
-                  <Line key={`fn_${i}`} type="monotone" dataKey={`funding_${i}`}
-                    stroke="#2563eb" strokeOpacity={o} strokeWidth={isCurrent ? 2.5 : 1}
-                    dot={false} isAnimationActive={false}
-                    name={isCurrent ? 'Financement courant' : undefined}
-                    legendType={isCurrent ? 'plainline' : 'none'} />,
-                ]
+                const elements = []
+                if (seriesActive[i].legacyExp) {
+                  elements.push(
+                    <Area key={`le_${i}`} type="monotone" dataKey={`legacyExp_${i}`} stackId={`pensions_${i}`}
+                      fill="#dc2626" fillOpacity={o * 0.35} stroke="#dc2626" strokeOpacity={o}
+                      strokeWidth={isCurrent ? 2 : 1} dot={false} isAnimationActive={false}
+                      name={isCurrent ? 'Pensions legacy' : undefined}
+                      legendType={isCurrent ? 'plainline' : 'none'} />
+                  )
+                }
+                if (seriesActive[i].capiPayout) {
+                  elements.push(
+                    <Area key={`cp_${i}`} type="monotone" dataKey={`capiPayout_${i}`} stackId={`pensions_${i}`}
+                      fill="#34d399" fillOpacity={o * 0.35} stroke="#059669" strokeOpacity={o}
+                      strokeWidth={isCurrent ? 2 : 1} dot={false} isAnimationActive={false}
+                      name={isCurrent ? 'Pensions capi' : undefined}
+                      legendType={isCurrent ? 'plainline' : 'none'} />
+                  )
+                }
+                if (seriesActive[i].funding) {
+                  elements.push(
+                    <Line key={`fn_${i}`} type="monotone" dataKey={`funding_${i}`}
+                      stroke="#2563eb" strokeOpacity={o} strokeWidth={isCurrent ? 2.5 : 1}
+                      dot={false} isAnimationActive={false}
+                      name={isCurrent ? 'Financement courant' : undefined}
+                      legendType={isCurrent ? 'plainline' : 'none'} />
+                  )
+                }
+                return elements
               })}
             </ComposedChart>
           </ResponsiveContainer>
@@ -383,54 +451,53 @@ export default function TransitionWalkthrough({ navigateTo }) {
 
         {/* Chart 2: Debt and interest */}
         <div className="tw-chart-block">
-          <h3>
-            Dette publique et intérêts cumulés
-            {useLogScale && <span className="tw-log-tag"> · échelle log auto</span>}
-          </h3>
+          <h3>Dette publique et intérêts cumulés</h3>
           <p className="tw-chart-explain">{STAGES[currentStage].chartExplain2}</p>
           <ResponsiveContainer width="100%" height={360}>
             <ComposedChart data={chartData} margin={{ bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="year" tick={{ fontSize: 13 }} />
-              <YAxis yAxisId="left" width={70} tick={{ fontSize: 13 }}
-                scale={useLogScale ? 'log' : 'auto'}
-                domain={useLogScale ? [1, 'auto'] : ['auto', 'auto']}
-                allowDataOverflow={useLogScale}
-                label={{ value: useLogScale ? 'Md€ (log)' : 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} />
-              <YAxis yAxisId="right" orientation="right" width={55} tick={{ fontSize: 13 }}
-                label={{ value: '% PIB', angle: 90, position: 'insideRight', dx: 8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} />
+              <YAxis width={70} tick={{ fontSize: 13 }}
+                label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8, style: { fontSize: 12, fill: 'var(--text-secondary)' } }} />
               <Tooltip content={tooltipChart2} />
               <Legend wrapperStyle={{ fontSize: 13 }} iconType="plainline" />
+              {truncationYear != null && (
+                <ReferenceLine x={truncationYear} stroke="#6b7280" strokeDasharray="4 3"
+                  label={{ value: 'Scénario impossible — modèle non applicable',
+                    position: 'insideTopRight', fill: '#374151', fontSize: 12 }} />
+              )}
               {Array.from({ length: currentStage + 1 }).flatMap((_, i) => {
                 const o = stageOpacity(i, currentStage)
                 const isCurrent = i === currentStage
-                return [
-                  <Area key={`ed_${i}`} type="monotone" dataKey={`existingDebt_${i}`} stackId={`debt_${i}`}
-                    yAxisId="left"
-                    fill="#1e40af" fillOpacity={o * 0.35} stroke="#1e40af" strokeOpacity={o}
-                    strokeWidth={isCurrent ? 2 : 1} dot={false} isAnimationActive={false}
-                    name={isCurrent ? 'Dette préexistante (D_ext)' : undefined}
-                    legendType={isCurrent ? 'plainline' : 'none'} />,
-                  <Area key={`td_${i}`} type="monotone" dataKey={`transitionDebt_${i}`} stackId={`debt_${i}`}
-                    yAxisId="left"
-                    fill="#60a5fa" fillOpacity={o * 0.35} stroke="#3b82f6" strokeOpacity={o}
-                    strokeWidth={isCurrent ? 2 : 1} dot={false} isAnimationActive={false}
-                    name={isCurrent ? (STAGES[i].debtLabel ?? 'Dette de transition') : undefined}
-                    legendType={isCurrent ? 'plainline' : 'none'} />,
-                  <Area key={`ci_${i}`} type="monotone" dataKey={`cumInterest_${i}`} stackId={`debt_${i}`}
-                    yAxisId="left"
-                    fill="#d97706" fillOpacity={o * 0.35} stroke="#d97706" strokeOpacity={o}
-                    strokeWidth={isCurrent ? 2 : 1} dot={false} isAnimationActive={false}
-                    name={isCurrent ? 'Intérêts cumulés' : undefined}
-                    legendType={isCurrent ? 'plainline' : 'none'} />,
-                  <Line key={`dr_${i}`} type="monotone" dataKey={`debtRatio_${i}`}
-                    yAxisId="right"
-                    stroke="#9333ea" strokeOpacity={o} strokeWidth={isCurrent ? 2.5 : 1}
-                    strokeDasharray={isCurrent ? undefined : '4 2'}
-                    dot={false} isAnimationActive={false}
-                    name={isCurrent ? 'Ratio dette/PIB' : undefined}
-                    legendType={isCurrent ? 'plainline' : 'none'} />,
-                ]
+                const elements = []
+                if (seriesActive[i].existingDebt) {
+                  elements.push(
+                    <Area key={`ed_${i}`} type="monotone" dataKey={`existingDebt_${i}`} stackId={`debt_${i}`}
+                      fill="#1e40af" fillOpacity={o * 0.35} stroke="#1e40af" strokeOpacity={o}
+                      strokeWidth={isCurrent ? 2 : 1} dot={false} isAnimationActive={false}
+                      name={isCurrent ? 'Dette préexistante (D_ext)' : undefined}
+                      legendType={isCurrent ? 'plainline' : 'none'} />
+                  )
+                }
+                if (seriesActive[i].transitionDebt) {
+                  elements.push(
+                    <Area key={`td_${i}`} type="monotone" dataKey={`transitionDebt_${i}`} stackId={`debt_${i}`}
+                      fill="#60a5fa" fillOpacity={o * 0.35} stroke="#3b82f6" strokeOpacity={o}
+                      strokeWidth={isCurrent ? 2 : 1} dot={false} isAnimationActive={false}
+                      name={isCurrent ? (STAGES[i].debtLabel ?? 'Dette de transition') : undefined}
+                      legendType={isCurrent ? 'plainline' : 'none'} />
+                  )
+                }
+                if (seriesActive[i].cumInterest) {
+                  elements.push(
+                    <Area key={`ci_${i}`} type="monotone" dataKey={`cumInterest_${i}`} stackId={`debt_${i}`}
+                      fill="#d97706" fillOpacity={o * 0.35} stroke="#d97706" strokeOpacity={o}
+                      strokeWidth={isCurrent ? 2 : 1} dot={false} isAnimationActive={false}
+                      name={isCurrent ? 'Intérêts cumulés' : undefined}
+                      legendType={isCurrent ? 'plainline' : 'none'} />
+                  )
+                }
+                return elements
               })}
             </ComposedChart>
           </ResponsiveContainer>

@@ -112,7 +112,15 @@
   font-family: var(--font-serif);
   font-size: 1.15rem;
   font-weight: 600;
+  margin: 0 0 0.15rem;
+}
+.tw-chart-subtitle {
+  font-family: var(--font-serif);
+  font-size: 0.98rem;
+  font-style: italic;
+  color: var(--accent-sienna, #b45309);
   margin: 0 0 0.5rem;
+  line-height: 1.35;
 }
 .tw-chart-explain {
   color: var(--text-secondary);
@@ -275,11 +283,3 @@
 .tw-chip-catastrophic.active { border-color: #dc2626; background: #fee2e2; color: #7f1d1d; }
 .tw-chip-clean { border-color: #86efac; }
 .tw-chip-clean.active { border-color: #059669; background: #d1fae5; color: #064e3b; }
-
-.tw-log-tag {
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  font-weight: 400;
-  font-family: var(--font-mono);
-  margin-left: 0.25rem;
-}
