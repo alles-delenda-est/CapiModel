@@ -256,6 +256,23 @@ body {
   accent-color: var(--accent-sienna);
 }
 
+/* Inline helper text shown directly under a numeric input (e.g. R0/E0
+   perimeter warning). Indented to align with the input column, muted to
+   read as a secondary annotation rather than a primary label. */
+.input-help {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-secondary, #6b7280);
+  margin: 2px 0 10px 128px;
+  max-width: 460px;
+}
+.input-help code {
+  font-size: 0.95em;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 0 3px;
+  border-radius: 2px;
+}
+
 /* Collapsible */
 .collapsible-header {
   cursor: pointer;
