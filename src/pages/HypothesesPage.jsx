@@ -1,6 +1,5 @@
-import { DEFAULT_CONFIG, DEMOGRAPHIC_PROFILES, DREES_DECILES, equinoxeRate } from '../simulation-engine-v1.js'
-import { extractKPIs } from '../v1-presets.js'
-import { runSimulation } from '../simulation-engine-v1.js'
+import { DEFAULT_CONFIG, DEMOGRAPHIC_PROFILES, DREES_DECILES, equinoxeRate, runSimulation } from '../simulation-engine.js'
+import { extractKPIs } from '../presets.js'
 import './HypothesesPage.css'
 
 // Sample points illustrating the Équinoxe step function
@@ -38,42 +37,6 @@ export default function HypothesesPage() {
         <p>
           Les valeurs ci-dessous correspondent au scénario <strong>« Hypothèses de base
           v1.0a »</strong>. Tous ces paramètres se règlent au curseur dans le simulateur.
-        </p>
-      </section>
-
-      {/* --- v1.0a corrections note (REQUIRED by Task 3 brief) --- */}
-      <section className="hyp-section hyp-warning-section">
-        <h2>Corrections v1.0a vs. v1.0</h2>
-        <p>
-          v1.0a introduit quatre corrections par rapport à v1.0 que les utilisateurs
-          peuvent remarquer dans la liste de paramètres&nbsp;:
-        </p>
-        <ol>
-          <li>
-            <strong>Le taux sans risque est dédoublé</strong> en
-            <code> r_f_portfolio</code> (rendement du fonds legacy, Tier A) et
-            <code> r_f_annuity</code> (coût de couverture annuité, Tier B), résolvant
-            un arbitrage carry-trade dans la tarification.
-          </li>
-          <li>
-            <strong>Les unités HLM évoluent uniformément</strong> (eq 27)&nbsp;:
-            <code> ΔU_t = U₀ × (1−ρ)<sup>t</sup> × ρ</code> pour tout <em>t</em>,
-            rétablissant la conservation des masses.
-          </li>
-          <li>
-            <strong>Les pensions capi sont calculées par part actuarielle</strong>
-            des actifs (<code>capiAssetShare_t</code>, eq 53), non par tête. La v1.0
-            exproprait l'épargne des travailleurs en accumulation au profit des
-            retraités précoces, masquant l'écart actuariel réel.
-          </li>
-          <li>
-            <strong>Équinoxe est dédoublée par périmètre</strong>&nbsp;: réduction
-            côté prestation (retraités legacy uniquement, eqs 18b–18c) et restauration
-            CSG/CRDS côté recette (tous retraités, eqs 21a/21b/22).
-          </li>
-        </ol>
-        <p>
-          Voir spec §5.5, §5.7, §5.13 pour les démonstrations.
         </p>
       </section>
 
@@ -123,26 +86,6 @@ export default function HypothesesPage() {
             </tr>
           </tbody>
         </table>
-      </section>
-
-      {/* --- R0/E0 asymmetry note (REQUIRED by Task 3 brief) --- */}
-      <section className="hyp-section hyp-note-section">
-        <h3>Note de périmètre R₀ / E₀ (§10.14)</h3>
-        <p>
-          <strong>R₀</strong> ({d.R0} M, droits directs uniquement) et
-          <strong> E₀</strong> ({d.E0} Md€, tous retraités y compris pensions de
-          réversion) sont sur des périmètres différents par construction. Le calcul
-          des tranches Équinoxe (eq 18) opère sur les droits directs via R₀&nbsp;;
-          la mise à l'échelle des dépenses legacy absorbe implicitement les ~11%
-          de pensions de réversion via l'indice <code>legacyRetirees(t)</code>
-          ancré sur R₀.
-        </p>
-        <p>
-          Spec §10.14 documente le raisonnement et signale un correctif v1.1 qui
-          dédoublerait le noyau de cohorte legacy en sous-cohortes droits-directs et
-          réversion-seule. <strong>Ne pas « harmoniser » R₀ à 19 M&nbsp;:</strong>
-          cela créerait un mismatch de périmètre avec les déciles DREES.
-        </p>
       </section>
 
       {/* --- §3.2 Workforce --- */}

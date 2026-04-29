@@ -279,23 +279,3 @@
 .kind-s { background: #dbeafe; color: #1e40af; }
 .kind-c { background: #fef3c7; color: #92400e; }
 .kind-m { background: #e9d5ff; color: #6b21a8; }
-
-.hyp-warning-section {
-  background: #fef3c7;
-  border-left: 4px solid #f59e0b;
-  padding: 1rem 1.25rem;
-  border-radius: 4px;
-  margin-bottom: 1.5rem;
-}
-.hyp-warning-section h2 { margin-top: 0; color: #78350f; }
-.hyp-warning-section ol { padding-left: 1.5rem; }
-.hyp-warning-section li { margin-bottom: 0.5rem; }
-
-.hyp-note-section {
-  background: #f0f9ff;
-  border-left: 4px solid #0284c7;
-  padding: 0.75rem 1.25rem;
-  border-radius: 4px;
-  margin-bottom: 1.5rem;
-}
-.hyp-note-section h3 { margin-top: 0; color: #0c4a6e; }

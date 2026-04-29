@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 
-const PAGES = new Set(['intro', 'simple', 'simulateur', 'hypotheses'])
+const PAGES = new Set(['intro', 'simple', 'walkthrough', 'simulateur', 'hypotheses'])
 
 function parseHash() {
   const hash = window.location.hash.replace(/^#\/?/, '')

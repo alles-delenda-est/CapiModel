@@ -1,0 +1,285 @@
+/* ============================================================
+   TransitionWalkthrough — stage-by-stage reform narrative
+   Styling follows SimplifiedView conventions.
+   ============================================================ */
+
+.tw-app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  line-height: 1.6;
+  font-size: 16px;
+}
+
+/* ---- Header ---- */
+.tw-header {
+  padding: 2rem 1rem 1.25rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border-ultra-thin);
+  margin-bottom: 1.5rem;
+}
+.tw-header h1 {
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+.tw-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+/* ---- Stepper chips ---- */
+.tw-stepper {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+.tw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  background: var(--bg-tile);
+  border: 1px solid var(--border-ultra-thin);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.3s var(--ease-luxury);
+}
+.tw-chip:hover {
+  border-color: var(--accent-sienna);
+  color: var(--text-primary);
+}
+.tw-chip.passed {
+  color: var(--text-primary);
+  background: var(--bg-tile);
+}
+.tw-chip.active {
+  background: var(--accent-sienna);
+  color: #fff;
+  border-color: var(--accent-sienna);
+  font-weight: 500;
+}
+.tw-chip-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.08);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.tw-chip.active .tw-chip-num {
+  background: rgba(255, 255, 255, 0.25);
+}
+.tw-chip-label {
+  font-family: var(--font-sans);
+}
+
+/* ---- Sections ---- */
+.tw-section {
+  background: var(--bg-tile);
+  padding: 1.75rem 1.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-ultra-thin);
+  margin-bottom: 1rem;
+  transition: border-color 0.4s var(--ease-luxury);
+}
+.tw-section:hover {
+  border-color: var(--accent-sienna);
+}
+
+/* ---- Chart blocks ---- */
+.tw-chart-block {
+  margin-bottom: 1.75rem;
+}
+.tw-chart-block:last-child {
+  margin-bottom: 0;
+}
+.tw-chart-block h3 {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0 0 0.15rem;
+}
+.tw-chart-subtitle {
+  font-family: var(--font-serif);
+  font-size: 0.98rem;
+  font-style: italic;
+  color: var(--accent-sienna, #b45309);
+  margin: 0 0 0.5rem;
+  line-height: 1.35;
+}
+.tw-chart-explain {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  margin: 0 0 0.85rem;
+  line-height: 1.5;
+}
+
+/* ---- Narrative block ---- */
+.tw-narrative .tw-stage-header {
+  margin-bottom: 0.75rem;
+}
+.tw-stage-num {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin-bottom: 0.25rem;
+}
+.tw-narrative h2 {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 0.35rem;
+  letter-spacing: -0.005em;
+}
+.tw-stage-change {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--accent-sienna);
+  margin-bottom: 0.75rem;
+}
+.tw-stage-text {
+  color: var(--text-primary);
+  margin: 0 0 1.5rem;
+  font-size: 0.95rem;
+}
+
+/* ---- KPI grid ---- */
+.tw-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+.tw-kpi {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-ultra-thin);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.tw-kpi-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.tw-kpi-value {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 0.15rem;
+}
+.tw-kpi-sub {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  min-height: 1.1em;
+}
+.tw-kpi-delta {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  margin-top: 0.3rem;
+  font-weight: 500;
+}
+.tw-delta-good { color: #059669; }
+.tw-delta-bad  { color: #dc2626; }
+
+/* ---- Controls ---- */
+.tw-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+.tw-btn {
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  padding: 0.7rem 1.25rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-ultra-thin);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.3s var(--ease-luxury);
+  min-width: 140px;
+}
+.tw-btn:hover:not(:disabled) {
+  border-color: var(--accent-sienna);
+  color: var(--accent-sienna);
+}
+.tw-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.tw-btn-next {
+  background: var(--accent-sienna);
+  color: #fff;
+  border-color: var(--accent-sienna);
+}
+.tw-btn-next:hover:not(:disabled) {
+  filter: brightness(0.92);
+  color: #fff;
+}
+
+/* ---- Footer ---- */
+.tw-footer {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 1rem 0 2rem;
+}
+.tw-footer a {
+  color: var(--accent-sienna);
+  text-decoration: none;
+}
+.tw-footer a:hover {
+  text-decoration: underline;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+  .tw-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .tw-chip-label {
+    display: none;
+  }
+  .tw-header h1 {
+    font-size: 1.6rem;
+  }
+}
+@media (max-width: 480px) {
+  .tw-controls {
+    flex-direction: column;
+  }
+  .tw-btn {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+/* v1.0a — chip categorical colours (catastrophic vs clean) */
+.tw-chip-catastrophic { border-color: #fca5a5; }
+.tw-chip-catastrophic.active { border-color: #dc2626; background: #fee2e2; color: #7f1d1d; }
+.tw-chip-clean { border-color: #86efac; }
+.tw-chip-clean.active { border-color: #059669; background: #d1fae5; color: #064e3b; }

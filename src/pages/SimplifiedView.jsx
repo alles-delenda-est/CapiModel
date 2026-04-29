@@ -3,7 +3,10 @@ import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
-import { runSimulation, extractKPIs, PRESETS } from '../simulation-engine.js'
+// v1.0a: was simulation-engine.js (v0.11) + bundled PRESETS/extractKPIs.
+// Now imports from the renamed engine + presets module.
+import { runSimulation } from '../simulation-engine.js'
+import { extractKPIs, PRESETS } from '../presets.js'
 import ChartTooltip from '../components/ChartTooltip.jsx'
 import './SimplifiedView.css'
 
@@ -14,21 +17,21 @@ const SCENARIOS = {
     tagline: 'Hypothèses conservatrices',
     description: 'Rendements modestes, emprunt plus cher, ventes de logements sociaux plus lentes. Que se passe-t-il si les conditions économiques sont difficiles ?',
     color: '#e11d48',
-    params: { ...PRESETS.stress.params },
+    params: { ...PRESETS.v1_stress.params },
   },
   central: {
     label: 'Central',
     tagline: 'Hypothèses réalistes',
     description: 'Basé sur les tendances économiques récentes en France. C\'est le scénario de référence, ni optimiste ni pessimiste.',
     color: '#2563eb',
-    params: { ...PRESETS.default.params },
+    params: { ...PRESETS.v1_default.params },
   },
   optimiste: {
     label: 'Optimiste',
     tagline: 'Conjoncture favorable',
     description: 'Bons rendements financiers, salaires en hausse plus rapide. Que se passe-t-il si l\'économie se porte bien ?',
     color: '#059669',
-    params: { ...PRESETS.optimiste.params },
+    params: { ...PRESETS.v1_optimiste.params },
   },
 }
 
@@ -124,7 +127,7 @@ export default function SimplifiedView({ navigateTo }) {
     }
 
     // Crossover: when capitalisation pensions surpass legacy pensions
-    const crossover = results.find(r => r.capiPayout > r.legacyExp && r.t > 5)
+    const crossover = results.find(r => r.capiPayout_t > r.legacyExp_t && r.t > 5)
     if (crossover) {
       items.push({
         year: crossover.year,
@@ -155,12 +158,13 @@ export default function SimplifiedView({ navigateTo }) {
   const chartData = useMemo(() => {
     return results.map(r => ({
       year: r.year,
-      legacyExp: r.legacyExp,
-      capiPayout: r.capiPayout,
-      totalPensionExp: r.totalPensionExp,
-      debt: r.debt,
-      capi: r.capi,
-      capiReal: r.capiReal,
+      // v1.0a row-field renames; totalPensionExp + capiReal derived locally.
+      legacyExp: r.legacyExp_t,
+      capiPayout: r.capiPayout_t,
+      totalPensionExp: r.legacyExp_t + r.capiPayout_t,
+      debt: r.D_t,
+      capi: r.K_t,
+      capiReal: r.K_t / Math.pow(1 + (params.pi ?? 0.02), r.t),
     }))
   }, [results])
 
@@ -419,10 +423,10 @@ export default function SimplifiedView({ navigateTo }) {
                 .map(r => (
                   <tr key={r.year}>
                     <td>{r.year}</td>
-                    <td>{r.legacyExp.toFixed(1)}</td>
-                    <td>{r.capiPayout.toFixed(1)}</td>
-                    <td>{r.debt.toFixed(0)}</td>
-                    <td>{r.capiReal.toFixed(0)}</td>
+                    <td>{r.legacyExp_t.toFixed(1)}</td>
+                    <td>{r.capiPayout_t.toFixed(1)}</td>
+                    <td>{r.D_t.toFixed(0)}</td>
+                    <td>{(r.K_t / Math.pow(1 + (params.pi ?? 0.02), r.t)).toFixed(0)}</td>
                   </tr>
                 ))}
             </tbody>

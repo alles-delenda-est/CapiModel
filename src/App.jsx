@@ -4,8 +4,8 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine, ComposedChart,
 } from 'recharts'
-import { runSimulation, DEFAULT_CONFIG } from './simulation-engine-v1.js'
-import { PRESETS, extractKPIs } from './v1-presets.js'
+import { runSimulation, DEFAULT_CONFIG } from './simulation-engine.js'
+import { PRESETS, extractKPIs } from './presets.js'
 import useHashNavigation from './hooks/useHashNavigation.js'
 import Navigation from './components/Navigation.jsx'
 import EnhancedSlider from './components/EnhancedSlider.jsx'
@@ -14,6 +14,7 @@ import CutoffSelector from './components/CutoffSelector.jsx'
 import IntroPage from './pages/IntroPage.jsx'
 import SimplifiedView from './pages/SimplifiedView.jsx'
 import HypothesesPage from './pages/HypothesesPage.jsx'
+import TransitionWalkthrough from './pages/TransitionWalkthrough.jsx'
 
 // --- Tooltip descriptions for each parameter (v1.0a) ---
 const TIPS = {
@@ -200,6 +201,7 @@ export default function App() {
 
       {currentPage === 'intro' && <IntroPage navigateTo={navigateTo} />}
       {currentPage === 'simple' && <SimplifiedView navigateTo={navigateTo} />}
+      {currentPage === 'walkthrough' && <TransitionWalkthrough navigateTo={navigateTo} />}
       {currentPage === 'hypotheses' && <HypothesesPage />}
       {currentPage === 'simulateur' && <>
 
@@ -453,6 +455,11 @@ export default function App() {
                     <input type="number" value={p.R0} step={0.5}
                       onChange={e => setParam('R0', parseFloat(e.target.value))} />
                   </div>
+                  <div className="input-help">
+                    Périmètre <strong>droits directs</strong> uniquement (DREES).
+                    Ne pas remplacer par 19&nbsp;M (tous retraités) : cela créerait
+                    un mismatch de périmètre avec les déciles. Voir spec §10.14.
+                  </div>
                   <div className="toggle-row">
                     <label style={{ minWidth: 120 }}>W0 (Md€)</label>
                     <input type="number" value={p.W0} step={20}
@@ -462,6 +469,12 @@ export default function App() {
                     <label style={{ minWidth: 120 }}>E0 (Md€)</label>
                     <input type="number" value={p.E0} step={5}
                       onChange={e => setParam('E0', parseFloat(e.target.value))} />
+                  </div>
+                  <div className="input-help">
+                    Périmètre <strong>tous retraités</strong> (y compris pensions
+                    de réversion). Asymétrie volontaire avec R₀ : la mise à
+                    l'échelle des dépenses absorbe les ~11&nbsp;% de réversion via
+                    <code> legacyRetirees(t)</code>. Voir spec §10.14.
                   </div>
                   <div className="toggle-row">
                     <label style={{ minWidth: 120 }}>F0 (Md€)</label>
