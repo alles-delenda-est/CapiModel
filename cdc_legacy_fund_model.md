@@ -1,8 +1,28 @@
 # CDC Legacy Entitlements Fund — Technical Model Documentation
 
+> ⚠️ **Deprecated — preserved for historical reference only.**
+>
+> This document describes **Simulator v5** (March 2026, 34 equations, single-stock waterfall, fixed sovereign borrowing rate). It does **not** describe the current production engine.
+>
+> The current engine is **v1.0a** (60 equations, four coupled stocks, endogenous borrowing rate, two-rate split, asset-share-weighted capi annuities, three-component Équinoxe scope split, retirement-age trajectory, GE penalty, dual-rights individual-perspective panel). See:
+>
+> - `CapiModel_overview.md` — current feature surface, default KPIs, walkthrough mechanics
+> - `THEORY.md` — operating theory, key v1.0a discoveries, v1.1 candidates
+> - `src/simulation-engine.js` — authoritative implementation, every non-trivial line tagged `// Spec §X.Y eq (N)`
+> - `tests/fixtures/v1.0a-default-trace.json` — canonical regression trace (§11.3 contract)
+> - `CHANGELOG.md` — v1.0a corrections vs v1.0
+>
+> The full v1.0a spec lives in `CapiModelSpec_v1.0a.md` (referenced from the engine source comments). If that file is missing locally, the engine source plus the THEORY/overview pair is the de facto durable description.
+>
+> Material differences vs v5 documented below: contributions routing (employee→capi only if below `cutoffAge`, not 100 % universal), waterfall ordering, two-rate split (`r_f_portfolio` vs `r_f_annuity`), capi annuity by asset share not headcount, Équinoxe scope split, retirement-age modes (`fixed` vs `indexed`), endogenous `r_d(t)` premium, GE penalty on capi return, state guarantee with shortfall tracker `CK_t`, four-stock accounting (`F_t`, `D_t`, `K_t`, `D^{ext}_t`).
+>
+> Reading this v5 document for current behaviour will give wrong results. Use the v1.0a sources above instead.
+
+---
+
 **Version:** Simulator v5  
 **Date:** March 2026  
-**Purpose:** Technical reference for independent replication
+**Purpose:** Technical reference for independent replication (historical)
 
 ---
 

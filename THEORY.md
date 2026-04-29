@@ -39,10 +39,11 @@ The model is a race between accumulation (`r_c`, `w_r`, capi ramp) and obligatio
 The simulator's value is **pedagogical, not prescriptive**:
 
 1. Make every parameter visible and adjustable in the Tier-A simulator UI; expose harder dials (annuity hedge rate, asset-share plateau, GE-penalty thresholds) in the Tier-B expert menu per spec §3.
-2. Provide a 5-stage walkthrough that builds the reform piece-by-piece against `realistic` demographics, demonstrating that no single reform package closes the gap without demographic relief.
+2. Provide a 5-stage walkthrough that builds the reform piece-by-piece against `realistic` demographics, demonstrating that no single reform package closes the gap without demographic relief. The walkthrough's stage 3 (capi + labour, no HLM funding) versus stage 4 (+ HLM cessions + transition levy) carries the central pedagogical point: HLM funding is what flips the trajectory from divergent to bounded.
 3. Provide presets spanning baseline / optimiste / stress, plus three pedagogical *paquet partiel* presets (see `src/v1-presets.js`).
-4. Document the model fully in `CapiModelSpec_v1.0a.md` (the durable spec) with regression-trace fixtures (`tests/fixtures/v1.0a-default-trace.json`) and property-based invariants (`tests/engine.test.js`).
-5. Maintain an honest critique that steelmans the objections.
+4. Provide a per-individual projection ("Et pour vous ?") so non-specialist readers can answer "what happens to me" rather than only "what happens to the aggregate". The panel takes a birth year (1965–2010), runs the engine plus a no-reform counterfactual, and reports monthly euro pension at retirement under both — using the prorated dual-rights model described below. Mounted on both the simplified view and (collapsibly) at the top of the simulator.
+5. Document the model fully in `CapiModelSpec_v1.0a.md` (the durable spec) with regression-trace fixtures (`tests/fixtures/v1.0a-default-trace.json`) and property-based invariants (`tests/engine.test.js`).
+6. Maintain an honest critique that steelmans the objections.
 
 Current focus: v1.0a is the production state. v1.1 work follows the `spec/v1.1` cadence (see Open questions below).
 
@@ -66,6 +67,24 @@ This discipline is what carried v1.0a's four substantive corrections (rate split
 - **HLM mass conservation matters.** v1.0's `(t==0)?U0×ρ : U0×(1-ρ)^(t-1)×ρ` formulation forced `ΔU_0 = ΔU_1`, violating `U_{t+1} = U_t − ΔU_t`. v1.0a's uniform geometric form `ΔU_t = U_t × ρ` is what the algebra requires.
 - **Équinoxe is two reforms in one.** v1.0 lumped progressive bracket reduction + IR-deduction abolition + CSG/CRDS restoration into a single `E0_net_t` term applied only to legacy retirees. v1.0a separates the benefit-side (legacy only, eqs 18b/c → 21a/b) from the tax-side (all retirees, eq 22 → eq 38), correctly attributing CSG revenue from capi pensioners.
 - **Demography is the binding constraint.** Walkthrough Stages 1–4 (status quo through full fiscal+labour reform) all stay catastrophic under `realistic` demographics; only Stage 5 (switching to `reformed`) closes the system. No single fiscal lever — no matter how aggressive — substitutes for demographic relief.
+- **Walkthrough stage ordering matters pedagogically.** The original v1.0a walkthrough bundled HLM with capi enablement (stage 3 = capi + HLM, stage 4 = + labour). Restructuring to stage 3 = capi + labour and stage 4 = + HLM cessions + transition levy isolates HLM as the visible difference between "transition cost explodes" and "transition cost is bounded". Stage 3 peak debt ratio is ~99 600 % of GDP; stage 4 peak is 272 %. Chart x-axis truncation at 500 % debt ratio appears on stages 1–3 then disappears on stage 4 — the visual disappearance of the divergence annotation carries the argument better than any KPI delta could.
+
+## Engine vs panel: per-individual dual-rights pedagogy
+
+The engine's binary cohort split (eqs 23/24: `capiRetirees_t` and `legacyRetirees_t` are mutually exclusive) is computationally tractable but understates the realistic per-worker outcome for transitional cohorts. A worker aged 50 at Y0 with 28 years of PAYG accrual switches to capi for their remaining 14 years; in any defensible legal framework they retain partial PAYG entitlements proportional to the years contributed.
+
+The "Et pour vous ?" panel implements this dual-rights view at the per-individual level, NOT at the engine aggregate level. `computeIndividualPerspective` (in `simulation-engine.js`) computes:
+
+- `yearsInPayg = max(0, ageInY0 - 22)` for capi cohort, full career for non-capi
+- `legacyShare = yearsInPayg / careerYears`
+- `monthlyPensionLegacy = avgLegacyPension(reformRows, retT) × legacyShare`
+- `monthlyCapiAnnuity` from the personal pot (year-by-year accumulation at `r_cn_eff_t`)
+
+The result is a monotonically rising total pension by birth year (1965 → 2010), with transitional cohorts (1977–2005) receiving partial PAYG + partial capi. This matches political and legal expectations and produces a curve readers can interpret.
+
+The discrepancy: if we summed the panel's `monthlyPensionLegacy × cohort_size` across all transitional cohorts retiring at year *t*, the total would be **higher** than the engine's `legacyExp_t` — because the engine treats capi cohort PAYG accruals as zero. At peak transition (2050–2070), the gap is order ~50–150 Md€/yr of additional PAYG obligations. Implication: engine debt KPIs ("Dette pic", "Année sans dette", "Intérêts cumulés") are mildly **optimistic** about reform feasibility — by perhaps 5–15 % in peak years.
+
+This is a known limitation, flagged in `computeIndividualPerspective` source comments and in the panel disclaimer. The pedagogical fix is to track per-cohort accrued PAYG rights as a state vector inside `runSimulation` — see Open questions below.
 
 ## Open questions (v1.1 wishlist, spec §10.13–§10.14)
 
@@ -74,6 +93,7 @@ This discipline is what carried v1.0a's four substantive corrections (rate split
 - **`LIFE_EXP_INDEXATION_FRACTION` exposure.** Currently 0.5 hardcoded; v1.1 should expose [0, 1] to compare full-NDC indexation vs partial vs none.
 - **`r_d_base` exposure.** Currently 0.035 hardcoded; v1.1 should expose for rate-environment stress.
 - **Survivors-only cohort split (§10.14).** `R0` is direct-rights only (DREES Édition 2025 scope) but `E0` is all-régime including survivors. v1.1 should split `legacyRetirees(t)` into `_direct` and `_survivors` sub-cohorts, each with its own demographic kernel and pension level.
+- **Per-cohort accrued PAYG rights as a state vector.** The engine's binary cohort split (capiRetirees vs legacyRetirees, eqs 23/24) understates transitional-cohort PAYG obligations by ~50–150 Md€/yr at peak transition. v1.1 candidate: maintain `paygRightsAccrued[birthYear]` (= `(cutoffAge − 22) / careerYears` for transitional cohorts, 1.0 for pre-cutoff, 0 for post-cutoff) and add `transitionalPaygExp_t = Σ cohortSize × accruedShare × E0_legacy_t × I_factor_t` to the legacy expenditure waterfall (§5.6, §5.9). Engine debt KPIs would worsen by 5–15 % in peak years; the "Et pour vous ?" panel could read engine output instead of reconstructing the dual-rights logic locally. Spec change is small (one new equation, modify §5.6); code change ~50 lines plus state vector and a property test. Hardest decision is whether to fund the new stream from the legacy fund (worsens transition debt — most realistic) or from a separate notional account (cleaner accounting).
 - **Cohort kernel decoupled from `A_R(t)` (§10.6).** With INSEE T60 actuarial replacement, the retiree-headcount kernel parameters (`peakT`, `peakMult`) would couple to retirement age — currently they are independent.
 - **`E0` doesn't respond to retirement age (§10.7).** Raising retirement age in v1.0a moves only timing, not benefit amount. Real systems also adjust accrual; v1.1 candidate.
 - **General-equilibrium endogeneity beyond `r_c`.** GE penalty currently only applies to capi return; v1.x could endogenise the wage-bill response to demographics, the migration response to fiscal pressure, etc.

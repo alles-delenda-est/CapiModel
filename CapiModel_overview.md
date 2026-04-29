@@ -31,8 +31,9 @@ An interactive browser-based simulator modelling France's transition from pay-as
 - **General-equilibrium return penalty** — capi return scales linearly to zero between `geKneeRatio` (default 2× GDP) and `geFloorRatio` (4× GDP), modelling equity-premium compression at macroeconomic scale.
 - **State guarantee on capi pensions** — when the pot can't cover the desired payout, the state borrows the shortfall (eq 55) and tracks it cumulatively in `CK_t`.
 - **6 presets**: 3 baseline (`v1_default`, `v1_optimiste`, `v1_stress`) + 3 paquet partiel pedagogical scenarios (`equinoxeOnly`, `labourHousingOnly`, `equinoxeAndLabour`).
-- **5-stage walkthrough** (`#/walkthrough`) — builds the reform piece by piece against `realistic` demographics, demonstrating that no single fiscal reform closes the gap without demographic relief.
-- **Hypotheses page** (`#/hypotheses`) — every §3 parameter listed with default + kind (S/C/M) + rationale, plus the v1.0a corrections note and the §10.14 R0/E0 asymmetry note.
+- **5-stage walkthrough** (`#/walkthrough`) — builds the reform piece by piece against `realistic` demographics. Stage 3 (capi + labour, no HLM) versus stage 4 (+ HLM cessions + transition levy) carries the central pedagogical point: HLM funding is what tips the trajectory from divergent to bounded. Charts truncate the x-axis at the first year debt/GDP exceeds 500 % with a "scénario impossible" annotation; the annotation appears on stages 1–3 and disappears on stages 4–5, making the divergence/convergence transition visually obvious without needing a log scale.
+- **"Et pour vous ?" individual perspective panel** — present on the simplified view and (collapsibly) at the top of the simulator. Birth-year slider (1965–2010) drives a per-worker projection of monthly retirement income under reform vs. a no-reform counterfactual. Uses a **prorated dual-rights model**: transitional cohorts (born 1977–2005 at default `cutoffAge`) receive partial PAYG pension proportional to years accrued before the transition plus capi annuity from their personal pot. The result is a monotonically rising total pension by birth year, matching realistic legal expectations. *Note: this dual-rights view is per-individual pedagogy, not aggregate engine state — see "Key assumptions and limitations" below.*
+- **Hypotheses page** (`#/hypotheses`) — every §3 parameter listed with default + kind (S/C/M) + rationale. The v1.0a corrections changelog moved to `CHANGELOG.md` at repo root; the §10.14 R0/E0 asymmetry note inlined as helper text under the R0/E0 inputs in the simulator's Tier B expert menu.
 - **Reference-trace regression** (`tests/fixtures/v1.0a-default-trace.json`) — 70-year × every-field default-preset baseline. Engine changes that alter default output fail loudly (§11.3 contract).
 
 ## Default scenario results (`v1_default` preset, v1.0a)
@@ -55,19 +56,23 @@ All values are derived from `tests/fixtures/v1.0a-default-trace.json` (the §11.
 
 ## Walkthrough — 5-stage transition narrative (`#/walkthrough`)
 
-Each stage extends `v1_default` with stage-specific overrides, against `realistic` demographics. The walkthrough demonstrates that **demography is the binding constraint** — Stages 1–4 (status quo through full fiscal+labour reform) all stay in catastrophic regime, only Stage 5 (switching to `reformed`) closes the system.
+Each stage extends `v1_default` with stage-specific overrides, against `realistic` demographics. The walkthrough demonstrates that **demography is the binding constraint** — Stages 1–4 (status quo through full fiscal+labour reform without demographic reform) all stay in catastrophic-or-divergent regime; only Stage 5 (switching to `reformed`) closes the system fully. The stage 3→4 transition (HLM cessions + levy) tips the model from divergent (stage 3 peak debt ratio ~99 600 % of GDP) to bounded (stage 4 peak ~272 %).
 
-| # | Stage | Peak transition debt | Peak total debt¹ | Debt-free year | Disposition |
-|---|---|---|---|---|---|
-| 1 | Statu quo (realistic demographics) | 4 383 k Md€ (2096) | 8 758 k Md€ | never | catastrophic |
-| 2 | + Équinoxe (3 components) | 1 479 k Md€ (2096) | 2 954 k Md€ | 2033 (transition) | catastrophic by total² |
-| 3 | + Capi + HLM | 10 056 k Md€ (2096) | 20 135 k Md€ | never | catastrophic |
-| 4 | + Labour reform (employment +10 % over 8 y) | 12.2 k Md€ (2077) | 52.6 k Md€ | never | borderline catastrophic |
-| 5 | + Demographic reform (`reformed` profile) | **4.4 k Md€ (2056)** | **24.4 k Md€** | **2076** | **clean** |
+| # | Stage | Peak D_t (Md€) | Peak total debt¹ | Peak debt/GDP | Debt-free year | Disposition |
+|---|---|---|---|---|---|---|
+| 1 | Statu quo (realistic demographics) | 4.4 M (2096) | 8.8 M (2096) | 37 700 % | never | catastrophic |
+| 2 | + Équinoxe (3 components) | 1.5 M (2096) | 3.0 M (2096) | 12 800 % | 2033 (transition)² | catastrophic by total |
+| 3 | + Capi + Labour reform (no HLM yet) | 12.8 M (2096) | 25.5 M (2096) | 99 600 % | never | catastrophic³ |
+| 4 | + HLM cessions + transition levy | **12.2 k (2077)** | 52.6 k (2096) | **272 %** | never⁴ | clean (bounded) |
+| 5 | + Demographic reform (`reformed` profile) | **4.4 k (2056)** | **24.4 k (2096)** | **180 %** | **2076** | **clean** |
 
-¹ Peak total debt = max(`D_ext_t + D_t + CI_t`) — combined sovereign exposure including pre-reform debt and cumulative interest. The walkthrough auto-switches its chart to log scale when this exceeds 100 k Md€.
+¹ Peak total debt = max(`D_ext_t + D_t + CI_t`) — combined sovereign exposure including pre-reform debt and cumulative interest. The chart truncates the x-axis at the first year debt/GDP exceeds 500 % with a "scénario impossible — modèle non applicable" annotation; this replaces the v1.0 log-scale auto-switch and gives readers a clearer signal of model breakdown.
 
 ² Stage 2 hits transition debt-free in 2033 because Équinoxe savings rapidly close the legacy gap, but `D_ext_t` continues to grow with GDP and `CI_t` accumulates from the early years — so peak total debt remains catastrophic. This is informative about which metric to trust.
+
+³ Stage 3 makes the transition cost visible by isolating capi enablement + labour reform without any transition financing. Without HLM proceeds or the levy, the period of double payment (legacy retirees + capi accumulation) explodes the debt. This is the intended pedagogical "before HLM" comparison — stage 4 then shows what HLM solves.
+
+⁴ Stage 4 has bounded debt (peak 272 % of GDP, well below the 500 % truncation) but the engine never quite reaches `D_t < 1` within the 70-year horizon. Stage 5's demographic reform is what produces a clean debt-free trajectory.
 
 ## Technical stack
 
@@ -80,6 +85,7 @@ React 19 + Vite 7 + Recharts. Single-page application, no backend. Auto-deployed
 - **`E0` doesn't respond to retirement age** (§10.7) — raising retirement age in v1.0a moves only timing, not benefit amount. Real systems also adjust accrual; v1.1 candidate.
 - **Cohort kernel parameters decoupled from `A_R(t)`** (§10.6) — known limitation; with INSEE T60 actuarial replacement they would couple.
 - **Survivors-only cohort implicit in `legacyRetirees(t)`** (§10.14) — `R0` is direct-rights only (DREES), `E0` is all-régime; the asymmetry is documented and intended. v1.1 fix would split `legacyRetirees(t)` into direct-rights and survivors-only sub-cohorts.
+- **Per-cohort accrued PAYG rights are not tracked in the engine** — the engine's binary cohort split (`legacyRetirees_t` vs `capiRetirees_t`, eqs 23/24) treats capi-cohort PAYG accruals as zero. The "Et pour vous ?" panel implements a per-individual prorated dual-rights view (transitional cohorts get partial PAYG + capi), but this view is not summed back into the engine's `legacyExp_t`. Implication: engine debt KPIs ("Dette pic", "Année sans dette", "Intérêts cumulés") are mildly **optimistic** about reform feasibility — the missing transitional PAYG obligations are roughly 50–150 Md€/yr at peak transition, perhaps 5–15 % understatement of peak debt. v1.1 candidate: track `paygRightsAccrued[birthYear]` as a state vector inside `runSimulation`, add a new equation for `transitionalPaygExp_t`, and update §5.6/§5.9 waterfall accordingly. See `THEORY.md` for the full discussion.
 - **No regional heterogeneity** — single national HLM price, single national labour market.
 - **No demographic feedback loops** — TFR responding to economic conditions, mortality responding to retirement age — out of scope.
 
