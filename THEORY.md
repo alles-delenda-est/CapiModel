@@ -8,7 +8,7 @@ This simulator exists to **expand the Overton window** by making the transition'
 
 ## Operating Theory
 
-The model implements 60 numbered equations over a 70-year horizon (Y0 = 2027), tracking three coupled stocks: the legacy PAYG fund (`F_t`), sovereign transition debt (`D_t`), and capitalisation pot (`K_t`), with a fourth tracker for pre-reform sovereign debt (`D^{ext}_t`) that grows pari-passu with GDP. The full equation set is in `CapiModelSpec_v1.0a.md` §5.
+The model implements 60 numbered equations over a 70-year horizon (Y0 = 2027), tracking three coupled stocks: the legacy PAYG fund (`F_t`), sovereign transition debt (`D_t`), and capitalisation pot (`K_t`), with a fourth tracker for pre-reform sovereign debt (`D^{ext}_t`) that grows pari-passu with GDP. The full equation set is in `CapiModelSpec_v1_0a.md` §5.
 
 ### Five core mechanisms (v1.0a)
 
@@ -42,7 +42,7 @@ The simulator's value is **pedagogical, not prescriptive**:
 2. Provide a 5-stage walkthrough that builds the reform piece-by-piece against `realistic` demographics, demonstrating that no single reform package closes the gap without demographic relief. The walkthrough's stage 3 (capi + labour, no HLM funding) versus stage 4 (+ HLM cessions + transition levy) carries the central pedagogical point: HLM funding is what flips the trajectory from divergent to bounded.
 3. Provide presets spanning baseline / optimiste / stress, plus three pedagogical *paquet partiel* presets (see `src/v1-presets.js`).
 4. Provide a per-individual projection ("Et pour vous ?") so non-specialist readers can answer "what happens to me" rather than only "what happens to the aggregate". The panel takes a birth year (1965–2010), runs the engine plus a no-reform counterfactual, and reports monthly euro pension at retirement under both — using the prorated dual-rights model described below. Mounted on both the simplified view and (collapsibly) at the top of the simulator.
-5. Document the model fully in `CapiModelSpec_v1.0a.md` (the durable spec) with regression-trace fixtures (`tests/fixtures/v1.0a-default-trace.json`) and property-based invariants (`tests/engine.test.js`).
+5. Document the model fully in `CapiModelSpec_v1_0a.md` (the durable spec) with regression-trace fixtures (`tests/fixtures/v1.0a-default-trace.json`) and property-based invariants (`tests/engine.test.js`).
 6. Maintain an honest critique that steelmans the objections.
 
 Current focus: v1.0a is the production state. v1.1 work follows the `spec/v1.1` cadence (see Open questions below).
@@ -51,7 +51,7 @@ Current focus: v1.0a is the production state. v1.1 work follows the `spec/v1.1` 
 
 The v1.0a refactor cycle established the cadence we expect to maintain for future versions:
 
-- **Spec-driven implementation.** All semantics live in `CapiModelSpec_v1.0a.md`. Every non-trivial line of the engine carries a `// Spec §X.Y eq (N)` comment that maps it back to the spec. Implementers reading the engine should be able to navigate to the spec equation in one keypress.
+- **Spec-driven implementation.** All semantics live in `CapiModelSpec_v1_0a.md`. Every non-trivial line of the engine carries a `// Spec §X.Y eq (N)` comment that maps it back to the spec. Implementers reading the engine should be able to navigate to the spec equation in one keypress.
 - **Test invariants enforce §6.** Five conservation/non-negativity/boundary invariants are asserted at every `t` in test mode for every canned scenario, and over 1000 randomly-sampled configurations (property-based). A failed invariant fails the test run regardless of KPI matching.
 - **Property-based validation.** §11.5 random-config tests cover bounded ranges per the brief — every §6 invariant must hold for every sample. Run-time budget: 60 s wall (currently ~15 s).
 - **Reference-trace regression** (§11.3). The default-preset 70-year × every-field trace is captured to a JSON fixture as a contract. Engine changes that alter default output fail the regression test loudly and require explicit per-field fixture-update justification — not a silent diff.

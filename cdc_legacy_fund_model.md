@@ -12,7 +12,7 @@
 > - `tests/fixtures/v1.0a-default-trace.json` — canonical regression trace (§11.3 contract)
 > - `CHANGELOG.md` — v1.0a corrections vs v1.0
 >
-> The full v1.0a spec lives in `CapiModelSpec_v1.0a.md` (referenced from the engine source comments). If that file is missing locally, the engine source plus the THEORY/overview pair is the de facto durable description.
+> The full v1.0a spec lives in `CapiModelSpec_v1_0a.md` (referenced from the engine source comments). If that file is missing locally, the engine source plus the THEORY/overview pair is the de facto durable description.
 >
 > Material differences vs v5 documented below: contributions routing (employee→capi only if below `cutoffAge`, not 100 % universal), waterfall ordering, two-rate split (`r_f_portfolio` vs `r_f_annuity`), capi annuity by asset share not headcount, Équinoxe scope split, retirement-age modes (`fixed` vs `indexed`), endogenous `r_d(t)` premium, GE penalty on capi return, state guarantee with shortfall tracker `CK_t`, four-stock accounting (`F_t`, `D_t`, `K_t`, `D^{ext}_t`).
 >

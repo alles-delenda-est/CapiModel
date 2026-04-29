@@ -4,7 +4,7 @@
 
 ## What it does
 
-An interactive browser-based simulator modelling France's transition from pay-as-you-go (PAYG / répartition) pensions to full capitalisation, financed by Caisse des Dépôts assets, FRR + Agirc-Arrco reserves, HLM social-housing cessions, and employer contributions. The model implements **60 numbered equations** over a 70-year horizon (Y0 = 2027, runs to 2096) per `CapiModelSpec_v1.0a.md`, tracking three coupled stocks (legacy fund `F_t`, sovereign transition debt `D_t`, capitalisation pot `K_t`) plus a fourth tracker for pre-reform sovereign debt (`D^{ext}_t`) that grows with GDP.
+An interactive browser-based simulator modelling France's transition from pay-as-you-go (PAYG / répartition) pensions to full capitalisation, financed by Caisse des Dépôts assets, FRR + Agirc-Arrco reserves, HLM social-housing cessions, and employer contributions. The model implements **60 numbered equations** over a 70-year horizon (Y0 = 2027, runs to 2096) per `CapiModelSpec_v1_0a.md`, tracking three coupled stocks (legacy fund `F_t`, sovereign transition debt `D_t`, capitalisation pot `K_t`) plus a fourth tracker for pre-reform sovereign debt (`D^{ext}_t`) that grows with GDP.
 
 ## Reform mechanism (v1.0a)
 
@@ -99,7 +99,7 @@ Currently hardcoded; v1.1 candidates for user-tunable exposure:
 
 ## Source documents
 
-- `CapiModelSpec_v1.0a.md` — Full model specification (60 equations + invariants + calibration sources)
+- `CapiModelSpec_v1_0a.md` — Full model specification (60 equations + invariants + calibration sources)
 - `THEORY.md` — Operating theory and engineering philosophy
 - `tests/fixtures/v1.0a-default-trace.json` — Canonical 70-year × every-field reference trace (§11.3 contract)
 - `critique.md` — Structured critique
