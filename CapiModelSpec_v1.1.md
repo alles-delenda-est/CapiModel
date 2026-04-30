@@ -361,41 +361,97 @@ state-funded PAYG outflow by an estimated 50–150 Md€/yr at peak transition
 (2050–2070). v1.1 corrects this with a per-cohort accrual share fed into the §5.9
 waterfall.
 
-**Per-cohort accrual share.** A worker born in year `B` has PAYG accrual share:
+**Per-cohort accrual share.** A worker born in year `B` has PAYG accrual share,
+defined piecewise in `ageInY0 = Y0 − B`:
 
-    legacyShare(B) = clamp((Y0 − B − 22) / (A_R(0) − 22), 0, 1)         (15a)
+    if ageInY0 > cutoffAge:        legacyShare(B) = 1.0
+    elif 22 ≤ ageInY0 ≤ cutoffAge: legacyShare(B) = (ageInY0 − 22) / (A_R(0) − 22)
+    else (ageInY0 < 22):           legacyShare(B) = 0                    (15a)
 
-with three regimes:
+Three regimes:
 
   - Born before `Y0 − cutoffAge` (age strictly greater than cutoffAge in Y0):
-    share = 1.0 (full PAYG career, retired or retiring under pre-reform rules).
+    share = 1.0. These cohorts retire under pre-reform rules with full PAYG
+    entitlement and never participate in capi. The share is **not** capped at
+    `(cutoffAge − 22) / (A_R(0) − 22)`; it jumps discontinuously to 1.0 at
+    `ageInY0 = cutoffAge + 1`. This discontinuity is intentional and reflects
+    the binary cohort-membership boundary at `cutoffAge`: cohorts above the
+    boundary are full-PAYG retirees, not transitional retirees with prorated
+    rights.
   - Born in [`Y0 − cutoffAge`, `Y0 − 22`] (age in [22, cutoffAge] in Y0):
-    share = (ageInY0 − 22) / (A_R(0) − 22), the closed form above.
+    transitional cohorts; share is the linear ramp `(ageInY0 − 22) / (A_R(0) − 22)`.
   - Born after `Y0 − 22` (age strictly less than 22 in Y0):
     share = 0 (entered workforce post-cutoff, full capi career).
 
 The cohort with age **exactly equal** to cutoffAge in Y0 is a transitional cohort,
 not a full-PAYG cohort: their share is `(cutoffAge − 22) / (A_R(0) − 22)`. With
-defaults `cutoffAge = 50`, `A_R(0) = 64`, this is 28/42 ≈ 0.667.
+defaults `cutoffAge = 50`, `A_R(0) = 64`, this is 28/42 ≈ 0.667. The cohort one
+year older (age `cutoffAge + 1` in Y0, i.e. born in `Y0 − cutoffAge − 1`) jumps
+to share = 1.0.
+
+There is **no closed-form clamp** that captures this piecewise behaviour: a
+naive `clamp((ageInY0 − 22) / (A_R(0) − 22), 0, 1)` would yield share < 1.0 for
+the boundary cohort `ageInY0 = cutoffAge` (as it should) but would *also* yield
+share < 1.0 for cohorts well above cutoffAge (instead of 1.0). Implementations
+must use the piecewise form above or an equivalent ternary, not a `min(...,
+cutoffAge)` clamp.
 
 When `enableCapi === false`, `legacyShare(B) = 1` for all `B` (no transition).
 
 **Population-weighted running average.** Maintain `legacyShareAvg_t` as a state
-scalar updated each year from the new capi-cohort entrants:
+scalar updated each year. The update is an explicit conditional on whether the
+transitional retiree population grew or shrank in year `t`:
 
-    ΔR^capi_t        = max(0, R^capi_t − R^capi_{t-1})
-    newShare_t       = legacyShare(Y0 + t − A_R(0))
-    legacyShareAvg_t = (legacyShareAvg_{t-1} × R^capi_{t-1}
-                        + newShare_t × ΔR^capi_t) / R^capi_t            (15b)
+    if R^capi_t > R^capi_{t-1}:
+        ΔR^capi_t        = R^capi_t − R^capi_{t-1}
+        newShare_t       = legacyShare(Y0 + t − A_R(0))
+        legacyShareAvg_t = (legacyShareAvg_{t-1} × R^capi_{t-1}
+                            + newShare_t × ΔR^capi_t) / R^capi_t
+    else:
+        legacyShareAvg_t = legacyShareAvg_{t-1}    # held flat per caveat below
+                                                                        (15b)
 
-Initial value `legacyShareAvg_0 = 0`; first non-zero at `t = T_capi_start`. When
-`R^capi_t = 0`, `legacyShareAvg_t = 0` (no division). When `R^capi_t` decreases
-(mortality exceeds new entries — late-horizon plateau), `legacyShareAvg_t` is
-held flat. This held-flat rule is a parametric simplification consistent with
-the rest of the engine, which does not track cohort-specific mortality (§7).
-A v1.2 upgrade with INSEE T60 actuarial tables would refine this; the bias is
-quantified per-release in the engine PR description and is conservative
-(slightly overstates `transitionalPaygExp_t`).
+The if-branch is the population-weighted blend of incumbent retirees (mass
+`R^capi_{t-1}`, average share `legacyShareAvg_{t-1}`) with new entrants (mass
+`ΔR^capi_t`, share `newShare_t`). The else-branch holds the running average
+flat — it does **not** apply the if-branch formula with `ΔR^capi_t = 0`,
+because dividing the (unchanged) numerator by a smaller `R^capi_t` would
+inflate the average rather than hold it flat. Initial value
+`legacyShareAvg_0 = 0`; first non-zero at `t = T_capi_start`. When
+`R^capi_t = 0`, `legacyShareAvg_t = 0` (no division).
+
+**Mortality-bias caveat.** When `R^capi_t < R^capi_{t-1}` (mortality exceeds
+new entries — typically the late-horizon plateau), the running average is held
+flat rather than recomputed from a true survivors-weighted blend. This is a
+parametric simplification consistent with the rest of the engine, which does
+not track cohort-specific mortality (§7): the engine has no information about
+which cohorts the disappearing retirees belonged to, so it cannot adjust
+`legacyShareAvg_t` for differential mortality across cohort vintages. The bias
+is conservative (slightly overstates `transitionalPaygExp_t` if older
+transitional cohorts — with higher `legacyShare` — die faster than younger
+ones, which is the demographic norm) and is quantified per-release in the
+engine PR description via a sensitivity check. A v1.2 upgrade with INSEE T60
+actuarial tables on a per-cohort kernel would refine this.
+
+**Uniform-mortality reconciliation construction.** When reconciling the
+aggregate `E^trans_t` against a per-cohort decomposition (e.g. the individual
+perspective panel), both sides must use the same uniform-mortality assumption
+to be mathematically equal. The reconciliation construction is:
+
+    uniform_decayed_cohort_size(B, t) =
+        initial_cohort_size(B) × R^capi_t / R^capi_at_retirement_year(B)
+            for cohorts B with retT(B) ≤ t,
+        0   for cohorts B with retT(B) > t
+
+i.e. each transitional cohort's surviving population at year `t` is its
+initial size scaled by the same fraction as the aggregate transitional retiree
+count has scaled since that cohort retired. Under this construction, the
+population-weighted sum of `legacyShare(B)` over surviving transitional
+cohorts equals `legacyShareAvg_t`, and the reconciliation
+`Σ_B uniform_decayed_cohort_size(B, t) × legacyShare(B) × E0_legacy_t × I_t
+= E^trans_t` holds exactly (modulo floating-point ε). Engine reconciliation
+tests must use this construction; using cohort-specific mortality would break
+the identity and is the v1.2 upgrade flagged above.
 
 **Aggregate transitional PAYG expenditure:**
 
