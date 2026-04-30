@@ -1,7 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "Skill(update-config)"
+      "Skill(update-config)",
+      "Bash(git branch *)",
+      "Bash(node *)",
+      "Bash(npm test *)",
+      "Bash(npx vite *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code} bytes=%{size_download}\\\\n\" http://localhost:5174/)",
+      "Bash(curl -s http://localhost:5174/src/simulation-engine.js -o /dev/null -w \"engine HTTP %{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:5174/src/components/IndividualPerspectivePanel.jsx -o /dev/null -w \"panel HTTP %{http_code}\\\\n\")",
+      "Bash(gh pr *)",
+      "Bash(cp /tmp/capimodel-stash/\"260427 CapiModel next steps.txt\" .)",
+      "Bash(cp /tmp/capimodel-stash/\"Task 5 Plan_v1.1_per_cohort_PAYG_accrual.md\" .)",
+      "Bash(rm -rf /tmp/capimodel-stash)",
+      "Skill(schedule)",
+      "Bash(mkdir -p /tmp/v1a-run)",
+      "Bash(git show *)"
     ]
   }
 }
