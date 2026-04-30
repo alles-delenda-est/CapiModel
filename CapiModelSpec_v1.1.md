@@ -1,7 +1,7 @@
 
-# CapiModel — Technical Specification v1.0a
+# CapiModel — Technical Specification v1.1
 
-**Status:** Specification (not yet implemented). All implementation references describe the **target** state of the engine after the planned v1.0 rewrite.
+**Status:** Specification — v1.1 supersedes v1.0a; per-cohort PAYG accrual added in §5.6.1.
 
 **Purpose:** Single source of truth for the CapiModel pension-transition engine, enabling independent reimplementation, automated testing, and unambiguous parameter calibration. Self-contained: no external documents are required to implement.
 
@@ -351,6 +351,100 @@ capiRetirees(t)   = (1 - cohIdx(t)) × retireeIdx(t) × capiActivation(t)     (2
 legacyRetirees(t) = retireeIdx(t) - capiRetirees(t)                         (24)
 legacyExp_t       = max(0, E0_legacy_t × legacyRetirees(t) × I_t)            (25)
 ```
+
+### 5.6.1 Transitional cohort accrued rights (v1.1)
+
+Workers transitioning to capi at Y0 retain proportional PAYG entitlements for the
+years contributed before the transition. v1.0a's binary split (eqs 23/24) treated
+all capi-cohort retirees as having zero PAYG entitlement, understating
+state-funded PAYG outflow by an estimated 50–150 Md€/yr at peak transition
+(2050–2070). v1.1 corrects this with a per-cohort accrual share fed into the §5.9
+waterfall.
+
+**Per-cohort accrual share.** A worker born in year `B` has PAYG accrual share:
+
+    legacyShare(B) = clamp((Y0 − B − 22) / (A_R(0) − 22), 0, 1)         (15a)
+
+with three regimes:
+
+  - Born before `Y0 − cutoffAge` (age strictly greater than cutoffAge in Y0):
+    share = 1.0 (full PAYG career, retired or retiring under pre-reform rules).
+  - Born in [`Y0 − cutoffAge`, `Y0 − 22`] (age in [22, cutoffAge] in Y0):
+    share = (ageInY0 − 22) / (A_R(0) − 22), the closed form above.
+  - Born after `Y0 − 22` (age strictly less than 22 in Y0):
+    share = 0 (entered workforce post-cutoff, full capi career).
+
+The cohort with age **exactly equal** to cutoffAge in Y0 is a transitional cohort,
+not a full-PAYG cohort: their share is `(cutoffAge − 22) / (A_R(0) − 22)`. With
+defaults `cutoffAge = 50`, `A_R(0) = 64`, this is 28/42 ≈ 0.667.
+
+When `enableCapi === false`, `legacyShare(B) = 1` for all `B` (no transition).
+
+**Population-weighted running average.** Maintain `legacyShareAvg_t` as a state
+scalar updated each year from the new capi-cohort entrants:
+
+    ΔR^capi_t        = max(0, R^capi_t − R^capi_{t-1})
+    newShare_t       = legacyShare(Y0 + t − A_R(0))
+    legacyShareAvg_t = (legacyShareAvg_{t-1} × R^capi_{t-1}
+                        + newShare_t × ΔR^capi_t) / R^capi_t            (15b)
+
+Initial value `legacyShareAvg_0 = 0`; first non-zero at `t = T_capi_start`. When
+`R^capi_t = 0`, `legacyShareAvg_t = 0` (no division). When `R^capi_t` decreases
+(mortality exceeds new entries — late-horizon plateau), `legacyShareAvg_t` is
+held flat. This held-flat rule is a parametric simplification consistent with
+the rest of the engine, which does not track cohort-specific mortality (§7).
+A v1.2 upgrade with INSEE T60 actuarial tables would refine this; the bias is
+quantified per-release in the engine PR description and is conservative
+(slightly overstates `transitionalPaygExp_t`).
+
+**Aggregate transitional PAYG expenditure:**
+
+    E^trans_t = R^capi_t × legacyShareAvg_t × E0_legacy_t × I_t         (25b)
+
+Uses the same `E0_legacy_t` (post-Équinoxe per-retiree benefit level) as
+full-legacy retirees. **Équinoxe component scoping for transitional retirees
+follows §5.5 v1.0a applied to each pension portion separately:**
+
+  - The PAYG portion (proportional to `legacyShare`) is subject to all three
+    Équinoxe components — bracket reduction (§5.5 component 1), IR deduction
+    abolition (§5.5 component 2), and CSG/CRDS restoration (§5.5 component 3).
+    This is captured by using `E0_legacy_t` in eq (25b) since `E0_legacy_t`
+    already incorporates the benefit-side reductions per §5.5 eq (21b).
+  - The capi portion (proportional to `1 − legacyShare`) is subject to CSG
+    only, exactly as full-capi retirees' pensions are. This is already
+    captured at the aggregate level via `S0_csg_revenue_t` (§5.5 eq 22)
+    which scales with `retireeIdx(t)` — i.e. all retirees including
+    transitional.
+
+This per-portion scoping mirrors how French tax practice would treat dual-
+source retirement income. An alternative *aggregated* scoping — applying all
+three Équinoxe components to combined PAYG + capi income as if it were a
+single pension — would be fiscally more aggressive (high-income retirees
+pushed into higher brackets across both streams). It is a substantive policy
+choice, not a model simplification, and is documented as a possible v1.2 lever
+in `CapiModel_overview.md`.
+
+**Total PAYG outflow funded by the legacy fund:**
+
+    E^total_t = E_t + E^trans_t                                          (25c)
+
+**Waterfall update (§5.9):** eq (39) is replaced by:
+
+    deficit_t = E^total_t − nonEmplrNet_t                                (39')
+
+All other waterfall equations (38, 40, 41, 42–43) are unchanged in form;
+they consume the new `deficit_t` and produce updated `netFlow_t`. The
+expression for `netFlow_t` becomes:
+
+    netFlow_t = nonEmplrNet_t + emplrToLeg_t − E^total_t
+
+`legacyExp_t` (= E_t in the spec's notation) is preserved unchanged in
+semantics and value: it remains the legacy-cohort-only outflow per eq (25).
+The new aggregates `E^trans_t` and `E^total_t` are additive.
+
+**Diagnostic exposure.** Three new row-level fields are added to engine output:
+`legacyShareAvg`, `transitionalPaygExp_t`, `totalLegacyOutflow_t`. These are
+diagnostic; downstream consumers (UI, fixtures, panel) read them directly.
 
 ### 5.7 HLM proceeds
 
@@ -734,6 +828,8 @@ This means `legacyRetirees(t)` is technically a "direct-rights-equivalent" headc
 
 **Implementer warning:** if you "fix" R0 to be 19M total retirees (direct + survivors) without splitting the cohorts, you create a scope mismatch between the DREES decile bracket weights (which are direct-rights-only) and the retiree count being divided into deciles. This produces visibly wrong `S0_brackets` figures and is a common bug. Don't do it. The right fix is the v1.1 cohort split, not "harmonising" R0.
 
+**Status update (v1.1):** the binary cohort split that this section flagged as a v1.0 limitation is partially resolved by §5.6.1. The per-cohort PAYG accrual model now correctly attributes prorated PAYG entitlements to transitional cohorts. The survivors-only cohort kernel split (the other v1.0 limitation in this section) remains unresolved and is deferred to v1.2.
+
 ---
 
 ## 11. Regression test harness
@@ -807,6 +903,8 @@ Three values that are **invariant under any v1.0 implementation** regardless of 
 - `r_d(0) = r_d_base = 0.035`, because `debtRatio(0) = 3450/3000 × 100 = 115%`, below the 150% threshold (so no premium).
 - `cohIdx(0) = 1.0` by construction.
 
+The v1.0a default-preset KPI snapshot is preserved at `tests/fixtures/v1.0a-default-trace.json` (frozen, do not regenerate). The v1.1 default-preset snapshot lives at `tests/fixtures/v1.1-default-trace.json` and is regenerated when the spec or engine changes.
+
 ---
 
-**End of spec v1.0a.**
+**End of spec v1.1.**
