@@ -11,6 +11,7 @@ import Navigation from './components/Navigation.jsx'
 import EnhancedSlider from './components/EnhancedSlider.jsx'
 import CollapsibleSection from './components/CollapsibleSection.jsx'
 import CutoffSelector from './components/CutoffSelector.jsx'
+import IndividualPerspectivePanel from './components/IndividualPerspectivePanel.jsx'
 import IntroPage from './pages/IntroPage.jsx'
 import SimplifiedView from './pages/SimplifiedView.jsx'
 import HypothesesPage from './pages/HypothesesPage.jsx'
@@ -204,6 +205,13 @@ export default function App() {
       {currentPage === 'walkthrough' && <TransitionWalkthrough navigateTo={navigateTo} />}
       {currentPage === 'hypotheses' && <HypothesesPage />}
       {currentPage === 'simulateur' && <>
+
+      {/* INDIVIDUAL PERSPECTIVE — top of page, collapsible */}
+      <section className="section">
+        <CollapsibleSection title="Et pour vous ?" level="normal" defaultOpen={false}>
+          <IndividualPerspectivePanel params={params} reformResults={results} />
+        </CollapsibleSection>
+      </section>
 
       {showLegacyUrlNotice && !legacyUrlNoticeDismissed && (
         <section className="section" style={{ background: '#fef3c7', border: '1px solid #f59e0b' }}>
@@ -499,9 +507,10 @@ export default function App() {
         )}
       </section>
 
-      {/* KPIs */}
+      {/* KPIs — collapsible: charts are the primary visual; KPIs are
+          quantitative deep-dive for power users. */}
       <section className="section">
-        <h2>Indicateurs clés</h2>
+        <CollapsibleSection title="Indicateurs clés" level="normal" defaultOpen={false}>
         <div className="kpi-grid">
           <div className="kpi-card">
             <h3>Dette pic</h3>
@@ -551,6 +560,7 @@ export default function App() {
             </div>
           </div>
         </div>
+        </CollapsibleSection>
       </section>
 
       {/* DATA TABLE */}

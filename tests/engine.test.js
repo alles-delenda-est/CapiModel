@@ -22,6 +22,9 @@ import {
   activePopFactor,
   cohIdx,
   runSimulation,
+  legacyShareOfCohort,
+  buildCounterfactualParams,
+  computeIndividualPerspective,
 } from '../src/simulation-engine.js';
 
 describe('module scaffold', () => {
@@ -469,6 +472,23 @@ function assertInvariants(rows, cfg, label = '') {
     expect(r.capiAssetShare_t, `${tag} capiAssetShare ≥ 0`).toBeGreaterThanOrEqual(0);
     expect(r.capiAssetShare_t, `${tag} capiAssetShare ≤ steady-state`)
       .toBeLessThanOrEqual(cfg.capiAssetShareSteadyState + 1e-12);
+
+    // ===== §6 v1.1 NEW INVARIANTS (per-cohort PAYG accrual, §5.6.1) =====
+    // (i) legacyShareAvg_t ∈ [0, 1] always.
+    expect(r.legacyShareAvg, `${tag} legacyShareAvg ≥ 0`).toBeGreaterThanOrEqual(-1e-12);
+    expect(r.legacyShareAvg, `${tag} legacyShareAvg ≤ 1`).toBeLessThanOrEqual(1 + 1e-12);
+    // (ii) transitionalPaygExp_t ≥ 0 (max-clamped in engine).
+    expect(r.transitionalPaygExp_t, `${tag} transitionalPaygExp ≥ 0`)
+      .toBeGreaterThanOrEqual(-1e-12);
+    // (iii) totalLegacyOutflow_t = legacyExp_t + transitionalPaygExp_t.
+    expect(r.totalLegacyOutflow_t, `${tag} totalLegacyOutflow = legacy + trans`)
+      .toBeCloseTo(r.legacyExp_t + r.transitionalPaygExp_t, 9);
+    // (iv) totalLegacyOutflow_t ≥ legacyExp_t (additive).
+    expect(r.totalLegacyOutflow_t, `${tag} totalLegacyOutflow ≥ legacyExp`)
+      .toBeGreaterThanOrEqual(r.legacyExp_t - 1e-12);
+    // (v) deficit_t = totalLegacyOutflow_t − nonEmplrNet_t (eq 39').
+    expect(r.deficit_t, `${tag} deficit = totalLegacy − nonEmplrNet`)
+      .toBeCloseTo(r.totalLegacyOutflow_t - r.nonEmplrNet_t, 9);
   }
 
   // (c) HLM mass conservation across years: U_{t+1} = U_t − ΔU_t exactly.
@@ -701,3 +721,197 @@ describe('§11.5 property-based tests (1000 random configs)', () => {
     }
   });
 });
+
+// ===========================================================================
+// §5.4 eq (15a) v1.1: per-cohort PAYG accrual share — boundary discipline
+// ===========================================================================
+describe('legacyShareOfCohort §5.4 eq (15a)', () => {
+  // Defaults: cutoffAge=50, retirementAgeBase=64, Y0=2027, careerYears=42.
+
+  it('returns 28/42 ≈ 0.6667 for cohort age 50 in Y0 (= cutoffAge)', () => {
+    // Born 1977 (age 50 in 2027) is the boundary cohort — transitional, NOT 1.0.
+    const share = legacyShareOfCohort(1977, DEFAULT_CONFIG);
+    expect(share).toBeCloseTo(28 / 42, 12);
+    expect(share).toBeLessThan(1.0);
+  });
+
+  it('returns 1.0 for cohort age 51 in Y0 (> cutoffAge)', () => {
+    // Born 1976 — strictly older than the cutoff, full PAYG career.
+    expect(legacyShareOfCohort(1976, DEFAULT_CONFIG)).toBe(1.0);
+  });
+
+  it('returns 0 for cohort age 22 in Y0 (entered workforce in Y0)', () => {
+    expect(legacyShareOfCohort(2005, DEFAULT_CONFIG)).toBe(0);
+  });
+
+  it('returns 0 for cohort age 21 in Y0 (not yet in workforce)', () => {
+    expect(legacyShareOfCohort(2006, DEFAULT_CONFIG)).toBe(0);
+  });
+
+  it('returns 14/42 ≈ 0.333 for cohort age 36 in Y0', () => {
+    // Born 1991 — mid-transitional.
+    const share = legacyShareOfCohort(1991, DEFAULT_CONFIG);
+    expect(share).toBeCloseTo(14 / 42, 12);
+  });
+
+  it('returns 1.0 when cfg.enableCapi === false (regardless of birthYear)', () => {
+    const cfg = { ...DEFAULT_CONFIG, enableCapi: false };
+    expect(legacyShareOfCohort(1985, cfg)).toBe(1.0);
+    expect(legacyShareOfCohort(2010, cfg)).toBe(1.0);
+    expect(legacyShareOfCohort(1960, cfg)).toBe(1.0);
+  });
+
+  it('respects custom cutoffAge and retirementAgeBase', () => {
+    // cutoffAge=45, retirementAgeBase=67 → careerYears=45.
+    // Cohort age=45 in Y0 (born 1982): share = 23/45 ≈ 0.5111.
+    // Cohort age=46 in Y0 (born 1981): share = 1.0.
+    // Cohort age=22 in Y0 (born 2005): share = 0.
+    const cfg = { ...DEFAULT_CONFIG, cutoffAge: 45, retirementAgeBase: 67 };
+    expect(legacyShareOfCohort(1982, cfg)).toBeCloseTo(23 / 45, 12);
+    expect(legacyShareOfCohort(1981, cfg)).toBe(1.0);
+    expect(legacyShareOfCohort(2005, cfg)).toBe(0);
+  });
+
+  it('returns 1.0 for cohorts already retired in Y0 (age ≥ A_R(0))', () => {
+    // Born 1962 (age 65 in Y0, ≥ retirementAgeBase=64) → already retired.
+    expect(legacyShareOfCohort(1962, DEFAULT_CONFIG)).toBe(1.0);
+  });
+});
+
+// ===========================================================================
+// §5.6.1 v1.1: legacyShareAvg internal consistency — running average matches
+// per-cohort reconstruction under held-flat mortality (the engine's assumption).
+// ===========================================================================
+describe('§5.6.1 v1.1: legacyShareAvg matches per-cohort reconstruction', () => {
+  it('default preset: engine running avg = pop-weighted avg of per-cohort shares (monotone regime)', () => {
+    // Scope of the test: while capiRetirees_t is monotonically non-decreasing,
+    // the engine's held-flat-on-decline rule is dormant and the running
+    // average exactly equals the pop-weighted reconstruction. After
+    // capiRetirees peaks (mortality > new entries — late-horizon plateau),
+    // the engine holds the average flat by design (§5.6.1 mortality rule);
+    // a per-cohort reconstruction without an actuarial mortality kernel
+    // overstates the surviving-population pop denominator. The held-flat
+    // regime is exercised by the §6 invariants instead.
+    const cfg = { ...DEFAULT_CONFIG };
+    const rows = runSimulation(cfg);
+    for (let t = 0; t < rows.length; t++) {
+      const r = rows[t];
+      if (t > 0 && r.capiRetirees < rows[t - 1].capiRetirees - 1e-12) break;
+      if (r.capiRetirees < 1e-9) {
+        expect(r.legacyShareAvg).toBeCloseTo(0, 9);
+        continue;
+      }
+      let weighted = 0;
+      let cumPop = 0;
+      let prev = 0;
+      for (let tt = 0; tt <= t; tt++) {
+        const cap = rows[tt].capiRetirees;
+        const delta = Math.max(0, cap - prev);
+        if (delta > 0) {
+          const B = cfg.Y0 + tt - cfg.retirementAgeBase;
+          const share = legacyShareOfCohort(B, cfg);
+          weighted += share * delta;
+          cumPop += delta;
+        }
+        prev = cap;
+      }
+      expect(cumPop, `t=${t} cumPop ≈ capiRetirees`).toBeCloseTo(r.capiRetirees, 9);
+      const expectedAvg = cumPop > 0 ? weighted / cumPop : 0;
+      expect(r.legacyShareAvg, `t=${t} legacyShareAvg`).toBeCloseTo(expectedAvg, 9);
+    }
+  });
+
+  it('held-flat regime: legacyShareAvg unchanged once capiRetirees starts declining', () => {
+    const cfg = { ...DEFAULT_CONFIG };
+    const rows = runSimulation(cfg);
+    let peakT = -1;
+    let peakVal = 0;
+    for (let t = 0; t < rows.length; t++) {
+      if (rows[t].capiRetirees > peakVal) {
+        peakVal = rows[t].capiRetirees;
+        peakT = t;
+      }
+    }
+    // After the peak, legacyShareAvg should be held flat (no new entries
+    // means deltaCapiRet_t = 0 → no contribution to the running avg).
+    if (peakT >= 0 && peakT < rows.length - 1) {
+      for (let t = peakT + 1; t < rows.length; t++) {
+        expect(rows[t].legacyShareAvg, `t=${t} held flat`)
+          .toBeCloseTo(rows[peakT].legacyShareAvg, 12);
+      }
+    }
+  });
+});
+
+// ===========================================================================
+// §5.6.1 v1.1: panel ↔ engine 1:1 alignment — per-individual values used by
+// the panel are the same per-individual values aggregated by the engine.
+// ===========================================================================
+describe('panel ↔ engine reconciliation (v1.1)', () => {
+  it('per-individual annual legacy pension at retirement = engine\'s per-cohort field at that year', () => {
+    const cfg = { ...DEFAULT_CONFIG };
+    const reformRows = runSimulation(cfg);
+    const cfRows = runSimulation(buildCounterfactualParams(cfg));
+    const T_capi_start = T_capi_start_of(cfg);
+
+    for (let tt = T_capi_start; tt < cfg.N - 1; tt++) {
+      const ttRow = reformRows[tt];
+      const ttPrev = tt > 0 ? reformRows[tt - 1] : { capiRetirees: 0 };
+      const deltaPop = Math.max(0, ttRow.capiRetirees - ttPrev.capiRetirees);
+      if (deltaPop <= 1e-9) continue;
+
+      const B = cfg.Y0 + tt - cfg.retirementAgeBase;
+      const persp = computeIndividualPerspective(cfg, reformRows, cfRows, B);
+
+      // Panel's per-individual annual legacy pension in k€/yr (un-rounded for ε).
+      const perCapitaAnnualKE_panel = persp.monthlyPensionLegacy * 12 / 1000;
+
+      // Engine's per-individual annual legacy pension at retirement year tt:
+      //   E0_legacy_t × I_factor_t × legacyShare(B) / R0   (k€/yr/retiree)
+      const share = legacyShareOfCohort(B, cfg);
+      const engineExpectedKE = ttRow.E0_legacy_t * ttRow.I_factor_t * share / cfg.R0;
+
+      // Panel rounds monthly to nearest €, so 1 €/year ≈ 0.001 k€ tolerance
+      // gives ~12 € of slack — comfortably above rounding noise.
+      expect(perCapitaAnnualKE_panel,
+        `cohort B=${B} retiring at t=${tt}`)
+        .toBeCloseTo(engineExpectedKE, 1);
+    }
+  });
+
+  it('cohort-aggregate sum at year t = engine transitionalPaygExp_t (monotone regime)', () => {
+    // In the monotone-growth regime (before capiRetirees peaks), summing
+    // (cohortShare × cohortPop) × E0_legacy_t × I_factor_t over all cohorts
+    // alive at year t equals the engine's transitionalPaygExp_t exactly.
+    // This is the per-cohort reconstruction of eq (25b) and the additive
+    // building block of the panel↔engine alignment.
+    const cfg = { ...DEFAULT_CONFIG };
+    const reformRows = runSimulation(cfg);
+
+    for (let t = T_capi_start_of(cfg); t < cfg.N; t++) {
+      // Stop once capiRetirees starts declining (held-flat regime — see
+      // sibling test `held-flat regime: legacyShareAvg unchanged ...`).
+      if (t > 0 && reformRows[t].capiRetirees
+                 < reformRows[t - 1].capiRetirees - 1e-12) break;
+
+      const r = reformRows[t];
+      if (r.legacyShareAvg < 1e-9) continue;
+
+      let cohortSumMd = 0; // Md€/yr
+      let prev = 0;
+      for (let tt = T_capi_start_of(cfg); tt <= t; tt++) {
+        const cap = reformRows[tt].capiRetirees;
+        const delta = Math.max(0, cap - prev);
+        if (delta > 0) {
+          const B = cfg.Y0 + tt - cfg.retirementAgeBase;
+          const share = legacyShareOfCohort(B, cfg);
+          cohortSumMd += share * r.E0_legacy_t * r.I_factor_t * delta;
+        }
+        prev = cap;
+      }
+      expect(cohortSumMd, `t=${t} cohort sum vs transitionalPaygExp`)
+        .toBeCloseTo(r.transitionalPaygExp_t, 6);
+    }
+  });
+});
+

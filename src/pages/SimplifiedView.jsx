@@ -8,6 +8,7 @@ import {
 import { runSimulation } from '../simulation-engine.js'
 import { extractKPIs, PRESETS } from '../presets.js'
 import ChartTooltip from '../components/ChartTooltip.jsx'
+import IndividualPerspectivePanel from '../components/IndividualPerspectivePanel.jsx'
 import './SimplifiedView.css'
 
 // === Simplified scenario definitions — same engine params, friendly labels ===
@@ -335,6 +336,12 @@ export default function SimplifiedView({ navigateTo }) {
           <p className="sv-spread-warning">{narrative.spreadWarning}</p>
         )}
         <p className="sv-verdict"><strong>{narrative.verdict}</strong></p>
+      </section>
+
+      {/* ---- INDIVIDUAL PERSPECTIVE ---- */}
+      <section className="sv-section">
+        <h2>Et pour vous ?</h2>
+        <IndividualPerspectivePanel params={params} reformResults={results} />
       </section>
 
       {/* ---- KPI CARDS ---- */}
