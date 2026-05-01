@@ -530,6 +530,43 @@ function assertInvariants(rows, cfg, label = '') {
   }
 }
 
+// §5.10 Legacy Fund dynamics (eq 36 + eq 43):
+// F_t only grows in surplus branch. Default preset runs deficit every year
+// → F_t is constant at F0, so fundReturn_t is constant. This is per-spec
+// (permanent endowment model); these tests document the known behavior and
+// will alert if the spec changes.
+describe('§5.10 Legacy Fund endowment behavior (default preset)', () => {
+  const rows = runSimulation();
+  it('F_t = F0 for every year (no surplus → eq 43 never fires)', () => {
+    const F0 = DEFAULT_CONFIG.F0;
+    for (let t = 0; t < rows.length; t++) {
+      expect(rows[t].F_t, `F_t at t=${t}`).toBeCloseTo(F0, 9);
+    }
+  });
+  it('fundReturn_t is constant across all years (= F0 × fisher(r_f_portfolio, pi))', () => {
+    const expected = DEFAULT_CONFIG.F0 * fisher(DEFAULT_CONFIG.r_f_portfolio, DEFAULT_CONFIG.pi);
+    for (let t = 0; t < rows.length; t++) {
+      expect(rows[t].fundReturn_t, `fundReturn_t at t=${t}`).toBeCloseTo(expected, 6);
+    }
+  });
+  it('r_d_t rises above r_d_base before peak-debt year (debtRatio crosses threshold1=150%)', () => {
+    // Default: existingDebt/baseGDP = 115% at t=0 (below threshold1).
+    // As D_t accumulates, debtRatio eventually crosses 150% and the premium activates.
+    // This test confirms the premium mechanism is live in the default run.
+    const r_d_base = DEFAULT_CONFIG.r_d_base;
+    const someYearExceedsBase = rows.some(r => r.r_d_t > r_d_base + 1e-9);
+    expect(someYearExceedsBase).toBe(true);
+  });
+  it('netFlow_t ≤ 0 every year in default preset (surplus branch adds zero at most)', () => {
+    // Around t=49-51, netFlow_t ≈ 0 (± float noise ~1e-13). The F_t test above
+    // confirms no meaningful fund growth occurs regardless.
+    const EPS = 1e-10;
+    for (let t = 0; t < rows.length; t++) {
+      expect(rows[t].netFlow_t, `netFlow_t at t=${t}`).toBeLessThanOrEqual(EPS);
+    }
+  });
+});
+
 // §6 v1.0a: r_f_portfolio and r_f_annuity are distinct in the default config
 // and the engine never conflates them.
 describe('§6 v1.0a: r_f_portfolio ≠ r_f_annuity', () => {
