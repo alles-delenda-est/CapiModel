@@ -19,6 +19,19 @@
 //     `legacyShareAvg_t` (eq 15b) is the population-weighted running average
 //     across capi-cohort retirees alive at year t. Held flat when
 //     R^capi_t declines (mortality > new entries). See §5.6.1.
+//
+// v1.2 deltas vs v1.1 (branch v1.2/capi-debt-optimisation):
+//  6. tauK (§5.10.1): annual levy on K_t stock → transition-debt repayment.
+//     Fires after §5.13 (post-payout K_t). Guarded by K_t solvency floor
+//     (K_t may not fall below capiPayoutFloor_t / annuityRate_t). Only active
+//     while D_t > 0; self-limits once debt is repaid.
+//     Ordering note: §5.11 lambda levy fires on INFLOWS (netCapiFlow_t, eq 45),
+//     tauK fires on the STOCK (post-eq 57). Mechanically decoupled — lambda
+//     reduces what enters K_t, tauK reduces what stays in K_t. Running both
+//     simultaneously is additive; reduce lambda if tauK is active.
+//     GE feedback: tauK lowers K_t/GDP_t, which reduces gePenalty_t and raises
+//     r_c_eff_t. This first-order feedback partially offsets the levy impact
+//     when K_t/GDP_t is in the GE-penalty zone (geKneeRatio < K/GDP < geFloorRatio).
 
 // ---- §8.1 DREES 2022 pension distribution (€/month bracket bounds) ----
 
@@ -112,11 +125,11 @@ export const DEFAULT_CONFIG = {
   enableCapi: true,
   cutoffAge: 50,
   alpha: 1.0,
-  // §opt-A: fraction of excess capi return (K_prev×r_cn − capiPayout, when > 0)
-  // channeled to transition-debt repayment each year. 0 = off (default).
-  betaK: 0,
-  // §opt-B: annual levy rate on end-of-year K_t stock → transition-debt repayment.
-  // Applied only while D_t > 0. 0 = off (default).
+  // §5.10.1 (v1.2): annual levy rate on end-of-year K_t stock → transition-debt
+  // repayment. Only fires while D_t > 0; capped by K_t solvency floor. Default 0.
+  // Empirical optimum ≈ 3.0% (peak debt −75%, total interest −88%, terminal debt ≈ 12 Md€
+  // at t=69). Safe ceiling < 3.5%; at 3.5% K_t depletes to 0 by t=69, causing a late
+  // debt spike that erases the gain. See v1.2 spec §5.10.1.
   tauK: 0,
   lambda: 0.30,
   Tlambda: 15,
@@ -591,7 +604,10 @@ export function runSimulation(userConfig = {}) {
     const netCapiFlow_t = C_s_capi_t + emplrToCap_t - levy_t;                   // (45)
 
     // ---------- §5.12 Capi accumulation & GE penalty ----------
-    const K_start_t   = K_t;                                                     // saved for betaK
+    // GE feedback (v1.2): tauK lowers K_t/GDP_t → lower gePenalty_t → higher r_c_eff_t.
+    // This first-order offset is automatically captured here since capiToGdp uses
+    // the pre-tauK K_t (this year's stock before levy); the levy fires in §5.10.1
+    // after §5.13, so next year's K_t (post-levy) feeds next year's capiToGdp.
     const capiToGdp_t = K_t / GDP_t;                                            // (46)
     const gePenalty_t = computeGePenalty(capiToGdp_t, cfg.geKneeRatio, cfg.geFloorRatio); // (47)
     const r_c_eff_t   = cfg.r_c * gePenalty_t;                                  // (48)
@@ -639,19 +655,20 @@ export function runSimulation(userConfig = {}) {
     CK_t = CK_t + shortfall_t;                                                  // (56)
     K_t  = Math.max(0, K_avail_t - capiPayout_t);                               // (57)
 
-    // ---------- §opt-A: betaK — excess capi return → debt ----------
-    // Only fires when D_t > 0 and the fund earned more than it paid out.
-    const capiReturnExcess_t = Math.max(0, K_start_t * r_cn_eff_t - capiPayoutDesired_t);
-    const betaKRepayment_t = D_t > 0 ? (cfg.betaK ?? 0) * capiReturnExcess_t : 0;
-    const betaKApplied_t   = Math.min(betaKRepayment_t, D_t);
-    K_t  = Math.max(0, K_t  - betaKApplied_t);
-    D_t  = D_t  - betaKApplied_t;
-
-    // ---------- §opt-B: tauK — annual levy on K_t stock → debt ----------
-    const tauKLevy_t   = D_t > 0 ? (cfg.tauK ?? 0) * K_t : 0;
-    const tauKApplied_t = Math.min(tauKLevy_t, D_t);
-    K_t  = Math.max(0, K_t  - tauKApplied_t);
-    D_t  = D_t  - tauKApplied_t;
+    // ---------- §5.10.1 (v1.2): tauK — annual levy on K_t stock → debt ----------
+    // Ordering: fires AFTER §5.13 (post-payout K_t settled). §5.11 lambda levy
+    // fires earlier on inflows (eq 45) — the two channels are mechanically
+    // decoupled and independently capped at D_t.
+    //
+    // Solvency floor: levy is capped so K_t cannot fall below
+    //   K_floor_t = capiPayoutFloor_t / annuityRate_t
+    // the pot required to service the guaranteed floor payout at the current
+    // annuity rate. Prevents catastrophic K_t depletion at high tauK values.
+    const K_floor_t     = annuityRate_t > 1e-6 ? capiPayoutFloor_t / annuityRate_t : 0;
+    const tauKRaw_t     = D_t > 0 ? (cfg.tauK ?? 0) * K_t : 0;
+    const tauKLevy_t    = Math.min(tauKRaw_t, Math.max(0, K_t - K_floor_t), D_t);
+    K_t  = Math.max(0, K_t  - tauKLevy_t);
+    D_t  = D_t  - tauKLevy_t;
 
     // ---------- §5.14 Diagnostics ----------
     // v1.0a eq (58): spread measures Legacy-Fund yield vs real sovereign cost.
@@ -713,9 +730,8 @@ export function runSimulation(userConfig = {}) {
       capiRetireeShare_t, capiAssetShare_t,
       potBasedPayout_t, capiPayoutDesired_t,
       shortfall_t, capiPayout_t,
-      // §opt debt-reduction channels
-      capiReturnExcess_t, betaKRepayment_t, betaKApplied_t,
-      tauKLevy_t, tauKApplied_t,
+      // §5.10.1 (v1.2) tauK debt-reduction channel
+      K_floor_t, tauKLevy_t,
       // §2 stocks (post-update)
       F_t, D_t, K_t, CI_t, CK_t,
       // §5.14 diagnostics
