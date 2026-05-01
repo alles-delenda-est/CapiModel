@@ -697,6 +697,9 @@ function sampleConfig(rng) {
     employmentRateTarget: u(0.55, 0.85),
     employmentTransitionYears: 3 + Math.floor(rng() * 23), // {3,4,...,25}
     constructionMultiplier: u(0.5, 2.0),
+    // v1.2: tauK sampled below the safe ceiling (0 to 0.03) to exercise the
+    // solvency floor and verify §6 invariants (K_t ≥ 0, D_t ≥ 0) with levy active.
+    tauK: u(0, 0.03),
   };
 }
 
