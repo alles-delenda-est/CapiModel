@@ -67,6 +67,16 @@ This discipline is what carried v1.0a's four substantive corrections (rate split
 - **Équinoxe is two reforms in one.** v1.0 lumped progressive bracket reduction + IR-deduction abolition + CSG/CRDS restoration into a single `E0_net_t` term applied only to legacy retirees. v1.0a separates the benefit-side (legacy only, eqs 18b/c → 21a/b) from the tax-side (all retirees, eq 22 → eq 38), correctly attributing CSG revenue from capi pensioners.
 - **Demography is the binding constraint.** Walkthrough Stages 1–4 (status quo through full fiscal+labour reform) all stay catastrophic under `realistic` demographics; only Stage 5 (switching to `reformed`) closes the system. No single fiscal lever — no matter how aggressive — substitutes for demographic relief.
 
+## Per-cohort PAYG accruals (v1.1)
+
+v1.0a's binary cohort split (eqs 23/24) treated all capi-cohort retirees as having zero PAYG entitlement — including workers who had already contributed for decades before the 2027 transition. PR #6 surfaced this as a dual-rights pedagogical view in the per-individual panel (`legacyShare = yearsInPayg / careerYears`), but the panel's per-individual sum across transitional cohorts disagreed with the engine's `legacyExp_t` because the engine still routed those cohorts as fully capi. PR #7 reverted the panel pending engine support; v1.1 (this work) provides that support.
+
+§5.6.1 introduces `legacyShareOfCohort(B)` as a closed-form per-cohort accrual share (eq 15a) and a population-weighted running average `legacyShareAvg_t` (eq 15b). The aggregate `transitionalPaygExp_t = R^capi_t × legacyShareAvg_t × E0_legacy_t × I_t` (eq 25b) feeds the §5.9 waterfall via revised eq 39'. `legacyExp_t` is preserved unchanged in semantics and value — the new aggregate is additive. The panel's per-individual computation now reads engine output directly, so the cohort sum coincides by construction with the engine's transitional aggregate.
+
+The largest ongoing simplification is the **held-flat mortality assumption** for `legacyShareAvg_t` once `R^capi_t` plateaus. A linear-in-age mortality proxy gives a 1.7% peak-debt bias under the default preset — below the 2% threshold for keeping held-flat in v1.1. Cumulative late-horizon bias is larger (~45% of peak debt by year 70) but matters less for headline KPIs (peak debt is reached at t=41 in 2068, before mortality dispersion has accumulated). v1.2 actuarial work with INSEE T60 tables would refine this; the bias direction is conservative (overstates late-horizon outflow).
+
+The peak-debt impact of v1.1 vs v1.0a on the default preset is +24% in peak `r_d(t)` (4.45% → 5.50%) and a peak-debt year shift from 2057 to 2065. Three of the six presets — `v1_stress`, `equinoxeOnly`, `labourHousingOnly` — hit the 0.20 `r_d_cap` under v1.1; all three are designated "DESIGNED CATASTROPHIC" in `presets.js` and likely hit the cap under v1.0a too (v1.0a fixtures for non-default presets are not captured in the repo).
+
 ## Open questions (v1.1 wishlist, spec §10.13–§10.14)
 
 - **`r_c` exposure.** Currently 0.045 hardcoded; v1.1 should expose as a sensitivity slider [0.025, 0.06] for stress-testing realised returns.

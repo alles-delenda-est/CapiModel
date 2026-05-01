@@ -1,9 +1,14 @@
-// Reference traces (§11.3) for v1.0a default-preset.
+// Reference traces (§11.3) for v1.1 default-preset.
 //
 // Assertion strategy:
 //   1. Spec-mandated anchors at t=0, 22, 33, 69 (per Task 2 brief).
 //   2. Full 70-year × every-field regression baseline against the captured
-//      fixture `tests/fixtures/v1.0a-default-trace.json`.
+//      fixture `tests/fixtures/v1.1-default-trace.json`.
+//
+// v1.1: target fixture switched from v1.0a-default-trace.json to
+// v1.1-default-trace.json; the v1.0a fixture is preserved unchanged at
+// `tests/fixtures/v1.0a-default-trace.json` as an archival snapshot of the
+// pre-§5.6.1 binary-cohort behaviour.
 //
 // **Engine-change protocol.** Any future change that alters default-preset
 // output will fail the regression and require either:
@@ -19,7 +24,7 @@ import { dirname, resolve } from 'node:path';
 import { runSimulation } from '../src/simulation-engine.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIXTURE_PATH = resolve(__dirname, 'fixtures/v1.0a-default-trace.json');
+const FIXTURE_PATH = resolve(__dirname, 'fixtures/v1.1-default-trace.json');
 const FIXTURE = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8'));
 
 const rows = runSimulation();

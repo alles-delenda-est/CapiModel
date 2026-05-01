@@ -79,17 +79,31 @@ React 19 + Vite 7 + Recharts. Single-page application, no backend. Auto-deployed
 - **No behavioural responses.** Retirement-timing decisions (beyond `retirementAge*`), labour-supply elasticity, precautionary savings — all out of scope.
 - **`E0` doesn't respond to retirement age** (§10.7) — raising retirement age in v1.0a moves only timing, not benefit amount. Real systems also adjust accrual; v1.1 candidate.
 - **Cohort kernel parameters decoupled from `A_R(t)`** (§10.6) — known limitation; with INSEE T60 actuarial replacement they would couple.
-- **Survivors-only cohort implicit in `legacyRetirees(t)`** (§10.14) — `R0` is direct-rights only (DREES), `E0` is all-régime; the asymmetry is documented and intended. v1.1 fix would split `legacyRetirees(t)` into direct-rights and survivors-only sub-cohorts.
+- **Survivors-only cohort implicit in `legacyRetirees(t)`** (§10.14) — `R0` is direct-rights only (DREES), `E0` is all-régime; the asymmetry is documented and intended. v1.2 fix would split `legacyRetirees(t)` into direct-rights and survivors-only sub-cohorts.
 - **No regional heterogeneity** — single national HLM price, single national labour market.
 - **No demographic feedback loops** — TFR responding to economic conditions, mortality responding to retirement age — out of scope.
 
-## v1.1 wishlist (spec §10.13)
+**Resolved in v1.1:** *Per-cohort accrued PAYG rights are now tracked.* Workers transitioning to capi at Y0 retain proportional PAYG entitlements via `legacyShareOfCohort(B)` (eq 15a), aggregated as `transitionalPaygExp_t` (eq 25b) and folded into the §5.9 waterfall via revised eq 39'. The v1.0a binary cohort split that understated state-funded outflow by 50–150 Md€/yr at peak transition no longer applies. See spec §5.6.1 and CHANGELOG.
 
-Currently hardcoded; v1.1 candidates for user-tunable exposure:
+## v1.2 wishlist (spec §10.13–§10.14)
+
+Currently hardcoded; v1.2 candidates for user-tunable exposure:
 - `r_c` (sensitivity slider, range [0.025, 0.06])
 - `lifeExpAt65_per_decade` (« Avancées de la science médicale », range [0.5, 1.5])
 - `LIFE_EXP_INDEXATION_FRACTION` (range [0, 1])
 - `r_d_base` (rate-environment stress)
+
+### Aggregated Équinoxe scoping (potential v1.2 lever)
+
+v1.1 applies Équinoxe components to each pension portion of a transitional retiree separately: brackets and IR deduction on the PAYG portion, CSG on both. This mirrors how French tax practice handles dual-source retirement income.
+
+A more aggressive alternative — proposed during v1.1 design — would aggregate combined PAYG + capi income before applying the progressive bracket cut. High-income retirees with substantial capi pots would then give up a larger share of their PAYG benefit because their combined income pushes them into higher Équinoxe brackets. This is a substantive policy choice (effectively taxing capi pensions at PAYG progressivity), not a model simplification, and would require a political decision before implementation. Estimated additional `S0_brackets` revenue: TBD pending pilot run; likely concentrated on the top decile of transitional cohorts.
+
+If future fiscal pressure requires more economies than v1.1 produces, this lever is available without further engine changes — it would be a §5.5 / §5.6.1 modification scoping the bracket integral over combined income for transitional retirees.
+
+### Per-cohort survival mask (potential v1.2 lever)
+
+v1.1's `legacyShareAvg_t` is held flat once `R^capi_t` plateaus. This overstates surviving-cohort outflow because older transitional cohorts (higher legacy share) die first under realistic mortality. Linear-in-age mortality proxy estimates a 1.7% peak-debt bias under the default preset — within the 2% threshold for v1.1, but the cumulative bias accumulates substantially through the late horizon. v1.2 with INSEE T60 actuarial tables would refine this; the bias direction is conservative.
 
 ## Source documents
 

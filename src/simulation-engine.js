@@ -1,7 +1,5 @@
-// CapiModel v1.0a simulation engine.
-// Spec source of truth: CapiModelSpec_v1_0a.md @ commit c466e6b
-// (Patrick's brief referenced SHA 2ac4f4f8b3... which does not exist in the
-//  repository; using c466e6b — current spec/v1.0a tip — as the authoritative pin.)
+// CapiModel v1.1 simulation engine.
+// Spec source of truth: CapiModelSpec_v1.1.md (branch spec/v1.1).
 // This file implements §1–§9 of the spec. Every non-trivial line of the
 // simulation loop carries a `// Spec §X.Y eq (N)` comment.
 // Naming follows the Greek→Latin map in docs/superpowers/plans/2026-04-26-capimodel-v1-task1.md;
@@ -12,6 +10,15 @@
 //  2. HLM uniform geometric: ΔU_t = U0 × (1-ρ)^t × ρ for all t (eq 27).
 //  3. Capi pot owned by retirees by ASSET share, not headcount share (eq 53, 53a).
 //  4. Équinoxe split: benefit-side reductions vs tax-side CSG revenue (§5.5).
+//
+// v1.1 deltas vs v1.0a:
+//  5. Per-cohort PAYG accruals: transitional cohorts now collect prorated
+//     PAYG pension via eq 25b (transitionalPaygExp_t), fed into the §5.9
+//     waterfall via eq 25c (totalLegacyOutflow_t) and revised eq 39'.
+//     `legacyShareOfCohort(B)` (eq 15a) is the closed-form per-cohort share;
+//     `legacyShareAvg_t` (eq 15b) is the population-weighted running average
+//     across capi-cohort retirees alive at year t. Held flat when
+//     R^capi_t declines (mortality > new entries). See §5.6.1.
 
 // ---- §8.1 DREES 2022 pension distribution (€/month bracket bounds) ----
 
@@ -280,6 +287,40 @@ export function sigmaCapi(t, cfg) {
   return clamp((cfg.cutoffAge - 22 + t) / T_career_base, 0, 1);
 }
 
+// §5.4 eq (15a) v1.1: per-cohort PAYG accrual share for a worker born in
+// `birthYear`. Piecewise — implementations MUST NOT collapse this to a
+// `min(ageInY0, cutoffAge)` clamp: the function is genuinely discontinuous
+// at `cutoffAge` (cohorts above the boundary are full-PAYG retirees who
+// jump to share = 1.0; cohorts AT or below the boundary are transitional).
+//
+// Spec form (CapiModelSpec_v1.1.md §5.6.1):
+//   if ageInY0 > cutoffAge:        share = 1.0
+//   elif 22 ≤ ageInY0 ≤ cutoffAge: share = (ageInY0 − 22) / (A_R(0) − 22)
+//   else (ageInY0 < 22):           share = 0
+//
+// Boundary case: ageInY0 == cutoffAge → transitional, NOT 1.0. With defaults
+// cutoffAge=50, A_R(0)=64 this is 28/42 ≈ 0.667. The cohort one year older
+// (ageInY0 = cutoffAge + 1) jumps discontinuously to share = 1.0.
+//
+// Special cases:
+//   * cfg.enableCapi === false → 1.0 for everyone (no transition).
+//   * cfg.cutoffAge == null with enableCapi === true → all working-age
+//     cohorts route to capi from t=0, so share = 0 (no transitional band).
+export function legacyShareOfCohort(birthYear, cfg) {
+  if (cfg.enableCapi === false) return 1.0;
+  if (cfg.cutoffAge == null) return 0;
+  const ageInY0 = cfg.Y0 - birthYear;
+  const A_R0 = retirementAge(0, cfg);
+  // (15a) explicit piecewise — DO NOT replace with a clamp.
+  if (ageInY0 > cfg.cutoffAge) {
+    return 1.0;                             // regime 1: full PAYG, never in capi
+  } else if (ageInY0 >= 22) {
+    return (ageInY0 - 22) / (A_R0 - 22);    // regime 2: transitional ramp
+  } else {
+    return 0;                               // regime 3: full capi
+  }
+}
+
 // §5.6: capiActivation(t) — fraction of post-2027 retirees in the capi system.
 export function capiActivation(t, cfg) {
   if (!cfg.enableCapi) return 0;
@@ -340,6 +381,12 @@ export function runSimulation(userConfig = {}) {
   let cumDF_prev = 1;
   let pvLegacyCum = 0;
   let pvCapiPayoutCum = 0;
+  // §5.6.1 v1.1 per-cohort PAYG accrual state:
+  //   legacyShareAvg — population-weighted running average legacy share across
+  //     capi-cohort retirees alive at year t (eq 15b).
+  //   capiRetirees_prev — last-period capi retiree count for the running blend.
+  let legacyShareAvg = 0;
+  let capiRetirees_prev = 0;
 
   // ---- Constants per-config (no t dependence) ----
   const w_n   = fisher(cfg.w_r, cfg.pi);                       // §5.1 eq (1)
@@ -423,6 +470,44 @@ export function runSimulation(userConfig = {}) {
     // ---------- §5.6 (continued): legacyExp_t now uses E0_legacy_t ----------
     const legacyExp_t = Math.max(0, E0_legacy_t * legacyRetirees_t * I_factor_t); // (25)
 
+    // ---------- §5.6.1 v1.1: per-cohort PAYG accrual ----------
+    // Update `legacyShareAvg_t` per spec eq (15b) as an explicit conditional
+    // on whether the transitional retiree population grew or shrank in year
+    // `t`. The else-branch holds the running average flat (NOT applies the
+    // if-branch with ΔR=0, which would inflate the average). See §5.6.1
+    // "Mortality-bias caveat" for the rationale.
+    const newCohortBirthYear_t = cfg.Y0 + t - cfg.retirementAgeBase;             // §10.3: anchor on retirementAgeBase
+    if (capiRetirees_t > capiRetirees_prev + 1e-15) {
+      // (15b) if-branch: population-weighted blend of incumbent retirees with
+      // new entrants. Both `capiRetirees_t > 0` and `> capiRetirees_prev`,
+      // so the division is safe.
+      const deltaCapiRet_t = capiRetirees_t - capiRetirees_prev;
+      const newShare_t = legacyShareOfCohort(newCohortBirthYear_t, cfg);
+      legacyShareAvg = (legacyShareAvg * capiRetirees_prev
+                        + newShare_t * deltaCapiRet_t)
+                       / capiRetirees_t;
+    } else if (capiRetirees_t > 1e-12) {
+      // (15b) else-branch: held flat (no division — explicitly preserves
+      // the previous average rather than recomputing on a smaller R^capi).
+      // legacyShareAvg = legacyShareAvg;  // intentional no-op
+    } else {
+      // R^capi_t ≈ 0: no transitional retirees → average undefined; spec
+      // convention is 0 (no division).
+      legacyShareAvg = 0;
+    }
+    const legacyShareAvg_t = legacyShareAvg;
+    // (25b) aggregate transitional PAYG expenditure on capi-cohort retirees'
+    // accrued PAYG rights. Uses E0_legacy_t (post-Équinoxe) per §5.6.1
+    // per-portion scoping rule.
+    const transitionalPaygExp_t = Math.max(
+      0,
+      capiRetirees_t * legacyShareAvg_t * E0_legacy_t * I_factor_t,
+    );
+    // (25c) total PAYG outflow funded by the legacy fund.
+    const totalLegacyOutflow_t = legacyExp_t + transitionalPaygExp_t;
+    // Persist the running-average state for the next iteration.
+    capiRetirees_prev = capiRetirees_t;
+
     // ---------- §5.7 HLM proceeds ----------
     // v1.0a eq (27): uniform geometric form. ΔU_t = U_t × ρ where U_t = U0×(1-ρ)^t.
     // Mass conservation: U_{t+1} = U_t − ΔU_t exactly. (v1.0 had a piecewise form
@@ -454,7 +539,11 @@ export function runSimulation(userConfig = {}) {
     // benefit-side reductions (eqs 21a/21b) which only affect legacy.
     const nonEmplrNet_t = fundReturn_t + H_t_proceeds + abatement_t
                         + C_s_payg_t + S0_csg_revenue_t - debtInterest_t;       // (38)
-    const deficit_t = legacyExp_t - nonEmplrNet_t;                              // (39)
+    // v1.1 eq (39'): deficit measured against TOTAL PAYG outflow
+    // (legacy-cohort + transitional-cohort accrued rights), not legacy-cohort
+    // alone. legacyExp_t is preserved as a separate diagnostic; the waterfall
+    // consumes totalLegacyOutflow_t.
+    const deficit_t = totalLegacyOutflow_t - nonEmplrNet_t;                     // (39')
     const emplrAvail_t = C_e_t * (1 - cfg.phiF);                                // (40)
 
     let emplrToLeg_t, emplrToCap_t;
@@ -465,7 +554,7 @@ export function runSimulation(userConfig = {}) {
     } else {
       emplrToLeg_t = emplrAvail_t; emplrToCap_t = C_e_t * cfg.phiF;
     }
-    const netFlow_t = nonEmplrNet_t + emplrToLeg_t - legacyExp_t;               // (41)
+    const netFlow_t = nonEmplrNet_t + emplrToLeg_t - totalLegacyOutflow_t;      // (41) v1.1
 
     // ---------- §5.10 Borrow / repay ----------
     // SPEC AMBIGUITY 5: borrowed_t initialised to deficit-branch borrowing,
@@ -579,6 +668,10 @@ export function runSimulation(userConfig = {}) {
       legacyRetirees: legacyRetirees_t,
       capiRetirees: capiRetirees_t,
       legacyExp_t,
+      // §5.6.1 v1.1 per-cohort PAYG accrual additions
+      legacyShareAvg: legacyShareAvg_t,
+      transitionalPaygExp_t,
+      totalLegacyOutflow_t,
       // §5.7 HLM
       U_t, delta_U_t, units_sold, priceDiscount_t, P_eff_t, gain_t, hlmActive_t,
       H_t_proceeds,
@@ -609,4 +702,168 @@ export function runSimulation(userConfig = {}) {
     });
   }
   return rows;
+}
+
+// =====================================================================
+// Counterfactual + individual perspective helpers (pedagogical layer)
+//
+// These do not change any §1–§9 spec equations; they translate engine
+// outputs into per-individual euro amounts a non-specialist reader can
+// interpret. v1.1: now reads engine output directly via
+// legacyShareOfCohort + E0_legacy_t × I_factor_t / R0, replacing the
+// pre-PR-#7 local dual-rights heuristic so the panel's sum across
+// transitional cohorts is structurally identical to the engine's
+// transitionalPaygExp_t (eq 25b). See CapiModelSpec_v1.1.md §5.6.1.
+// =====================================================================
+
+/**
+ * Build a "no reform" parameter set from a reform parameter set.
+ *
+ * Disables Équinoxe, capitalisation, HLM cessions, and labour reform
+ * (employment target reverts to baseline). Preserves macroeconomic
+ * inputs (rates, demographics, calibration constants) so the
+ * comparison isolates reform impact, not world-state divergence.
+ */
+export function buildCounterfactualParams(reformParams) {
+  return {
+    ...reformParams,
+    useEquinoxe: false,
+    enableCapi: false,
+    hlmDiscount: false,
+    delta: 0,
+    rho: 0,
+    lambda: 0,
+    employmentRateTarget: reformParams.employmentRate0,
+  };
+}
+
+/**
+ * Median worker pedagogical projection (v1.1).
+ *
+ * Returns per-individual monthly euro amounts at retirement for one
+ * hypothetical worker born in `birthYear`, comparing reform vs CF.
+ * The legacy (PAYG) pension is computed via the engine's per-cohort
+ * accrual share (legacyShareOfCohort) and the engine's per-retiree
+ * pension level (E0_legacy_t × I_factor_t / R0) read at the
+ * cohort's retirement year.
+ *
+ * 1:1 alignment property (uniform-mortality reconciliation per spec
+ * §5.6.1): under uniform_decayed_cohort_size(B, t) =
+ * initial_cohort_size(B) × R^capi_t / R^capi_at_retirement_year(B), the
+ * pop-weighted sum
+ *   Σ_B uniform_decayed_cohort_size(B, t) × monthlyPensionLegacy(B)
+ * over all transitional cohorts B retiring by year t equals the engine's
+ * `transitionalPaygExp_t` at year t exactly (modulo floating-point ε —
+ * see tests/engine.test.js for the reconciliation test).
+ */
+export function computeIndividualPerspective(cfg, reformRows, cfRows, birthYear) {
+  const RETIREMENT_AGE = cfg.retirementAgeBase ?? 64;
+  const LIFE_EXPECTANCY = 85;
+  const N_WORKERS_M = 30;        // active population (millions, indexed)
+  const KE_TO_EUR = 1000;        // engine units are k€ per worker → €
+
+  const Y0 = cfg.Y0 ?? 2027;
+  const ageInY0 = Y0 - birthYear;
+  // §5.6.1 v1.1: derive `inCapi` from the same boundary discipline used by
+  // legacyShareOfCohort (eq 15a). A cohort that has any capi accrual at all
+  // — i.e., legacyShare < 1.0 — should accumulate a capi pot. This puts the
+  // boundary cohort (age = cutoffAge in Y0; legacyShare = 28/42 with
+  // defaults) into the capi bucket, consistent with the engine's smooth
+  // contribution-routing ramp (sigmaCapi(t) reaches 1.0 by T_capi_start).
+  const legacyShare = legacyShareOfCohort(birthYear, cfg);
+  const inCapi = legacyShare < 1.0;
+  const retirementYear = birthYear + RETIREMENT_AGE;
+  const retT = Math.max(0, Math.min(reformRows.length - 1, retirementYear - Y0));
+
+  const w_n = cfg.pi + cfg.w_r + cfg.pi * cfg.w_r;
+
+  // Walk the reform sim, accumulating personal capi pot. Only contributes
+  // while the worker is in the [22, retirementAge) band, and only if they
+  // are eligible (younger than cutoffAge in Y0). Pot grows at the engine's
+  // effective nominal capi rate (r_cn_eff_t, already includes GE penalty).
+  let capiPot = 0;
+  let capiPotAtRet = 0;
+  let lastWorkingContribK = 0;
+  let yearsInCapi = 0;
+  for (let t = 0; t < reformRows.length; t++) {
+    const age = (Y0 + t) - birthYear;
+    const r = reformRows[t];
+    if (age >= 22 && age < RETIREMENT_AGE) {
+      const wFactor = Math.pow(1 + w_n, t);
+      lastWorkingContribK = (cfg.W0 / N_WORKERS_M) * wFactor * cfg.tau_s;
+      if (inCapi) {
+        const totalCapiIn = (r.C_s_capi_t ?? 0) + (r.emplrToCap_t ?? 0);
+        const effLevy = totalCapiIn > 0
+          ? Math.min(1, (r.levy_t ?? 0) / totalCapiIn)
+          : 0;
+        const netContrib = lastWorkingContribK * (1 - effLevy);
+        const r_cn = r.r_cn_eff_t ?? 0;
+        capiPot = capiPot * (1 + r_cn) + netContrib;
+        yearsInCapi++;
+      }
+    }
+    if (age === RETIREMENT_AGE) capiPotAtRet = capiPot;
+  }
+
+  // §5.6.1 v1.1: per-retiree annual legacy pension (k€/yr/retiree) at
+  // retirement year, read directly from engine output. The cohort's
+  // accrual share `legacyShare` was computed up-front (same engine helper
+  // used by the simulation loop, eq 15a). Multiply by legacyShare →
+  // individual's PAYG portion.
+  const r = reformRows[retT];
+  const perCapitaLegacyKE = (r.E0_legacy_t * r.I_factor_t) / cfg.R0;
+  const monthlyPensionLegacy = perCapitaLegacyKE * legacyShare * KE_TO_EUR / 12;
+
+  // CF: full PAYG career, no Équinoxe, enableCapi=false → legacyShareOfCohort
+  // returns 1.0 by construction. Use cfRows directly.
+  const cfR = cfRows[retT];
+  const perCapitaLegacyKE_CF = (cfR.E0_legacy_t * cfR.I_factor_t) / cfg.R0;
+  const monthlyPensionCF = perCapitaLegacyKE_CF * KE_TO_EUR / 12;
+
+  // Capi annuity from personal pot. Annuity factor uses real return r_c
+  // over (LIFE_EXPECTANCY − RETIREMENT_AGE) years. Capi-portion taxation
+  // (CSG) is modelled at the macro level (S0_csg_revenue_t) — not
+  // applied per-individual here.
+  const r_c_n = (1 + cfg.r_c) * (1 + cfg.pi) - 1;
+  const retYears = Math.max(1, LIFE_EXPECTANCY - RETIREMENT_AGE);
+  const annuityFactor = r_c_n > 0
+    ? (1 - Math.pow(1 + r_c_n, -retYears)) / r_c_n
+    : retYears;
+  const monthlyCapiAnnuity = inCapi && capiPotAtRet > 0
+    ? (capiPotAtRet / annuityFactor) * KE_TO_EUR / 12
+    : 0;
+
+  const monthlyPensionTotal = monthlyPensionLegacy + monthlyCapiAnnuity;
+  const monthlyGain = monthlyPensionTotal - monthlyPensionCF;
+
+  // Personal contributions at retirement year (real-€-of-Y0 frame).
+  const monthlyContribS = lastWorkingContribK * KE_TO_EUR / 12;
+  const wFactorRet = Math.pow(1 + w_n, retT);
+  const monthlyContribE = (cfg.W0 / N_WORKERS_M) * wFactorRet
+                          * cfg.tau_e * KE_TO_EUR / 12;
+
+  // Personal capi pot in real Y0 € (deflate by inflation only).
+  const capiPotReal = capiPotAtRet / Math.pow(1 + cfg.pi, retT) * KE_TO_EUR;
+
+  // Diagnostic: yearsInPayg under §5.6.1 boundary discipline.
+  const careerYears = Math.max(1, RETIREMENT_AGE - 22);
+  const yearsInPayg = legacyShare * careerYears;
+
+  return {
+    birthYear,
+    ageInY0,
+    retirementYear,
+    inCapi,
+    yearsInPayg,
+    yearsInCapi,
+    legacyShare,
+    monthlyContribS: Math.round(monthlyContribS),
+    monthlyContribE: Math.round(monthlyContribE),
+    monthlyPensionLegacy: Math.round(monthlyPensionLegacy),
+    monthlyCapiAnnuity: Math.round(monthlyCapiAnnuity),
+    monthlyPensionTotal: Math.round(monthlyPensionTotal),
+    monthlyPensionCF: Math.round(monthlyPensionCF),
+    monthlyGain: Math.round(monthlyGain),
+    capiPotReal: Math.round(capiPotReal),
+  };
 }
