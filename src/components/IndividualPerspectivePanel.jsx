@@ -165,14 +165,22 @@ export default function IndividualPerspectivePanel({
           de répartition partielle (au prorata de votre carrière), à laquelle
           s’ajoute la rente issue de votre pot capitalisé sur les{' '}
           {data.yearsInCapi}&nbsp;années suivantes.
+          {' '}La réconciliation entre cette projection individuelle et
+          l’agrégat E^trans du moteur suppose une mortalité uniforme sur les
+          cohortes de transition (taille survivante au prorata de R^capi&nbsp;;
+          cf. spec §5.6.1, construction de réconciliation et «&nbsp;Mortality-bias
+          caveat&nbsp;»). Une mortalité différenciée par génération est reportée
+          à v1.2.
         </p>
       )}
 
       <p className="ip-disclaimer">
         Projection pédagogique d’un salarié médian. La pension de répartition
         est lue directement depuis le moteur de simulation (modèle d’accrual
-        par cohorte §5.6.1)&nbsp;; la somme sur les cohortes de transition
-        coïncide par construction avec l’agrégat E^trans du moteur.
+        par cohorte §5.6.1)&nbsp;; sous l’hypothèse de mortalité uniforme
+        (§5.6.1, «&nbsp;Uniform-mortality reconciliation construction&nbsp;»),
+        la somme pondérée sur les cohortes de transition coïncide exactement
+        avec l’agrégat E^trans du moteur.
       </p>
     </div>
   )

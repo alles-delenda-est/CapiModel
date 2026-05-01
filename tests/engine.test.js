@@ -740,6 +740,15 @@ describe('legacyShareOfCohort §5.4 eq (15a)', () => {
     expect(legacyShareOfCohort(1976, DEFAULT_CONFIG)).toBe(1.0);
   });
 
+  it('returns 1.0 for cohorts well above cutoffAge (ages 57 & 63 in Y0)', () => {
+    // Born 1970 (age 57 in 2027) and 1964 (age 63 in 2027): cohorts well
+    // above cutoffAge — must NOT decay via a clamp; the spec requires a
+    // hard 1.0 from the piecewise. These are the "no closed-form clamp"
+    // fence-post cases called out in spec §5.6.1.
+    expect(legacyShareOfCohort(1970, DEFAULT_CONFIG)).toBe(1.0);
+    expect(legacyShareOfCohort(1964, DEFAULT_CONFIG)).toBe(1.0);
+  });
+
   it('returns 0 for cohort age 22 in Y0 (entered workforce in Y0)', () => {
     expect(legacyShareOfCohort(2005, DEFAULT_CONFIG)).toBe(0);
   });
@@ -890,7 +899,7 @@ describe('panel ↔ engine reconciliation (v1.1)', () => {
 
     for (let t = T_capi_start_of(cfg); t < cfg.N; t++) {
       // Stop once capiRetirees starts declining (held-flat regime — see
-      // sibling test `held-flat regime: legacyShareAvg unchanged ...`).
+      // the §5.6.1 uniform-mortality reconciliation test that follows).
       if (t > 0 && reformRows[t].capiRetirees
                  < reformRows[t - 1].capiRetirees - 1e-12) break;
 
@@ -911,6 +920,81 @@ describe('panel ↔ engine reconciliation (v1.1)', () => {
       }
       expect(cohortSumMd, `t=${t} cohort sum vs transitionalPaygExp`)
         .toBeCloseTo(r.transitionalPaygExp_t, 6);
+    }
+  });
+
+  // §5.6.1 v1.1 Test 11: aggregate vs per-cohort reconciliation under the
+  // uniform-mortality construction defined in spec §5.6.1
+  // ("Uniform-mortality reconciliation construction"). This must hold across
+  // BOTH monotone-growth and held-flat regimes on the default preset, at
+  // ε = 0.01 Md€ — significantly tighter than the headline sensitivity
+  // numbers reported in the PR description, so any drift in either side of
+  // the identity is caught.
+  //
+  // Construction (spec §5.6.1):
+  //   uniform_decayed_cohort_size(B, t) = delta_B × decay(t)
+  //   decay(t) = R^capi_t / max_{τ≤t} R^capi_τ      (uniform across cohorts)
+  //
+  // For the default preset, R^capi_t is unimodal (verified empirically via
+  // `runSimulation`: monotone non-decreasing up to peak t=45, strictly
+  // decreasing after). So the running-max formulation is equivalent to the
+  // spec's `R^capi_t / R^capi_at_retT(B)` ratio for all cohorts B.
+  it('Test 11 — uniform-mortality reconciliation: cohort-aggregate sum = transitionalPaygExp_t at ε ≤ 0.01 Md€ across all years (default preset)', () => {
+    const EPS_MD = 0.01;
+    const cfg = { ...DEFAULT_CONFIG };
+    const rows = runSimulation(cfg);
+
+    // Pre-compute running max of capiRetirees and per-cohort growth events
+    // (so the inner loop is O(1) per year, not O(t)).
+    const cohorts = []; // { tt, delta, share }
+    let runningMax = 0;
+    let prev = 0;
+    for (let tt = 0; tt < rows.length; tt++) {
+      const cap = rows[tt].capiRetirees;
+      if (cap > prev + 1e-15) {
+        const B = cfg.Y0 + tt - cfg.retirementAgeBase;
+        cohorts.push({ tt, delta: cap - prev, share: legacyShareOfCohort(B, cfg) });
+      }
+      if (cap > runningMax) runningMax = cap;
+      prev = cap;
+    }
+
+    // Verify default preset unimodality (precondition of the running-max
+    // equivalence with the spec's per-cohort retT ratio).
+    let firstDeclineT = -1;
+    for (let t = 1; t < rows.length; t++) {
+      if (rows[t].capiRetirees < rows[t - 1].capiRetirees - 1e-12) {
+        firstDeclineT = t;
+        break;
+      }
+    }
+    if (firstDeclineT >= 0) {
+      for (let t = firstDeclineT + 1; t < rows.length; t++) {
+        expect(rows[t].capiRetirees,
+          `default preset must be unimodal — growth event at t=${t} after first decline at t=${firstDeclineT}`)
+          .toBeLessThanOrEqual(rows[t - 1].capiRetirees + 1e-12);
+      }
+    }
+
+    // Walk every year and verify the identity at ε = 0.01 Md€.
+    let runMax = 0;
+    let cohortShareSum = 0; // Σ delta × share, accumulated as new cohorts retire
+    let cohortIdx = 0;
+    for (let t = 0; t < rows.length; t++) {
+      const r = rows[t];
+      // Add any cohorts retiring at year t (== growth events at year t).
+      while (cohortIdx < cohorts.length && cohorts[cohortIdx].tt === t) {
+        const c = cohorts[cohortIdx++];
+        cohortShareSum += c.delta * c.share;
+      }
+      if (r.capiRetirees > runMax) runMax = r.capiRetirees;
+
+      const decay = runMax > 1e-15 ? r.capiRetirees / runMax : 0;
+      const expectedTransKMd = cohortShareSum * decay * r.E0_legacy_t * r.I_factor_t;
+      const diff = Math.abs(expectedTransKMd - r.transitionalPaygExp_t);
+      expect(diff,
+        `Test 11 reconciliation at t=${t} (year ${cfg.Y0 + t}): |Σ uniform_size×share×E0×I − transitionalPaygExp| = ${diff.toExponential(3)} Md€ exceeds ε = ${EPS_MD} Md€`)
+        .toBeLessThan(EPS_MD);
     }
   });
 });

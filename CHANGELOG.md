@@ -8,10 +8,24 @@ and this project adheres to semantic versioning where appropriate.
 ## [v1.1]
 
 Per-cohort PAYG accrual added to the v1.0a engine. Resolves the binary
-cohort-routing understatement (~50–150 Md€/yr at peak transition,
-2050–2070); peak debt under the default preset rises ~24% (4.45% → 5.50% in
-peak `r_d(t)`). The v1.0a tag is preserved at `spec-v1.0a-final`; any
-v1.0a-anchored published numbers must be restated under v1.1.
+cohort-routing understatement: v1.0a's eq 23/24 split treated every
+capi-cohort retiree as having zero PAYG entitlement, ignoring the years
+they had contributed before transitioning. v1.1's eq 25b adds back
+`E^trans_t = R^capi_t × legacyShareAvg_t × E0_legacy_t × I_t` on top of
+`legacyExp_t` (= E_t), restoring those accrued rights.
+
+Default-preset deltas vs the v1.0a fixture (substantially larger than the
+original 5–15% peak-debt estimate in the spec — at the spec stage we did
+not have the additive E^trans channel in front of us, so the 5–15% guess
+was a lower-bound projection on the headline KPI):
+
+- peak `r_d(t)`: 4.45% (2057) → 5.50% (2065)  — +24% relative
+- peak debt: 5 470 Md€ (2059) → 8 594 Md€ (2068) — +57% relative
+- total interest paid: 5 948 Md€ → 15 473 Md€ — +160% relative
+- debt-free year (default): 2082 → never reached within the 70-yr horizon
+
+The v1.0a tag is preserved at `spec-v1.0a-final`; any v1.0a-anchored
+published numbers must be restated under v1.1.
 
 - **Per-cohort accrual share** (eq 15a) — closed-form piecewise-linear
   share `legacyShare(B)` by birth year `B`, parameter-free at the cohort

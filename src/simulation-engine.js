@@ -288,34 +288,37 @@ export function sigmaCapi(t, cfg) {
 }
 
 // §5.4 eq (15a) v1.1: per-cohort PAYG accrual share for a worker born in
-// `birthYear`. Piecewise linear; closed form, parameter-free at the cohort
-// level beyond cutoffAge / retirementAgeBase / Y0.
+// `birthYear`. Piecewise — implementations MUST NOT collapse this to a
+// `min(ageInY0, cutoffAge)` clamp: the function is genuinely discontinuous
+// at `cutoffAge` (cohorts above the boundary are full-PAYG retirees who
+// jump to share = 1.0; cohorts AT or below the boundary are transitional).
 //
-// Boundary discipline (matches CapiModelSpec_v1.1.md §5.6.1):
-//   * Age strictly > cutoffAge in Y0 → share = 1.0 (full PAYG career,
-//     retired or retiring under pre-reform rules).
-//   * Age == cutoffAge in Y0 → share = (cutoffAge − 22) / (A_R(0) − 22)
-//     (transitional cohort at the boundary, NOT 1.0). With defaults
-//     cutoffAge=50, A_R(0)=64, this is 28/42 ≈ 0.667.
-//   * Age in [22, cutoffAge) in Y0 → linear in age.
-//   * Age < 22 in Y0 → share = 0 (entered workforce post-cutoff, full capi).
+// Spec form (CapiModelSpec_v1.1.md §5.6.1):
+//   if ageInY0 > cutoffAge:        share = 1.0
+//   elif 22 ≤ ageInY0 ≤ cutoffAge: share = (ageInY0 − 22) / (A_R(0) − 22)
+//   else (ageInY0 < 22):           share = 0
+//
+// Boundary case: ageInY0 == cutoffAge → transitional, NOT 1.0. With defaults
+// cutoffAge=50, A_R(0)=64 this is 28/42 ≈ 0.667. The cohort one year older
+// (ageInY0 = cutoffAge + 1) jumps discontinuously to share = 1.0.
 //
 // Special cases:
 //   * cfg.enableCapi === false → 1.0 for everyone (no transition).
 //   * cfg.cutoffAge == null with enableCapi === true → all working-age
-//     cohorts route to capi from t=0, so share = 0 for ages < retirementAgeBase
-//     in Y0; older cohorts (already retired) get share = 1.
+//     cohorts route to capi from t=0, so share = 0 (no transitional band).
 export function legacyShareOfCohort(birthYear, cfg) {
   if (cfg.enableCapi === false) return 1.0;
+  if (cfg.cutoffAge == null) return 0;
   const ageInY0 = cfg.Y0 - birthYear;
   const A_R0 = retirementAge(0, cfg);
-  if (ageInY0 >= A_R0) return 1.0;          // already retired in Y0
-  if (cfg.cutoffAge == null) {
-    return ageInY0 < 22 ? 0 : 0;            // active workers all-capi → share = 0
+  // (15a) explicit piecewise — DO NOT replace with a clamp.
+  if (ageInY0 > cfg.cutoffAge) {
+    return 1.0;                             // regime 1: full PAYG, never in capi
+  } else if (ageInY0 >= 22) {
+    return (ageInY0 - 22) / (A_R0 - 22);    // regime 2: transitional ramp
+  } else {
+    return 0;                               // regime 3: full capi
   }
-  if (ageInY0 > cfg.cutoffAge) return 1.0;  // strictly older than cutoff, but still working
-  if (ageInY0 < 22) return 0;
-  return (ageInY0 - 22) / (A_R0 - 22);
 }
 
 // §5.6: capiActivation(t) — fraction of post-2027 retirees in the capi system.
@@ -468,25 +471,29 @@ export function runSimulation(userConfig = {}) {
     const legacyExp_t = Math.max(0, E0_legacy_t * legacyRetirees_t * I_factor_t); // (25)
 
     // ---------- §5.6.1 v1.1: per-cohort PAYG accrual ----------
-    // Update the population-weighted running average legacy share across
-    // capi-cohort retirees alive at year t (eq 15b). New entrants are workers
-    // retiring at year t whose birth year is Y0 + t − A_R(0); their per-cohort
-    // share is fixed by eq 15a.
-    const deltaCapiRet_t = Math.max(0, capiRetirees_t - capiRetirees_prev);
+    // Update `legacyShareAvg_t` per spec eq (15b) as an explicit conditional
+    // on whether the transitional retiree population grew or shrank in year
+    // `t`. The else-branch holds the running average flat (NOT applies the
+    // if-branch with ΔR=0, which would inflate the average). See §5.6.1
+    // "Mortality-bias caveat" for the rationale.
     const newCohortBirthYear_t = cfg.Y0 + t - cfg.retirementAgeBase;             // §10.3: anchor on retirementAgeBase
-    const newShare_t = deltaCapiRet_t > 0
-      ? legacyShareOfCohort(newCohortBirthYear_t, cfg)
-      : 0;
-    if (capiRetirees_t > 1e-12) {
-      // Population-weighted blend (held flat when capiRetirees_t decreases —
-      // see §5.6.1 mortality discussion; deltaCapiRet_t = 0 in that case so
-      // numerator is just legacyShareAvg × capiRetirees_prev, and the previous
-      // value is preserved exactly when capiRetirees_t === capiRetirees_prev).
+    if (capiRetirees_t > capiRetirees_prev + 1e-15) {
+      // (15b) if-branch: population-weighted blend of incumbent retirees with
+      // new entrants. Both `capiRetirees_t > 0` and `> capiRetirees_prev`,
+      // so the division is safe.
+      const deltaCapiRet_t = capiRetirees_t - capiRetirees_prev;
+      const newShare_t = legacyShareOfCohort(newCohortBirthYear_t, cfg);
       legacyShareAvg = (legacyShareAvg * capiRetirees_prev
                         + newShare_t * deltaCapiRet_t)
-                       / Math.max(capiRetirees_t, capiRetirees_prev + deltaCapiRet_t);
+                       / capiRetirees_t;
+    } else if (capiRetirees_t > 1e-12) {
+      // (15b) else-branch: held flat (no division — explicitly preserves
+      // the previous average rather than recomputing on a smaller R^capi).
+      // legacyShareAvg = legacyShareAvg;  // intentional no-op
     } else {
-      legacyShareAvg = 0;                                                        // (15b) no division
+      // R^capi_t ≈ 0: no transitional retirees → average undefined; spec
+      // convention is 0 (no division).
+      legacyShareAvg = 0;
     }
     const legacyShareAvg_t = legacyShareAvg;
     // (25b) aggregate transitional PAYG expenditure on capi-cohort retirees'
@@ -740,11 +747,14 @@ export function buildCounterfactualParams(reformParams) {
  * pension level (E0_legacy_t × I_factor_t / R0) read at the
  * cohort's retirement year.
  *
- * 1:1 alignment property: summing
- *   monthlyPensionLegacy(B) × cohortPop_at_t(B)
+ * 1:1 alignment property (uniform-mortality reconciliation per spec
+ * §5.6.1): under uniform_decayed_cohort_size(B, t) =
+ * initial_cohort_size(B) × R^capi_t / R^capi_at_retirement_year(B), the
+ * pop-weighted sum
+ *   Σ_B uniform_decayed_cohort_size(B, t) × monthlyPensionLegacy(B)
  * over all transitional cohorts B retiring by year t equals the engine's
- * `transitionalPaygExp_t` at year t (modulo the indexation-frame choice
- * — see tests/engine.test.js for the exact reconciliation).
+ * `transitionalPaygExp_t` at year t exactly (modulo floating-point ε —
+ * see tests/engine.test.js for the reconciliation test).
  */
 export function computeIndividualPerspective(cfg, reformRows, cfRows, birthYear) {
   const RETIREMENT_AGE = cfg.retirementAgeBase ?? 64;
