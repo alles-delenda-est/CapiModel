@@ -112,12 +112,6 @@ export const DEFAULT_CONFIG = {
   enableCapi: true,
   cutoffAge: 50,
   alpha: 1.0,
-  // §opt-A: fraction of excess capi return (K_prev×r_cn − capiPayout, when > 0)
-  // channeled to transition-debt repayment each year. 0 = off (default).
-  betaK: 0,
-  // §opt-B: annual levy rate on end-of-year K_t stock → transition-debt repayment.
-  // Applied only while D_t > 0. 0 = off (default).
-  tauK: 0,
   lambda: 0.30,
   Tlambda: 15,
   // §3.6 v1.0a: long-run share of aggregate K_t notionally owned by current
@@ -591,7 +585,6 @@ export function runSimulation(userConfig = {}) {
     const netCapiFlow_t = C_s_capi_t + emplrToCap_t - levy_t;                   // (45)
 
     // ---------- §5.12 Capi accumulation & GE penalty ----------
-    const K_start_t   = K_t;                                                     // saved for betaK
     const capiToGdp_t = K_t / GDP_t;                                            // (46)
     const gePenalty_t = computeGePenalty(capiToGdp_t, cfg.geKneeRatio, cfg.geFloorRatio); // (47)
     const r_c_eff_t   = cfg.r_c * gePenalty_t;                                  // (48)
@@ -638,20 +631,6 @@ export function runSimulation(userConfig = {}) {
     }
     CK_t = CK_t + shortfall_t;                                                  // (56)
     K_t  = Math.max(0, K_avail_t - capiPayout_t);                               // (57)
-
-    // ---------- §opt-A: betaK — excess capi return → debt ----------
-    // Only fires when D_t > 0 and the fund earned more than it paid out.
-    const capiReturnExcess_t = Math.max(0, K_start_t * r_cn_eff_t - capiPayoutDesired_t);
-    const betaKRepayment_t = D_t > 0 ? (cfg.betaK ?? 0) * capiReturnExcess_t : 0;
-    const betaKApplied_t   = Math.min(betaKRepayment_t, D_t);
-    K_t  = Math.max(0, K_t  - betaKApplied_t);
-    D_t  = D_t  - betaKApplied_t;
-
-    // ---------- §opt-B: tauK — annual levy on K_t stock → debt ----------
-    const tauKLevy_t   = D_t > 0 ? (cfg.tauK ?? 0) * K_t : 0;
-    const tauKApplied_t = Math.min(tauKLevy_t, D_t);
-    K_t  = Math.max(0, K_t  - tauKApplied_t);
-    D_t  = D_t  - tauKApplied_t;
 
     // ---------- §5.14 Diagnostics ----------
     // v1.0a eq (58): spread measures Legacy-Fund yield vs real sovereign cost.
@@ -713,9 +692,6 @@ export function runSimulation(userConfig = {}) {
       capiRetireeShare_t, capiAssetShare_t,
       potBasedPayout_t, capiPayoutDesired_t,
       shortfall_t, capiPayout_t,
-      // §opt debt-reduction channels
-      capiReturnExcess_t, betaKRepayment_t, betaKApplied_t,
-      tauKLevy_t, tauKApplied_t,
       // §2 stocks (post-update)
       F_t, D_t, K_t, CI_t, CK_t,
       // §5.14 diagnostics
