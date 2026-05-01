@@ -40,7 +40,6 @@ const TIPS = {
   hlmDiscount: "Applique une décote volume aux prix HLM.",
   lambda: "Fraction des flux de capi prélevée pour rembourser la dette de transition.",
   alpha: "Fraction du surplus annuel dirigée vers le remboursement de dette (1 = total).",
-  tauK: "Prélèvement annuel sur le stock K_t du fonds capi → remboursement dette de transition (uniquement si D_t > 0 ; s'arrête automatiquement une fois la dette remboursée). Optimum empirique ≈ 2,5 % : peak debt −73 %, intérêts totaux −89 %, dette remboursée ~2066. Au-delà de ~3,5 % le fonds se déprime trop vite et le pic de dette remonte.",
   Tlambda: "Année à partir de laquelle le prélèvement de transition s'active (smoothing ±1 an).",
   phiF: "Plancher employeur vers la capitalisation (0 = waterfall complet vers legacy d'abord).",
   deltaTauxPatronal: "Baisse optionnelle du taux de cotisation employeur.",
@@ -339,9 +338,6 @@ export default function App() {
                 <EnhancedSlider id="alpha" label="Fraction surplus → dette α" value={p.alpha}
                   onChange={v => setParam('alpha', v)} min={0} max={1} step={0.05} unit="" decimals={2}
                   defaultValue={DEFAULT_CONFIG.alpha} />
-                <EnhancedSlider id="tauK" label="Prélèvement fonds capi τ_K" value={p.tauK}
-                  onChange={v => setParam('tauK', v)} min={0} max={0.05} step={0.0025} unit="" decimals={4}
-                  defaultValue={DEFAULT_CONFIG.tauK} tip={TIPS.tauK} warningAbove={0.035} />
                 <EnhancedSlider id="lambda" label="Prélèvement transition λ" value={p.lambda}
                   onChange={v => setParam('lambda', v)} min={0} max={0.5} step={0.025} unit="" decimals={3} tip={TIPS.lambda}
                   defaultValue={DEFAULT_CONFIG.lambda} warningAbove={0.30} />
