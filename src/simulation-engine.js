@@ -114,11 +114,15 @@ export const DEFAULT_CONFIG = {
   employmentRateTarget: 0.76,
   employmentTransitionYears: 12,
   // §5.3 (v1.3): employer contribution-rate cut, activated at t=taxCutStartT (year 2029).
-  // Without tauK compensation any positive deltaTauxPatronal causes catastrophic debt growth
-  // (0.5% cut alone → peak debt 55 k Md€). Safe range: 0–1% with tauK ≈ 1.5–5×delta.
-  // Empirical optimum at delta=0.5%: tauK=2.5% → total interest 3508 Md€ (−80% vs baseline),
-  // terminal debt 17 Md€, initial relief ≈7 Md€/yr (2029), eventual relief ≈630 Md€/yr (t=69).
+  // deltaTauxPatronal: one-time step cut at taxCutStartT (absolute rate, e.g. 0.005 = 0.5 pp).
+  // deltaTauxPatronalPA: additional annual increment applied each subsequent year
+  //   (e.g. 0.005 = tau_e falls by another 0.5 pp every year after the initial step).
+  //   With deltaTauxPatronalPA=0.005 tau_e reaches 0 after ~33 years (full employer relief by 2060).
+  // Without tauK compensation any positive cut causes catastrophic debt growth.
+  // Empirical optimum at step=0.5%, PA=0%: tauK=2.5% → total interest 3508 Md€ (−80%),
+  //   terminal debt 17 Md€, initial relief ≈7 Md€/yr, eventual relief ≈630 Md€/yr (t=69).
   deltaTauxPatronal: 0.005,
+  deltaTauxPatronalPA: 0,
   // §5.3 (v1.3): year offset at which deltaTauxPatronal activates (default t=2 → 2029).
   taxCutStartT: 2,
   // §3.3 retirement age
@@ -462,9 +466,13 @@ export function runSimulation(userConfig = {}) {
     const empFactor = empRateNow / cfg.employmentRate0;                         // (8b)
     const W_t = cfg.W0 * Omega_t * empFactor * activePop_t;                     // (9)
     const C_s_t = W_t * cfg.tau_s;                                              // (10)
-    // v1.3: deltaTauxPatronal activates at t >= taxCutStartT (default t=2 / year 2029).
-    const tau_e_eff = t >= (cfg.taxCutStartT ?? 2)
-      ? Math.max(0, cfg.tau_e - cfg.deltaTauxPatronal)
+    // v1.3: deltaTauxPatronal (step) + deltaTauxPatronalPA × years-since-start (annual glide).
+    // Total cut is capped at tau_e (employer rate cannot go negative).
+    const taxCutYears = t >= (cfg.taxCutStartT ?? 2) ? (t - (cfg.taxCutStartT ?? 2) + 1) : 0;
+    const totalCut_t = Math.min(cfg.tau_e, (cfg.deltaTauxPatronal ?? 0)
+      + (cfg.deltaTauxPatronalPA ?? 0) * taxCutYears);
+    const tau_e_eff = taxCutYears > 0
+      ? Math.max(0, cfg.tau_e - totalCut_t)
       : cfg.tau_e;                                                              // §5.3 (v1.3)
     const C_e_t = W_t * tau_e_eff;                                              // (11)
 
@@ -607,8 +615,7 @@ export function runSimulation(userConfig = {}) {
     // Initial cut: annual saving from the fixed year-2 rate reduction.
     // Eventual cut: freed employer legacy obligation flowing to capi — the
     //   amount that could alternatively be returned as ongoing tax relief.
-    const employerCutInitial_t = t >= (cfg.taxCutStartT ?? 2)
-      ? W_t * (cfg.deltaTauxPatronal ?? 0) : 0;
+    const employerCutInitial_t = W_t * totalCut_t;  // annual employer savings (current year)
     const employerCutEventual_t = emplrToCap_t;
 
     // ---------- §5.10 Borrow / repay ----------
