@@ -588,22 +588,6 @@ export default function App() {
               {kpis.firstShortfallYear ? `Dès ${kpis.firstShortfallYear}` : 'Pot suffisant sur tout l\'horizon'}
             </div>
           </div>
-          {expertMode && (
-            <div className="kpi-card">
-              <h3>Baisse des charges initiale</h3>
-              <div className={`kpi-value ${kpis.employerTaxCutInitial > 0 ? 'kpi-ok' : 'kpi-warn'}`}>
-                {fmtMd(kpis.employerTaxCutInitial)} €/an</div>
-              <div className="kpi-sub">Allègement patronal dès 2029 (Δτ_e × W₂)</div>
-            </div>
-          )}
-          {expertMode && (
-            <div className="kpi-card">
-              <h3>Baisse des charges éventuelle</h3>
-              <div className={`kpi-value ${kpis.employerTaxCutEventual > 0 ? 'kpi-ok' : 'kpi-warn'}`}>
-                {fmtMd(kpis.employerTaxCutEventual)} €/an</div>
-              <div className="kpi-sub">Cotisations legacy libérées (fin d'horizon, t=69)</div>
-            </div>
-          )}
         </div>
         </CollapsibleSection>
       </section>
