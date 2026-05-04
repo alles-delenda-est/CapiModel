@@ -121,7 +121,8 @@ export const DEFAULT_CONFIG = {
   // Without tauK compensation any positive cut causes catastrophic debt growth.
   // Empirical optimum at step=0.5%, PA=0%: tauK=2.5% → total interest 3508 Md€ (−80%),
   //   terminal debt 17 Md€, initial relief ≈7 Md€/yr, eventual relief ≈630 Md€/yr (t=69).
-  deltaTauxPatronal: 0.005,
+  // Defaults 0: viable range is narrow; exposed only in expert Tier B (see App.jsx).
+  deltaTauxPatronal: 0,
   deltaTauxPatronalPA: 0,
   // §5.3 (v1.3): year offset at which deltaTauxPatronal activates (default t=2 → 2029).
   taxCutStartT: 2,
@@ -156,10 +157,9 @@ export const DEFAULT_CONFIG = {
   // §5.10.1 (v1.2): annual levy rate on end-of-year K_t stock → transition-debt
   // repayment. Only fires while D_t > 0; capped by K_t solvency floor.
   // At deltaTauxPatronal=0%: optimum tauK=3.0% (total interest −88%, terminal debt 12 Md€).
-  // At deltaTauxPatronal=0.5% (v1.3 default): optimum tauK=2.5% (total interest −80%,
-  //   terminal debt 17 Md€). Increasing tauK beyond 2.5% with delta=0.5% depletes K_t and
-  //   raises terminal debt instead of lowering it. See v1.2/v1.3 spec §5.10.1.
-  tauK: 0.025,
+  // At deltaTauxPatronal=0.5%: optimum tauK=2.5% (total interest −80%, terminal debt 17 Md€).
+  // Default 0: expert-only parameter (see App.jsx Tier B). Set to 0.03 to activate.
+  tauK: 0,
   lambda: 0.30,
   Tlambda: 15,
   // §3.6 v1.0a: long-run share of aggregate K_t notionally owned by current

@@ -348,9 +348,6 @@ export default function App() {
                 <EnhancedSlider id="phiF" label="Plancher employeur φ_f" value={p.phiF}
                   onChange={v => setParam('phiF', v)} min={0} max={0.5} step={0.025} unit="" decimals={3} tip={TIPS.phiF}
                   defaultValue={DEFAULT_CONFIG.phiF} />
-                <EnhancedSlider id="deltaTauxPatronal" label="Baisse cot. patronale" value={p.deltaTauxPatronal}
-                  onChange={v => setParam('deltaTauxPatronal', v)} min={0} max={0.05} step={0.005} unit="" decimals={3} tip={TIPS.deltaTauxPatronal}
-                  defaultValue={DEFAULT_CONFIG.deltaTauxPatronal} />
               </CollapsibleSection>
 
               <CollapsibleSection title="HLM" level="critical" defaultOpen={true}>
@@ -518,6 +515,22 @@ export default function App() {
                 </CollapsibleSection>
               )}
 
+              {expertMode && (
+                <CollapsibleSection title="Tier B — Baisse des charges patronales (v1.3)" level="advanced">
+                  <div className="input-help" style={{ color: 'var(--color-warning, #b45309)', marginBottom: 8 }}>
+                    ⚠️ Paramètre v1.3 expérimental. Plage viable&nbsp;: Δτ_e ≤&nbsp;0,5&nbsp;% (step) avec
+                    τ_K ≈&nbsp;2,5&nbsp;%. Tout incrément annuel (PA&nbsp;&gt;&nbsp;0) est catastrophique.
+                    Allègement initial ≈&nbsp;7&nbsp;Md€/an&nbsp;; éventuel ≈&nbsp;630&nbsp;Md€/an (t=69).
+                  </div>
+                  <EnhancedSlider id="deltaTauxPatronal" label="Baisse cot. patronale Δτ_e" value={p.deltaTauxPatronal}
+                    onChange={v => setParam('deltaTauxPatronal', v)} min={0} max={0.05} step={0.005} unit="" decimals={3} tip={TIPS.deltaTauxPatronal}
+                    defaultValue={DEFAULT_CONFIG.deltaTauxPatronal} />
+                  <EnhancedSlider id="deltaTauxPatronalPA" label="Incrément annuel Δτ_e/an" value={p.deltaTauxPatronalPA ?? 0}
+                    onChange={v => setParam('deltaTauxPatronalPA', v)} min={0} max={0.01} step={0.001} unit="" decimals={3}
+                    defaultValue={0} />
+                </CollapsibleSection>
+              )}
+
             </div>
           </>
         )}
@@ -575,18 +588,22 @@ export default function App() {
               {kpis.firstShortfallYear ? `Dès ${kpis.firstShortfallYear}` : 'Pot suffisant sur tout l\'horizon'}
             </div>
           </div>
-          <div className="kpi-card">
-            <h3>Baisse des charges initiale</h3>
-            <div className={`kpi-value ${kpis.employerTaxCutInitial > 0 ? 'kpi-ok' : 'kpi-warn'}`}>
-              {fmtMd(kpis.employerTaxCutInitial)} €/an</div>
-            <div className="kpi-sub">Allègement patronal dès 2029 (Δτ_e × W₂)</div>
-          </div>
-          <div className="kpi-card">
-            <h3>Baisse des charges éventuelle</h3>
-            <div className={`kpi-value ${kpis.employerTaxCutEventual > 0 ? 'kpi-ok' : 'kpi-warn'}`}>
-              {fmtMd(kpis.employerTaxCutEventual)} €/an</div>
-            <div className="kpi-sub">Cotisations legacy libérées (fin d'horizon, t=69)</div>
-          </div>
+          {expertMode && (
+            <div className="kpi-card">
+              <h3>Baisse des charges initiale</h3>
+              <div className={`kpi-value ${kpis.employerTaxCutInitial > 0 ? 'kpi-ok' : 'kpi-warn'}`}>
+                {fmtMd(kpis.employerTaxCutInitial)} €/an</div>
+              <div className="kpi-sub">Allègement patronal dès 2029 (Δτ_e × W₂)</div>
+            </div>
+          )}
+          {expertMode && (
+            <div className="kpi-card">
+              <h3>Baisse des charges éventuelle</h3>
+              <div className={`kpi-value ${kpis.employerTaxCutEventual > 0 ? 'kpi-ok' : 'kpi-warn'}`}>
+                {fmtMd(kpis.employerTaxCutEventual)} €/an</div>
+              <div className="kpi-sub">Cotisations legacy libérées (fin d'horizon, t=69)</div>
+            </div>
+          )}
         </div>
         </CollapsibleSection>
       </section>
