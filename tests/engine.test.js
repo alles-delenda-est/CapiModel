@@ -530,36 +530,42 @@ function assertInvariants(rows, cfg, label = '') {
   }
 }
 
-// §5.10 Legacy Fund dynamics (eq 36 + eq 43):
-// F_t only grows in surplus branch. Default preset runs deficit every year
-// → F_t is constant at F0, so fundReturn_t is constant. This is per-spec
-// (permanent endowment model); these tests document the known behavior and
-// will alert if the spec changes.
+// §5.10 Legacy Fund dynamics (eq 36 / eq 43, v1.2 real-value endowment):
+// v1.2 fix: fundReturn uses REAL rate (r_f_portfolio), inflation component πF_t
+// is retained in the fund. F_t compounds at π in deficit years (real value
+// preserved). In the default preset (always-deficit), F_t ≈ F0 × (1+π)^t and
+// fundReturn_t ≈ F0 × (1+π)^t × r_f_portfolio (growing each year).
 describe('§5.10 Legacy Fund endowment behavior (default preset)', () => {
   const rows = runSimulation();
-  it('F_t = F0 for every year (no surplus → eq 43 never fires)', () => {
-    const F0 = DEFAULT_CONFIG.F0;
+  it('F_t ≥ F0 every year and grows at inflation rate in deficit-only default preset', () => {
+    const { F0, pi } = DEFAULT_CONFIG;
     for (let t = 0; t < rows.length; t++) {
-      expect(rows[t].F_t, `F_t at t=${t}`).toBeCloseTo(F0, 9);
+      // F_t should compound at pi each year (deficit branch: F_t *= (1+pi))
+      const expected = F0 * Math.pow(1 + pi, t + 1); // compounded by end of year t
+      expect(rows[t].F_t, `F_t at t=${t}`).toBeGreaterThanOrEqual(F0 - 1e-9);
+      expect(rows[t].F_t, `F_t at t=${t}`).toBeCloseTo(expected, 6);
     }
   });
-  it('fundReturn_t is constant across all years (= F0 × fisher(r_f_portfolio, pi))', () => {
-    const expected = DEFAULT_CONFIG.F0 * fisher(DEFAULT_CONFIG.r_f_portfolio, DEFAULT_CONFIG.pi);
+  it('fundReturn_t grows each year (real rate × growing F_t)', () => {
+    const { F0, pi, r_f_portfolio } = DEFAULT_CONFIG;
     for (let t = 0; t < rows.length; t++) {
+      // fundReturn_t = F_t × r_f_portfolio; F_t = F0 × (1+pi)^(t+1) at end of year t
+      // but fundReturn is computed on F_t at START of year t = F0 × (1+pi)^t
+      const F_start = F0 * Math.pow(1 + pi, t);
+      const expected = F_start * r_f_portfolio;
       expect(rows[t].fundReturn_t, `fundReturn_t at t=${t}`).toBeCloseTo(expected, 6);
     }
+    // Confirm growth: year-69 return > year-0 return
+    expect(rows[69].fundReturn_t).toBeGreaterThan(rows[0].fundReturn_t);
   });
   it('r_d_t rises above r_d_base before peak-debt year (debtRatio crosses threshold1=150%)', () => {
     // Default: existingDebt/baseGDP = 115% at t=0 (below threshold1).
     // As D_t accumulates, debtRatio eventually crosses 150% and the premium activates.
-    // This test confirms the premium mechanism is live in the default run.
     const r_d_base = DEFAULT_CONFIG.r_d_base;
     const someYearExceedsBase = rows.some(r => r.r_d_t > r_d_base + 1e-9);
     expect(someYearExceedsBase).toBe(true);
   });
-  it('netFlow_t ≤ 0 every year in default preset (surplus branch adds zero at most)', () => {
-    // Around t=49-51, netFlow_t ≈ 0 (± float noise ~1e-13). The F_t test above
-    // confirms no meaningful fund growth occurs regardless.
+  it('netFlow_t ≤ 0 every year in default preset', () => {
     const EPS = 1e-10;
     for (let t = 0; t < rows.length; t++) {
       expect(rows[t].netFlow_t, `netFlow_t at t=${t}`).toBeLessThanOrEqual(EPS);

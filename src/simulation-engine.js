@@ -21,6 +21,14 @@
 //     R^capi_t declines (mortality > new entries). See §5.6.1.
 //
 // v1.2 deltas vs v1.1 (branch v1.2/capi-debt-optimisation):
+//  7. fundReturn fix (eq 36 / eq 26): F_t now compounds at π in deficit years
+//     (real value preserved) instead of staying flat. fundReturn_t uses the
+//     REAL rate r_f_portfolio (not the Fisher nominal r_f_portfolio_n), so the
+//     income paid to operations = F_t × r_f_portfolio and the inflation component
+//     πF_t is retained in the fund. In surplus years F_t compounds at π before
+//     the waterfall surplus is added.  Over 70 years this causes F_t to grow from
+//     F0=340 to ≈1350 Md€ and fundReturn_t to grow from ≈15 to ≈61 Md€/yr.
+//     r_f_portfolio_n is retained in the row schema as a diagnostic field.
 //  6. tauK (§5.10.1): annual levy on K_t stock → transition-debt repayment.
 //     Fires after §5.13 (post-payout K_t). Guarded by K_t solvency floor
 //     (K_t may not fall below capiPayoutFloor_t / annuityRate_t). Only active
@@ -551,7 +559,9 @@ export function runSimulation(userConfig = {}) {
     const debtInterest_t = D_t * r_d_t;                                         // (35)
 
     // ---------- §5.9 Cash flow & employer waterfall ----------
-    const fundReturn_t = F_t * r_f_portfolio_n;                                 // (36)
+    // v1.2 fix: use REAL rate so the inflation component πF_t stays in the fund.
+    // r_f_portfolio_n retained in row output as a diagnostic field only.
+    const fundReturn_t = F_t * cfg.r_f_portfolio;                               // (36) v1.2
     const abatement_t  = cfg.A0 * Omega_t * empFactor * activePop_t;            // (37)
     // v1.0a eq (38): S0_csg_revenue_t added as a tax-side revenue stream that
     // applies to all retiree pension income (legacy + capi). Distinct from the
@@ -582,10 +592,11 @@ export function runSimulation(userConfig = {}) {
     if (netFlow_t < 0) {
       borrowed_t = -netFlow_t;
       D_t = D_t + borrowed_t;                                                   // (42)
+      F_t = F_t * (1 + cfg.pi);       // v1.2: compound at π (was: unchanged eq 26)
     } else {
       const repaid_t = Math.min(cfg.alpha * netFlow_t, D_t);
       D_t = D_t - repaid_t;
-      F_t = F_t + (netFlow_t - repaid_t);                                       // (43)
+      F_t = F_t * (1 + cfg.pi) + (netFlow_t - repaid_t);                       // (43) v1.2
     }
 
     // ---------- §5.11 Transition levy (smoothed) ----------
