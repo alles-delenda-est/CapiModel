@@ -160,6 +160,14 @@ export const DEFAULT_CONFIG = {
   // At deltaTauxPatronal=0.5%: optimum tauK=2.5% (total interest −80%, terminal debt 17 Md€).
   // Default 0: expert-only parameter (see App.jsx Tier B). Set to 0.03 to activate.
   tauK: 0,
+  // §5.10.2 (v1.3): surplus-growth levy — when K_t grows by more than thetaBuffer × K_t
+  // in a given year, the excess growth is routed to transition-debt repayment.
+  // "Growth" = net change in K_t after returns, contributions, payouts, and tauK levy.
+  // Unlike tauK (stock levy), this cannot be blocked by the solvency floor because it
+  // only fires when K_t is already growing — it never draws down principal.
+  // At thetaBuffer=0.01 (1 %/yr): debt-free by ~2086 under default demographics.
+  // At thetaBuffer=0 the full net growth goes to debt (aggressive); 0.02 is conservative.
+  thetaBuffer: 0.01,
   lambda: 0.30,
   Tlambda: 15,
   // §3.6 v1.0a: long-run share of aggregate K_t notionally owned by current
@@ -448,6 +456,8 @@ export function runSimulation(userConfig = {}) {
   const T_capi_start = T_capi_start_of(cfg);                   // §5.4 eq (14)
   const capiRampSpan = capiRampSpan_of(cfg);                   // §5.6
   for (let t = 0; t < cfg.N; t++) {
+    const K_start_t = K_t;                  // snapshot before any this-year mutations
+
     // ---------- §5.1 Growth factors ----------
     const Omega_t    = Math.pow(1 + w_n, t);                                    // (4)
     const I_factor_t = Math.pow(1 + iota, t);                                   // (5)
@@ -714,6 +724,25 @@ export function runSimulation(userConfig = {}) {
     K_t  = Math.max(0, K_t  - tauKLevy_t);
     D_t  = D_t  - tauKLevy_t;
 
+    // ---------- §5.10.2 (v1.3): surplus-growth levy ----------
+    // Routes net K_t growth above the prudential buffer rate (thetaBuffer × K_start)
+    // to transition-debt repayment.  A D_t/GDP phase-in gate prevents early depletion:
+    //   • below 10 % D/GDP the levy is zero (capi pot is still in build-up phase)
+    //   • between 10 % and 50 % the levy scales linearly from 0 → 1×
+    //   • above 50 % D/GDP the levy is fully active
+    // This means the levy fires once the debt burden is meaningful, then fades
+    // naturally as D_t is repaid — acting as a self-extinguishing single lever.
+    // thetaBuffer is the annual "keep" rate: K_t always grows by at least
+    // thetaBuffer × K_start after the levy, so principal is never drawn down.
+    const K_growth_t           = K_t - K_start_t;
+    const surplusAboveBuffer_t = Math.max(0, K_growth_t - (cfg.thetaBuffer ?? 0.01) * K_start_t);
+    const surplusPhaseIn_t     = GDP_t > 0 ? smoothstep(D_t / GDP_t, 0.10, 0.50) : 0;
+    const surplusLevy_t        = D_t > 0
+      ? Math.min(surplusPhaseIn_t * surplusAboveBuffer_t, D_t)
+      : 0;
+    K_t = Math.max(0, K_t - surplusLevy_t);
+    D_t = Math.max(0, D_t - surplusLevy_t);
+
     // ---------- §5.14 Diagnostics ----------
     // v1.0a eq (58): spread measures Legacy-Fund yield vs real sovereign cost.
     const spread_t = cfg.r_f_portfolio - (r_d_t - cfg.pi);                      // (58)
@@ -778,6 +807,8 @@ export function runSimulation(userConfig = {}) {
       shortfall_t, capiPayout_t,
       // §5.10.1 (v1.2) tauK debt-reduction channel
       K_floor_t, tauKLevy_t,
+      // §5.10.2 (v1.3) surplus-growth levy
+      K_start_t, K_growth_t, surplusAboveBuffer_t, surplusPhaseIn_t, surplusLevy_t,
       // §2 stocks (post-update)
       F_t, D_t, K_t, CI_t, CK_t,
       // §5.14 diagnostics
