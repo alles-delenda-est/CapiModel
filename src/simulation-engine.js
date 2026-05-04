@@ -30,6 +30,15 @@
 //     F0=340 to ≈1350 Md€ and fundReturn_t to grow from ≈15 to ≈61 Md€/yr.
 //     r_f_portfolio_n is retained in the row schema as a diagnostic field.
 //  6. tauK (§5.10.1): annual levy on K_t stock → transition-debt repayment.
+//
+// v1.3 deltas vs v1.2 (branch feat/employer-tax-cut):
+//  8. Employer tax cut phasing (§5.3): deltaTauxPatronal now activates at
+//     t = taxCutStartT (default: 2, year 2029) instead of t = 0. tau_e_eff
+//     is time-varying in the loop. New diagnostic fields:
+//       employerCutInitial_t = W_t × deltaTauxPatronal (when t ≥ taxCutStartT)
+//       employerCutEventual_t = emplrToCap_t (freed employer legacy obligation)
+//     Eventual cut quantifies employer contributions freed from legacy as the
+//     transition matures — the annual amount that could be returned as tax relief.
 //     Fires after §5.13 (post-payout K_t). Guarded by K_t solvency floor
 //     (K_t may not fall below capiPayoutFloor_t / annuityRate_t). Only active
 //     while D_t > 0; self-limits once debt is repaid.
@@ -104,7 +113,14 @@ export const DEFAULT_CONFIG = {
   employmentRate0: 0.69,
   employmentRateTarget: 0.76,
   employmentTransitionYears: 12,
-  deltaTauxPatronal: 0,
+  // §5.3 (v1.3): employer contribution-rate cut, activated at t=taxCutStartT (year 2029).
+  // Without tauK compensation any positive deltaTauxPatronal causes catastrophic debt growth
+  // (0.5% cut alone → peak debt 55 k Md€). Safe range: 0–1% with tauK ≈ 1.5–5×delta.
+  // Empirical optimum at delta=0.5%: tauK=2.5% → total interest 3508 Md€ (−80% vs baseline),
+  // terminal debt 17 Md€, initial relief ≈7 Md€/yr (2029), eventual relief ≈630 Md€/yr (t=69).
+  deltaTauxPatronal: 0.005,
+  // §5.3 (v1.3): year offset at which deltaTauxPatronal activates (default t=2 → 2029).
+  taxCutStartT: 2,
   // §3.3 retirement age
   retirementAgeBase: 64,
   retirementAgeMode: 'fixed',
@@ -134,11 +150,12 @@ export const DEFAULT_CONFIG = {
   cutoffAge: 50,
   alpha: 1.0,
   // §5.10.1 (v1.2): annual levy rate on end-of-year K_t stock → transition-debt
-  // repayment. Only fires while D_t > 0; capped by K_t solvency floor. Default 0.
-  // Empirical optimum ≈ 3.0% (peak debt −75%, total interest −88%, terminal debt ≈ 12 Md€
-  // at t=69). Safe ceiling < 3.5%; at 3.5% K_t depletes to 0 by t=69, causing a late
-  // debt spike that erases the gain. See v1.2 spec §5.10.1.
-  tauK: 0,
+  // repayment. Only fires while D_t > 0; capped by K_t solvency floor.
+  // At deltaTauxPatronal=0%: optimum tauK=3.0% (total interest −88%, terminal debt 12 Md€).
+  // At deltaTauxPatronal=0.5% (v1.3 default): optimum tauK=2.5% (total interest −80%,
+  //   terminal debt 17 Md€). Increasing tauK beyond 2.5% with delta=0.5% depletes K_t and
+  //   raises terminal debt instead of lowering it. See v1.2/v1.3 spec §5.10.1.
+  tauK: 0.025,
   lambda: 0.30,
   Tlambda: 15,
   // §3.6 v1.0a: long-run share of aggregate K_t notionally owned by current
@@ -426,8 +443,6 @@ export function runSimulation(userConfig = {}) {
   const delta_eff = cfg.delta * clamp(2 - cm, 0.3, 1.7);       // §5.1 eq (6b)
   const T_capi_start = T_capi_start_of(cfg);                   // §5.4 eq (14)
   const capiRampSpan = capiRampSpan_of(cfg);                   // §5.6
-  const tau_e_eff = Math.max(0, cfg.tau_e - cfg.deltaTauxPatronal); // §5.3
-
   for (let t = 0; t < cfg.N; t++) {
     // ---------- §5.1 Growth factors ----------
     const Omega_t    = Math.pow(1 + w_n, t);                                    // (4)
@@ -447,6 +462,10 @@ export function runSimulation(userConfig = {}) {
     const empFactor = empRateNow / cfg.employmentRate0;                         // (8b)
     const W_t = cfg.W0 * Omega_t * empFactor * activePop_t;                     // (9)
     const C_s_t = W_t * cfg.tau_s;                                              // (10)
+    // v1.3: deltaTauxPatronal activates at t >= taxCutStartT (default t=2 / year 2029).
+    const tau_e_eff = t >= (cfg.taxCutStartT ?? 2)
+      ? Math.max(0, cfg.tau_e - cfg.deltaTauxPatronal)
+      : cfg.tau_e;                                                              // §5.3 (v1.3)
     const C_e_t = W_t * tau_e_eff;                                              // (11)
 
     // ---------- §5.4 Retirement age & cohort routing ----------
@@ -584,6 +603,13 @@ export function runSimulation(userConfig = {}) {
       emplrToLeg_t = emplrAvail_t; emplrToCap_t = C_e_t * cfg.phiF;
     }
     const netFlow_t = nonEmplrNet_t + emplrToLeg_t - totalLegacyOutflow_t;      // (41) v1.1
+    // v1.3 diagnostics: employer tax-cut channels.
+    // Initial cut: annual saving from the fixed year-2 rate reduction.
+    // Eventual cut: freed employer legacy obligation flowing to capi — the
+    //   amount that could alternatively be returned as ongoing tax relief.
+    const employerCutInitial_t = t >= (cfg.taxCutStartT ?? 2)
+      ? W_t * (cfg.deltaTauxPatronal ?? 0) : 0;
+    const employerCutEventual_t = emplrToCap_t;
 
     // ---------- §5.10 Borrow / repay ----------
     // SPEC AMBIGUITY 5: borrowed_t initialised to deficit-branch borrowing,
@@ -729,6 +755,8 @@ export function runSimulation(userConfig = {}) {
       // §5.9 waterfall
       fundReturn_t, abatement_t, nonEmplrNet_t, deficit_t, emplrAvail_t,
       emplrToLeg_t, emplrToCap_t, netFlow_t,
+      // v1.3 employer tax-cut diagnostics
+      employerCutInitial_t, employerCutEventual_t,
       // §5.10 (post-update) borrow tracker
       borrowed_t,
       // §5.11 levy

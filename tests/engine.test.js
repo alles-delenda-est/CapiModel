@@ -706,6 +706,10 @@ function sampleConfig(rng) {
     // v1.2: tauK sampled below the safe ceiling (0 to 0.03) to exercise the
     // solvency floor and verify §6 invariants (K_t ≥ 0, D_t ≥ 0) with levy active.
     tauK: u(0, 0.03),
+    // v1.3: deltaTauxPatronal sampled up to 1% (safe range for typical tauK levels).
+    // taxCutStartT fixed at 2 (tested via DEFAULT_CONFIG; varied range would need
+    // wider tauK compensation to keep invariants, tested separately).
+    deltaTauxPatronal: u(0, 0.01),
   };
 }
 

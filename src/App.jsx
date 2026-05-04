@@ -43,7 +43,7 @@ const TIPS = {
   tauK: "⚠️ Paramètre expert v1.2 — Prélèvement annuel sur le stock K_t du fonds capi → remboursement dette de transition. Fires uniquement si D_t > 0 ; s'arrête automatiquement une fois la dette remboursée. Un plancher de solvabilité empêche K_t de tomber sous le niveau nécessaire pour servir la rente garantie. Optimum empirique ≈ 3,0 % : peak debt −75 %, intérêts totaux −88 %, dette terminale ≈ 12 Md€ à t=69. Plafond de sécurité < 3,5 % : à 3,5 % K_t tombe à 0 en fin d'horizon, déclenchant la garantie d'État et un pic terminal de dette. Interaction λ : λ réduit les flux entrant dans K_t (eq 45) et tauK réduit le stock de K_t (eq 57+) — les deux sont additifs ; réduire λ si tauK > 0.",
   Tlambda: "Année à partir de laquelle le prélèvement de transition s'active (smoothing ±1 an).",
   phiF: "Plancher employeur vers la capitalisation (0 = waterfall complet vers legacy d'abord).",
-  deltaTauxPatronal: "Baisse optionnelle du taux de cotisation employeur.",
+  deltaTauxPatronal: "Baisse du taux de cotisation employeur, activée en année 2 de la réforme (2029). Sans compensation tauK, tout delta > 0 provoque une spirale de dette catastrophique (ex. 0,5 % seul → pic 55 000 Md€). Plage viable : 0–1 % avec tauK ≈ 1,5–5×delta. Optimum v1.3 à delta=0,5 % : tauK=2,5 % → intérêts totaux −80 %, dette terminale 17 Md€, allègement initial ≈7 Md€/an (2029), allègement éventuel ≈630 Md€/an (fin d'horizon).",
   T_hlm: "Durée du programme de cession HLM (5 ans de taper en fin).",
   capiAssetShareSteadyState: "Part actuarielle de long terme du pot capi détenue par les retraités (vs travailleurs en accumulation). Eq (53a) v1.0a remplace le partage par tête (qui exproprait les travailleurs).",
   equinoxePhasing: "Profil temporel de mise en œuvre Équinoxe : immediate, phased-5y/-10y, partial-50/-75.",
@@ -574,6 +574,18 @@ export default function App() {
             <div className="kpi-sub">
               {kpis.firstShortfallYear ? `Dès ${kpis.firstShortfallYear}` : 'Pot suffisant sur tout l\'horizon'}
             </div>
+          </div>
+          <div className="kpi-card">
+            <h3>Baisse des charges initiale</h3>
+            <div className={`kpi-value ${kpis.employerTaxCutInitial > 0 ? 'kpi-ok' : 'kpi-warn'}`}>
+              {fmtMd(kpis.employerTaxCutInitial)} €/an</div>
+            <div className="kpi-sub">Allègement patronal dès 2029 (Δτ_e × W₂)</div>
+          </div>
+          <div className="kpi-card">
+            <h3>Baisse des charges éventuelle</h3>
+            <div className={`kpi-value ${kpis.employerTaxCutEventual > 0 ? 'kpi-ok' : 'kpi-warn'}`}>
+              {fmtMd(kpis.employerTaxCutEventual)} €/an</div>
+            <div className="kpi-sub">Cotisations legacy libérées (fin d'horizon, t=69)</div>
           </div>
         </div>
         </CollapsibleSection>
