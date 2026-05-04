@@ -43,7 +43,8 @@ const TIPS = {
   tauK: "⚠️ Paramètre expert v1.2 — Prélèvement annuel sur le stock K_t du fonds capi → remboursement dette de transition. Fires uniquement si D_t > 0 ; s'arrête automatiquement une fois la dette remboursée. Un plancher de solvabilité empêche K_t de tomber sous le niveau nécessaire pour servir la rente garantie. Optimum empirique ≈ 3,0 % : peak debt −75 %, intérêts totaux −88 %, dette terminale ≈ 12 Md€ à t=69. Plafond de sécurité < 3,5 % : à 3,5 % K_t tombe à 0 en fin d'horizon, déclenchant la garantie d'État et un pic terminal de dette. Interaction λ : λ réduit les flux entrant dans K_t (eq 45) et tauK réduit le stock de K_t (eq 57+) — les deux sont additifs ; réduire λ si tauK > 0.",
   Tlambda: "Année à partir de laquelle le prélèvement de transition s'active (smoothing ±1 an).",
   phiF: "Plancher employeur vers la capitalisation (0 = waterfall complet vers legacy d'abord).",
-  deltaTauxPatronal: "Baisse optionnelle du taux de cotisation employeur.",
+  thetaBuffer: "Réserve de croissance annuelle du fonds capi : la fraction de la croissance de K_t au-delà de θ × K_t est automatiquement reversée au remboursement de la dette de transition. Agit uniquement quand K_t croît (ne touche jamais au principal). Porte D_t/PIB comme gate : inactive sous 10 % D/PIB, pleinement active au-delà de 50 %. À θ = 1 % (défaut) : pic dette −81 % (1 713 vs 9 036 Md€), quasi-extinction de la dette en 2072. Se désactive naturellement à zéro quand D_t = 0.",
+  deltaTauxPatronal: "Baisse du taux de cotisation employeur, activée en année 2 de la réforme (2029). Sans compensation tauK, tout delta > 0 provoque une spirale de dette catastrophique (ex. 0,5 % seul → pic 55 000 Md€). Plage viable : 0–1 % avec tauK ≈ 1,5–5×delta. Optimum v1.3 à delta=0,5 % : tauK=2,5 % → intérêts totaux −80 %, dette terminale 17 Md€, allègement initial ≈7 Md€/an (2029), allègement éventuel ≈630 Md€/an (fin d'horizon).",
   T_hlm: "Durée du programme de cession HLM (5 ans de taper en fin).",
   capiAssetShareSteadyState: "Part actuarielle de long terme du pot capi détenue par les retraités (vs travailleurs en accumulation). Eq (53a) v1.0a remplace le partage par tête (qui exproprait les travailleurs).",
   equinoxePhasing: "Profil temporel de mise en œuvre Équinoxe : immediate, phased-5y/-10y, partial-50/-75.",
@@ -348,9 +349,9 @@ export default function App() {
                 <EnhancedSlider id="phiF" label="Plancher employeur φ_f" value={p.phiF}
                   onChange={v => setParam('phiF', v)} min={0} max={0.5} step={0.025} unit="" decimals={3} tip={TIPS.phiF}
                   defaultValue={DEFAULT_CONFIG.phiF} />
-                <EnhancedSlider id="deltaTauxPatronal" label="Baisse cot. patronale" value={p.deltaTauxPatronal}
-                  onChange={v => setParam('deltaTauxPatronal', v)} min={0} max={0.05} step={0.005} unit="" decimals={3} tip={TIPS.deltaTauxPatronal}
-                  defaultValue={DEFAULT_CONFIG.deltaTauxPatronal} />
+                <EnhancedSlider id="thetaBuffer" label="Réserve croissance fonds θ" value={p.thetaBuffer}
+                  onChange={v => setParam('thetaBuffer', v)} min={0} max={0.05} step={0.005} unit="" decimals={3} tip={TIPS.thetaBuffer}
+                  defaultValue={DEFAULT_CONFIG.thetaBuffer} />
               </CollapsibleSection>
 
               <CollapsibleSection title="HLM" level="critical" defaultOpen={true}>
@@ -515,6 +516,22 @@ export default function App() {
                   <EnhancedSlider id="tauK" label="Prélèvement fonds capi τ_K" value={p.tauK}
                     onChange={v => setParam('tauK', v)} min={0} max={0.05} step={0.0025} unit="" decimals={4}
                     defaultValue={DEFAULT_CONFIG.tauK} tip={TIPS.tauK} warningAbove={0.035} />
+                </CollapsibleSection>
+              )}
+
+              {expertMode && (
+                <CollapsibleSection title="Tier B — Baisse des charges patronales (v1.3)" level="advanced">
+                  <div className="input-help" style={{ color: 'var(--color-warning, #b45309)', marginBottom: 8 }}>
+                    ⚠️ Paramètre v1.3 expérimental. Plage viable&nbsp;: Δτ_e ≤&nbsp;0,5&nbsp;% (step) avec
+                    τ_K ≈&nbsp;2,5&nbsp;%. Tout incrément annuel (PA&nbsp;&gt;&nbsp;0) est catastrophique.
+                    Allègement initial ≈&nbsp;7&nbsp;Md€/an&nbsp;; éventuel ≈&nbsp;630&nbsp;Md€/an (t=69).
+                  </div>
+                  <EnhancedSlider id="deltaTauxPatronal" label="Baisse cot. patronale Δτ_e" value={p.deltaTauxPatronal}
+                    onChange={v => setParam('deltaTauxPatronal', v)} min={0} max={0.05} step={0.005} unit="" decimals={3} tip={TIPS.deltaTauxPatronal}
+                    defaultValue={DEFAULT_CONFIG.deltaTauxPatronal} />
+                  <EnhancedSlider id="deltaTauxPatronalPA" label="Incrément annuel Δτ_e/an" value={p.deltaTauxPatronalPA ?? 0}
+                    onChange={v => setParam('deltaTauxPatronalPA', v)} min={0} max={0.01} step={0.001} unit="" decimals={3}
+                    defaultValue={0} />
                 </CollapsibleSection>
               )}
 

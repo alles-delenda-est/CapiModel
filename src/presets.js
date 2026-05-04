@@ -179,11 +179,19 @@ export function extractKPIs(rows) {
   // S0 at t=0: aggregate Équinoxe effect (benefit-side reduction + tax-side
   // revenue), pre-phasing. Useful for KPI display continuity with v0.11.
   const S0 = (rows[0]?.S0_total ?? 0);
+  // v1.3 employer tax-cut KPIs.
+  // Initial cut: annual employer savings from the fixed year-2 rate reduction.
+  // Eventual cut: freed employer legacy obligation at end of horizon (t=69) —
+  //   the annual amount that could be returned as structural ongoing tax relief.
+  const employerCutInitialRow = rows.find(r => (r.employerCutInitial_t ?? 0) > 0);
+  const employerTaxCutInitial = employerCutInitialRow?.employerCutInitial_t ?? 0;
+  const employerTaxCutEventual = last.employerCutEventual_t ?? 0;
   return {
     peakDebt, peakDebtYear, debtFreeYear, totalInterest,
     finalCapi, finalCapiReal, netPosition, minSpread, S0,
     pvLegacyTotal: last.pvLegacyCum_t,
     pvCapiPayoutTotal: last.pvCapiPayoutCum_t,
     totalCapiShortfall, peakCapiShortfall, firstShortfallYear,
+    employerTaxCutInitial, employerTaxCutEventual,
   };
 }

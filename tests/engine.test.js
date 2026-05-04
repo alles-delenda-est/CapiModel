@@ -558,11 +558,13 @@ describe('§5.10 Legacy Fund endowment behavior (default preset)', () => {
     // Confirm growth: year-69 return > year-0 return
     expect(rows[69].fundReturn_t).toBeGreaterThan(rows[0].fundReturn_t);
   });
-  it('r_d_t rises above r_d_base before peak-debt year (debtRatio crosses threshold1=150%)', () => {
-    // Default: existingDebt/baseGDP = 115% at t=0 (below threshold1).
-    // As D_t accumulates, debtRatio eventually crosses 150% and the premium activates.
+  it('r_d_t rises above r_d_base when debt ratio crosses threshold1=150% (surplus levy disabled)', () => {
+    // With thetaBuffer=1 the surplus-growth levy is inactive (buffer keep-rate = 100% of
+    // K_t growth, so no surplus reaches the debt channel). Debt accumulates into the range
+    // where the endogenous risk premium fires (debtRatio > rpThreshold1 = 150%).
     const r_d_base = DEFAULT_CONFIG.r_d_base;
-    const someYearExceedsBase = rows.some(r => r.r_d_t > r_d_base + 1e-9);
+    const highDebtRows = runSimulation({ ...DEFAULT_CONFIG, thetaBuffer: 1 });
+    const someYearExceedsBase = highDebtRows.some(r => r.r_d_t > r_d_base + 1e-9);
     expect(someYearExceedsBase).toBe(true);
   });
   it('netFlow_t ≤ 0 every year in default preset', () => {
@@ -706,6 +708,10 @@ function sampleConfig(rng) {
     // v1.2: tauK sampled below the safe ceiling (0 to 0.03) to exercise the
     // solvency floor and verify §6 invariants (K_t ≥ 0, D_t ≥ 0) with levy active.
     tauK: u(0, 0.03),
+    // v1.3: deltaTauxPatronal sampled up to 1% (safe range for typical tauK levels).
+    // taxCutStartT fixed at 2 (tested via DEFAULT_CONFIG; varied range would need
+    // wider tauK compensation to keep invariants, tested separately).
+    deltaTauxPatronal: u(0, 0.01),
   };
 }
 

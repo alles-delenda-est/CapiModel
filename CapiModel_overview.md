@@ -85,6 +85,29 @@ React 19 + Vite 7 + Recharts. Single-page application, no backend. Auto-deployed
 
 **Resolved in v1.1:** *Per-cohort accrued PAYG rights are now tracked.* Workers transitioning to capi at Y0 retain proportional PAYG entitlements via `legacyShareOfCohort(B)` (eq 15a), aggregated as `transitionalPaygExp_t` (eq 25b) and folded into the §5.9 waterfall via revised eq 39'. The v1.0a binary cohort split that understated state-funded outflow by 50–150 Md€/yr at peak transition no longer applies. See spec §5.6.1 and CHANGELOG.
 
+## v1.2: τ_K — annual levy on the capitalisation stock
+
+v1.2 adds an optional annual levy `τ_K` (parameter `tauK`) applied to the end-of-year capitalisation stock `K_t`. The levy fires only while transition debt `D_t > 0` and is capped by a solvency floor (`K_floor_t`) to prevent K_t from falling below what is needed to service guaranteed annuities. Effect: accelerates debt repayment at the cost of a smaller capi pot.
+
+Empirical optimum (default regime, `deltaTauxPatronal = 0`): **τ_K ≈ 3.0 %** → peak debt −75 %, total interest −88 %, terminal debt ≈ 12 Md€. Safety ceiling: < 3.5 % — above that, K_t depletes to zero by t = 69, triggering the State guarantee and a terminal debt spike.
+
+Default: `tauK = 0`. Expert-only in the UI (Tier B section). Set to 0.03 to activate the optimum.
+
+## v1.3: Δτ_e — employer contribution-rate cut (baisse des charges patronales)
+
+v1.3 adds an optional reduction in the employer PAYG contribution rate `τ_e` (currently 16.5 %), activated at `taxCutStartT` years after Y0 (default: t = 2, year 2029). Two parameters:
+
+- **`deltaTauxPatronal`** — permanent step cut in `τ_e` at activation (e.g. 0.005 = 0.5 pp).
+- **`deltaTauxPatronalPA`** — additional annual increment thereafter (glide path, default 0).
+
+The engine tracks two KPI channels:
+- **`employerCutInitial_t`** = `W_t × totalCut_t` — annual employer payroll savings from the current cut.
+- **`employerCutEventual_t`** = `emplrToCap_t` — employer legacy obligations freed into the capi pot (structural eventual relief).
+
+**Feasibility constraint**: removing employer revenue when K_t is still small creates compounding debt faster than the levy on K_t can offset. Any annual increment (`deltaTauxPatronalPA > 0`) is catastrophic at all tauK levels. The maximum viable permanent step cut is **0.5 pp** with `tauK = 2.5 %` (joint optimum: total interest −80 %, terminal debt 17 Md€, initial relief ≈ 7 Md€/yr, eventual organic relief ≈ 630 Md€/yr at t = 69).
+
+**Defaults: both 0.** Viable range is narrow and the mechanic is pedagogically complex; exposed only in the expert Tier B UI. See `THEORY.md §employer-cut` for the infeasibility analysis.
+
 ## v1.2 wishlist (spec §10.13–§10.14)
 
 Currently hardcoded; v1.2 candidates for user-tunable exposure:
