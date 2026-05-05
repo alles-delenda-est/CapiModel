@@ -10,7 +10,6 @@
 //  2. HLM uniform geometric: ΔU_t = U0 × (1-ρ)^t × ρ for all t (eq 27).
 //  3. Capi pot owned by retirees by ASSET share, not headcount share (eq 53, 53a).
 //  4. Équinoxe split: benefit-side reductions vs tax-side CSG revenue (§5.5).
-//
 // v1.1 deltas vs v1.0a:
 //  5. Per-cohort PAYG accruals: transitional cohorts now collect prorated
 //     PAYG pension via eq 25b (transitionalPaygExp_t), fed into the §5.9
@@ -19,6 +18,45 @@
 //     `legacyShareAvg_t` (eq 15b) is the population-weighted running average
 //     across capi-cohort retirees alive at year t. Held flat when
 //     R^capi_t declines (mortality > new entries). See §5.6.1.
+//
+// v1.2 deltas vs v1.1 (branch v1.2/capi-debt-optimisation):
+//  7. fundReturn fix (eq 36 / eq 26): F_t now compounds at π in deficit years
+//     (real value preserved) instead of staying flat. fundReturn_t uses the
+//     REAL rate r_f_portfolio (not the Fisher nominal r_f_portfolio_n), so the
+//     income paid to operations = F_t × r_f_portfolio and the inflation component
+//     πF_t is retained in the fund. In surplus years F_t compounds at π before
+//     the waterfall surplus is added.  Over 70 years this causes F_t to grow from
+//     F0=340 to ≈1350 Md€ and fundReturn_t to grow from ≈15 to ≈61 Md€/yr.
+//     r_f_portfolio_n is retained in the row schema as a diagnostic field.
+//  6. tauK (§5.10.1): annual levy on K_t stock → transition-debt repayment.
+//
+// v1.3 deltas vs v1.2 (branch feat/employer-tax-cut):
+//  8. Employer tax cut phasing (§5.3): deltaTauxPatronal now activates at
+//     t = taxCutStartT (default: 2, year 2029) instead of t = 0. tau_e_eff
+//     is time-varying in the loop. New diagnostic fields:
+//       employerCutInitial_t = W_t × deltaTauxPatronal (when t ≥ taxCutStartT)
+//       employerCutEventual_t = emplrToCap_t (freed employer legacy obligation)
+//     Eventual cut quantifies employer contributions freed from legacy as the
+//     transition matures — the annual amount that could be returned as tax relief.
+//     Fires after §5.13 (post-payout K_t). Guarded by K_t solvency floor
+//     (K_t may not fall below capiPayoutFloor_t / annuityRate_t). Only active
+//     while D_t > 0; self-limits once debt is repaid.
+//     Ordering note: §5.11 lambda levy fires on INFLOWS (netCapiFlow_t, eq 45),
+//     tauK fires on the STOCK (post-eq 57). Mechanically decoupled — lambda
+//     reduces what enters K_t, tauK reduces what stays in K_t. Running both
+//     simultaneously is additive; reduce lambda if tauK is active.
+//     GE feedback: tauK lowers K_t/GDP_t, which reduces gePenalty_t and raises
+//     r_c_eff_t. This first-order feedback partially offsets the levy impact
+//     when K_t/GDP_t is in the GE-penalty zone (geKneeRatio < K/GDP < geFloorRatio).
+
+// §4 (v2.0) actuarial demographic data — see DemographicKernel_plan.md.
+// Used by activePopFactor_actuarial / retireeIdx_actuarial / cohIdx_actuarial.
+import {
+  COR_SCENARIOS,
+  COR_YEARS,
+  RETIREE_AGE_WEIGHTS_2027,
+  S_mixed,
+} from './demographic-tables.js';
 
 // ---- §8.1 DREES 2022 pension distribution (€/month bracket bounds) ----
 
@@ -61,6 +99,19 @@ export const DEFAULT_CONFIG = {
   Y0: 2027,
   pi: 0.02,
   w_r: 0.004,
+  // §4 (v2.0) demographic kernel mode.
+  //   'parametric' — existing smoothstep kernel (eqs 7a–e). Backward-compat default.
+  //   'actuarial'  — COR juin 2025 + INSEE T60 table-driven kernel.
+  // 'parametric' is bit-identical to v1.x output; 'actuarial' will become the
+  // default in v2.1 once the placeholder data in src/demographic-tables.js is
+  // replaced with primary-source transcriptions.
+  demoMode: 'parametric',
+  // §4 (v2.0) actuarial-mode scenario (ignored when demoMode === 'parametric').
+  // 'cor_central' | 'cor_high' | 'cor_low'
+  demoScenario: 'cor_central',
+  // §4 (v2.0) female fraction in the 2027 retiree pool (T60 mortality blend).
+  // COR retiree pool ≈ 48% male / 52% female. Affects cohIdx_actuarial only.
+  mortalityFemaleFraction: 0.52,
   // §3.1 v1.0a: r_f split into two distinct rates.
   // r_f_portfolio (eq 36 fundReturn, eq 58 spread) — diversified Legacy Fund
   //   return; OECD 60/40 historical median.
@@ -83,7 +134,19 @@ export const DEFAULT_CONFIG = {
   employmentRate0: 0.69,
   employmentRateTarget: 0.76,
   employmentTransitionYears: 12,
+  // §5.3 (v1.3): employer contribution-rate cut, activated at t=taxCutStartT (year 2029).
+  // deltaTauxPatronal: one-time step cut at taxCutStartT (absolute rate, e.g. 0.005 = 0.5 pp).
+  // deltaTauxPatronalPA: additional annual increment applied each subsequent year
+  //   (e.g. 0.005 = tau_e falls by another 0.5 pp every year after the initial step).
+  //   With deltaTauxPatronalPA=0.005 tau_e reaches 0 after ~33 years (full employer relief by 2060).
+  // Without tauK compensation any positive cut causes catastrophic debt growth.
+  // Empirical optimum at step=0.5%, PA=0%: tauK=2.5% → total interest 3508 Md€ (−80%),
+  //   terminal debt 17 Md€, initial relief ≈7 Md€/yr, eventual relief ≈630 Md€/yr (t=69).
+  // Defaults 0: viable range is narrow; exposed only in expert Tier B (see App.jsx).
   deltaTauxPatronal: 0,
+  deltaTauxPatronalPA: 0,
+  // §5.3 (v1.3): year offset at which deltaTauxPatronal activates (default t=2 → 2029).
+  taxCutStartT: 2,
   // §3.3 retirement age
   retirementAgeBase: 64,
   retirementAgeMode: 'fixed',
@@ -112,12 +175,20 @@ export const DEFAULT_CONFIG = {
   enableCapi: true,
   cutoffAge: 50,
   alpha: 1.0,
-  // §opt-A: fraction of excess capi return (K_prev×r_cn − capiPayout, when > 0)
-  // channeled to transition-debt repayment each year. 0 = off (default).
-  betaK: 0,
-  // §opt-B: annual levy rate on end-of-year K_t stock → transition-debt repayment.
-  // Applied only while D_t > 0. 0 = off (default).
+  // §5.10.1 (v1.2): annual levy rate on end-of-year K_t stock → transition-debt
+  // repayment. Only fires while D_t > 0; capped by K_t solvency floor.
+  // At deltaTauxPatronal=0%: optimum tauK=3.0% (total interest −88%, terminal debt 12 Md€).
+  // At deltaTauxPatronal=0.5%: optimum tauK=2.5% (total interest −80%, terminal debt 17 Md€).
+  // Default 0: expert-only parameter (see App.jsx Tier B). Set to 0.03 to activate.
   tauK: 0,
+  // §5.10.2 (v1.3): surplus-growth levy — when K_t grows by more than thetaBuffer × K_t
+  // in a given year, the excess growth is routed to transition-debt repayment.
+  // "Growth" = net change in K_t after returns, contributions, payouts, and tauK levy.
+  // Unlike tauK (stock levy), this cannot be blocked by the solvency floor because it
+  // only fires when K_t is already growing — it never draws down principal.
+  // At thetaBuffer=0.01 (1 %/yr): debt-free by ~2086 under default demographics.
+  // At thetaBuffer=0 the full net growth goes to debt (aggressive); 0.02 is conservative.
+  thetaBuffer: 0.01,
   lambda: 0.30,
   Tlambda: 15,
   // §3.6 v1.0a: long-run share of aggregate K_t notionally owned by current
@@ -354,6 +425,65 @@ export function cohIdx(t) {
   return 1 - smoothstep(t, 0, 45);
 }
 
+// =================== §5.2 (v2.0) actuarial kernel ===================
+//
+// Three table-driven replacements for eqs 7c′, 7d′, 7e′.  All three return
+// normalised indices (ratio to t=0 value) so downstream equations 9, 10, 11,
+// 23, 24, 25, 25b, 31 are structurally unchanged.
+//
+// See DemographicKernel_plan.md §5.1–5.3 for the full design rationale.
+
+/** Linear interpolation of `value` against a `years` array.
+ *  Both arrays are aligned (same length, monotonically increasing years).
+ *  Years outside the range clamp to the boundary value. */
+function _interpYears(year, years, values) {
+  if (year <= years[0]) return values[0];
+  if (year >= years[years.length - 1]) return values[values.length - 1];
+  // Binary search would be O(log n) but the array is small (73 entries) and
+  // year always lands within ±1 of the integer index — direct lookup is fine.
+  const idx = year - years[0];
+  if (Number.isInteger(year) && idx >= 0 && idx < years.length) {
+    return values[idx];
+  }
+  // Non-integer year: linear interpolation between floor and ceil.
+  const lo = Math.floor(idx);
+  const hi = lo + 1;
+  const frac = idx - lo;
+  return values[lo] + frac * (values[hi] - values[lo]);
+}
+
+/** §5.2 eq (7d′): activePopFactor_actuarial = P_act_t / P_act_0.
+ *  cfg must define `demoScenario` (one of cor_central/cor_high/cor_low). */
+export function activePopFactor_actuarial(t, cfg) {
+  const scen = COR_SCENARIOS[cfg.demoScenario];
+  if (!scen) throw new Error(`Unknown demoScenario: ${cfg.demoScenario}`);
+  const Y0 = cfg.Y0 ?? 2027;
+  const P_act_0 = _interpYears(Y0, COR_YEARS, scen.P_act);
+  const P_act_t = _interpYears(Y0 + t, COR_YEARS, scen.P_act);
+  return P_act_t / P_act_0;
+}
+
+/** §5.2 eq (7c′): retireeIdx_actuarial = P_ret_t / P_ret_0. */
+export function retireeIdx_actuarial(t, cfg) {
+  const scen = COR_SCENARIOS[cfg.demoScenario];
+  if (!scen) throw new Error(`Unknown demoScenario: ${cfg.demoScenario}`);
+  const Y0 = cfg.Y0 ?? 2027;
+  const P_ret_0 = _interpYears(Y0, COR_YEARS, scen.P_ret);
+  const P_ret_t = _interpYears(Y0 + t, COR_YEARS, scen.P_ret);
+  return P_ret_t / P_ret_0;
+}
+
+/** §5.2 eq (7e′): cohIdx_actuarial — age-weighted T60 survival of the 2027
+ *  retiree pool, with male/female blended at the SURVIVAL-CURVE level. */
+export function cohIdx_actuarial(t, cfg) {
+  const f = cfg.mortalityFemaleFraction ?? 0.52;
+  let acc = 0;
+  for (let aOffset = 0; aOffset < 22; aOffset++) {
+    acc += RETIREE_AGE_WEIGHTS_2027[aOffset] * S_mixed(aOffset, t, f);
+  }
+  return clamp(acc, 0, 1); // weights sum to ≈1.0; clamp guards float rounding
+}
+
 // =================== runSimulation ===================
 
 // §5.5 phasing modes (UI exposure of equinoxePhasing is Task 3 scope; engine
@@ -405,18 +535,24 @@ export function runSimulation(userConfig = {}) {
   const delta_eff = cfg.delta * clamp(2 - cm, 0.3, 1.7);       // §5.1 eq (6b)
   const T_capi_start = T_capi_start_of(cfg);                   // §5.4 eq (14)
   const capiRampSpan = capiRampSpan_of(cfg);                   // §5.6
-  const tau_e_eff = Math.max(0, cfg.tau_e - cfg.deltaTauxPatronal); // §5.3
-
   for (let t = 0; t < cfg.N; t++) {
+    const K_start_t = K_t;                  // snapshot before any this-year mutations
+
     // ---------- §5.1 Growth factors ----------
     const Omega_t    = Math.pow(1 + w_n, t);                                    // (4)
     const I_factor_t = Math.pow(1 + iota, t);                                   // (5)
     const H_factor_t = Math.pow((1 + g_h_eff) * (1 + cfg.pi), t);               // (6)
 
-    // ---------- §5.2 Demographic indices ----------
-    const retireeIdx_t = retireeIdx(t, cfg.demoProfile);                        // (7c)
-    const activePop_t  = activePopFactor(t, cfg.demoProfile);                   // (7d)
-    const cohIdx_t     = cohIdx(t);                                             // (7e)
+    // ---------- §5.2 Demographic indices — dispatched by demoMode ----------
+    const retireeIdx_t = cfg.demoMode === 'actuarial'                           // (7c / 7c′)
+      ? retireeIdx_actuarial(t, cfg)
+      : retireeIdx(t, cfg.demoProfile);
+    const activePop_t  = cfg.demoMode === 'actuarial'                           // (7d / 7d′)
+      ? activePopFactor_actuarial(t, cfg)
+      : activePopFactor(t, cfg.demoProfile);
+    const cohIdx_t     = cfg.demoMode === 'actuarial'                           // (7e / 7e′)
+      ? cohIdx_actuarial(t, cfg)
+      : cohIdx(t);
     const dependencyRatio_t = retireeIdx_t / activePop_t;                       // §5.2 diagnostic
 
     // ---------- §5.3 Wage bill & contributions ----------
@@ -426,6 +562,14 @@ export function runSimulation(userConfig = {}) {
     const empFactor = empRateNow / cfg.employmentRate0;                         // (8b)
     const W_t = cfg.W0 * Omega_t * empFactor * activePop_t;                     // (9)
     const C_s_t = W_t * cfg.tau_s;                                              // (10)
+    // v1.3: deltaTauxPatronal (step) + deltaTauxPatronalPA × years-since-start (annual glide).
+    // Total cut is capped at tau_e (employer rate cannot go negative).
+    const taxCutYears = t >= (cfg.taxCutStartT ?? 2) ? (t - (cfg.taxCutStartT ?? 2) + 1) : 0;
+    const totalCut_t = Math.min(cfg.tau_e, (cfg.deltaTauxPatronal ?? 0)
+      + (cfg.deltaTauxPatronalPA ?? 0) * taxCutYears);
+    const tau_e_eff = taxCutYears > 0
+      ? Math.max(0, cfg.tau_e - totalCut_t)
+      : cfg.tau_e;                                                              // §5.3 (v1.3)
     const C_e_t = W_t * tau_e_eff;                                              // (11)
 
     // ---------- §5.4 Retirement age & cohort routing ----------
@@ -538,7 +682,9 @@ export function runSimulation(userConfig = {}) {
     const debtInterest_t = D_t * r_d_t;                                         // (35)
 
     // ---------- §5.9 Cash flow & employer waterfall ----------
-    const fundReturn_t = F_t * r_f_portfolio_n;                                 // (36)
+    // v1.2 fix: use REAL rate so the inflation component πF_t stays in the fund.
+    // r_f_portfolio_n retained in row output as a diagnostic field only.
+    const fundReturn_t = F_t * cfg.r_f_portfolio;                               // (36) v1.2
     const abatement_t  = cfg.A0 * Omega_t * empFactor * activePop_t;            // (37)
     // v1.0a eq (38): S0_csg_revenue_t added as a tax-side revenue stream that
     // applies to all retiree pension income (legacy + capi). Distinct from the
@@ -561,6 +707,12 @@ export function runSimulation(userConfig = {}) {
       emplrToLeg_t = emplrAvail_t; emplrToCap_t = C_e_t * cfg.phiF;
     }
     const netFlow_t = nonEmplrNet_t + emplrToLeg_t - totalLegacyOutflow_t;      // (41) v1.1
+    // v1.3 diagnostics: employer tax-cut channels.
+    // Initial cut: annual saving from the fixed year-2 rate reduction.
+    // Eventual cut: freed employer legacy obligation flowing to capi — the
+    //   amount that could alternatively be returned as ongoing tax relief.
+    const employerCutInitial_t = W_t * totalCut_t;  // annual employer savings (current year)
+    const employerCutEventual_t = emplrToCap_t;
 
     // ---------- §5.10 Borrow / repay ----------
     // SPEC AMBIGUITY 5: borrowed_t initialised to deficit-branch borrowing,
@@ -569,10 +721,11 @@ export function runSimulation(userConfig = {}) {
     if (netFlow_t < 0) {
       borrowed_t = -netFlow_t;
       D_t = D_t + borrowed_t;                                                   // (42)
+      F_t = F_t * (1 + cfg.pi);       // v1.2: compound at π (was: unchanged eq 26)
     } else {
       const repaid_t = Math.min(cfg.alpha * netFlow_t, D_t);
       D_t = D_t - repaid_t;
-      F_t = F_t + (netFlow_t - repaid_t);                                       // (43)
+      F_t = F_t * (1 + cfg.pi) + (netFlow_t - repaid_t);                       // (43) v1.2
     }
 
     // ---------- §5.11 Transition levy (smoothed) ----------
@@ -591,7 +744,10 @@ export function runSimulation(userConfig = {}) {
     const netCapiFlow_t = C_s_capi_t + emplrToCap_t - levy_t;                   // (45)
 
     // ---------- §5.12 Capi accumulation & GE penalty ----------
-    const K_start_t   = K_t;                                                     // saved for betaK
+    // GE feedback (v1.2): tauK lowers K_t/GDP_t → lower gePenalty_t → higher r_c_eff_t.
+    // This first-order offset is automatically captured here since capiToGdp uses
+    // the pre-tauK K_t (this year's stock before levy); the levy fires in §5.10.1
+    // after §5.13, so next year's K_t (post-levy) feeds next year's capiToGdp.
     const capiToGdp_t = K_t / GDP_t;                                            // (46)
     const gePenalty_t = computeGePenalty(capiToGdp_t, cfg.geKneeRatio, cfg.geFloorRatio); // (47)
     const r_c_eff_t   = cfg.r_c * gePenalty_t;                                  // (48)
@@ -639,19 +795,39 @@ export function runSimulation(userConfig = {}) {
     CK_t = CK_t + shortfall_t;                                                  // (56)
     K_t  = Math.max(0, K_avail_t - capiPayout_t);                               // (57)
 
-    // ---------- §opt-A: betaK — excess capi return → debt ----------
-    // Only fires when D_t > 0 and the fund earned more than it paid out.
-    const capiReturnExcess_t = Math.max(0, K_start_t * r_cn_eff_t - capiPayoutDesired_t);
-    const betaKRepayment_t = D_t > 0 ? (cfg.betaK ?? 0) * capiReturnExcess_t : 0;
-    const betaKApplied_t   = Math.min(betaKRepayment_t, D_t);
-    K_t  = Math.max(0, K_t  - betaKApplied_t);
-    D_t  = D_t  - betaKApplied_t;
+    // ---------- §5.10.1 (v1.2): tauK — annual levy on K_t stock → debt ----------
+    // Ordering: fires AFTER §5.13 (post-payout K_t settled). §5.11 lambda levy
+    // fires earlier on inflows (eq 45) — the two channels are mechanically
+    // decoupled and independently capped at D_t.
+    //
+    // Solvency floor: levy is capped so K_t cannot fall below
+    //   K_floor_t = capiPayoutFloor_t / annuityRate_t
+    // the pot required to service the guaranteed floor payout at the current
+    // annuity rate. Prevents catastrophic K_t depletion at high tauK values.
+    const K_floor_t     = annuityRate_t > 1e-6 ? capiPayoutFloor_t / annuityRate_t : 0;
+    const tauKRaw_t     = D_t > 0 ? (cfg.tauK ?? 0) * K_t : 0;
+    const tauKLevy_t    = Math.min(tauKRaw_t, Math.max(0, K_t - K_floor_t), D_t);
+    K_t  = Math.max(0, K_t  - tauKLevy_t);
+    D_t  = D_t  - tauKLevy_t;
 
-    // ---------- §opt-B: tauK — annual levy on K_t stock → debt ----------
-    const tauKLevy_t   = D_t > 0 ? (cfg.tauK ?? 0) * K_t : 0;
-    const tauKApplied_t = Math.min(tauKLevy_t, D_t);
-    K_t  = Math.max(0, K_t  - tauKApplied_t);
-    D_t  = D_t  - tauKApplied_t;
+    // ---------- §5.10.2 (v1.3): surplus-growth levy ----------
+    // Routes net K_t growth above the prudential buffer rate (thetaBuffer × K_start)
+    // to transition-debt repayment.  A D_t/GDP phase-in gate prevents early depletion:
+    //   • below 10 % D/GDP the levy is zero (capi pot is still in build-up phase)
+    //   • between 10 % and 50 % the levy scales linearly from 0 → 1×
+    //   • above 50 % D/GDP the levy is fully active
+    // This means the levy fires once the debt burden is meaningful, then fades
+    // naturally as D_t is repaid — acting as a self-extinguishing single lever.
+    // thetaBuffer is the annual "keep" rate: K_t always grows by at least
+    // thetaBuffer × K_start after the levy, so principal is never drawn down.
+    const K_growth_t           = K_t - K_start_t;
+    const surplusAboveBuffer_t = Math.max(0, K_growth_t - (cfg.thetaBuffer ?? 0.01) * K_start_t);
+    const surplusPhaseIn_t     = GDP_t > 0 ? smoothstep(D_t / GDP_t, 0.10, 0.50) : 0;
+    const surplusLevy_t        = D_t > 0
+      ? Math.min(surplusPhaseIn_t * surplusAboveBuffer_t, D_t)
+      : 0;
+    K_t = Math.max(0, K_t - surplusLevy_t);
+    D_t = Math.max(0, D_t - surplusLevy_t);
 
     // ---------- §5.14 Diagnostics ----------
     // v1.0a eq (58): spread measures Legacy-Fund yield vs real sovereign cost.
@@ -697,10 +873,12 @@ export function runSimulation(userConfig = {}) {
       U_t, delta_U_t, units_sold, priceDiscount_t, P_eff_t, gain_t, hlmActive_t,
       H_t_proceeds,
       // §5.8 borrowing rate
-      GDP_t, D_ext_t, debtRatio_t, r_d_t, debtInterest_t,
+      GDP_t, D_ext_t, debtRatio_t, D_t_to_gdp_pct: GDP_t > 0 ? D_t / GDP_t * 100 : 0, r_d_t, debtInterest_t,
       // §5.9 waterfall
       fundReturn_t, abatement_t, nonEmplrNet_t, deficit_t, emplrAvail_t,
       emplrToLeg_t, emplrToCap_t, netFlow_t,
+      // v1.3 employer tax-cut diagnostics
+      employerCutInitial_t, employerCutEventual_t,
       // §5.10 (post-update) borrow tracker
       borrowed_t,
       // §5.11 levy
@@ -713,9 +891,10 @@ export function runSimulation(userConfig = {}) {
       capiRetireeShare_t, capiAssetShare_t,
       potBasedPayout_t, capiPayoutDesired_t,
       shortfall_t, capiPayout_t,
-      // §opt debt-reduction channels
-      capiReturnExcess_t, betaKRepayment_t, betaKApplied_t,
-      tauKLevy_t, tauKApplied_t,
+      // §5.10.1 (v1.2) tauK debt-reduction channel
+      K_floor_t, tauKLevy_t,
+      // §5.10.2 (v1.3) surplus-growth levy
+      K_start_t, K_growth_t, surplusAboveBuffer_t, surplusPhaseIn_t, surplusLevy_t,
       // §2 stocks (post-update)
       F_t, D_t, K_t, CI_t, CK_t,
       // §5.14 diagnostics
