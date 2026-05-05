@@ -111,6 +111,41 @@ The "eventual" relief arises because as the legacy-pension obligation winds down
 
 Both `deltaTauxPatronal` and `deltaTauxPatronalPA` default to 0. The mechanic is pedagogically complex and the viable parameter range is narrow enough that accidental misconfiguration is highly likely. Both sliders are exposed only in the expert Tier B section ("Baisse des charges patronales v1.3") alongside τ_K. The two KPI cards (initial and eventual employer relief) are also gated behind `expertMode`.
 
+## Demographic kernel v2.0 — actuarial replacement (planned)
+
+The parametric kernel (§5.2, eqs 7a–7e) was flagged at §10.4 and §10.6 as the highest-priority structural limitation. `DemographicKernel_plan.md` specifies the full replacement. Summary of the design:
+
+### What changes
+
+Three kernel functions are replaced by table-driven equivalents:
+
+| Current | Replacement | Source |
+|---------|------------|--------|
+| `retireeIdx(t)` — smoothstep envelope (peakMult, longRunMult, peakT) | `retireeIdx_actuarial(t)` — `P_ret_t / P_ret_0` from COR table | COR juin 2025, Table S1 |
+| `activePopFactor(t)` — piecewise linear over 5 anchors | `activePopFactor_actuarial(t)` — `P_act_t / P_act_0` from COR table | COR juin 2025, Table S1 |
+| `cohIdx(t)` — `1 − smoothstep(t, 0, 45)`, symmetric | `cohIdx_actuarial(t)` — cumulative T60 survival of 2027 retiree pool | INSEE T60 2023 |
+
+All three replacements produce normalised indices (ratio to t=0) so downstream equations (9, 10, 11, 23, 24, 25, 25b, 31) are **structurally unchanged**.
+
+### Why `cohIdx` matters most
+
+The parametric `cohIdx(t) = 1 − smoothstep(t, 0, 45)` is symmetric around t=22 — it loses the 1960s cohort at a constant rate. Real T60 mortality is concave: the survivor mass drops slowly in years 0–20 (most 60-year-olds in 2027 reach 80) then steeply in years 25–45 (few 90-year-olds survive). The symmetric form overstates late-horizon `transitionalPaygExp_t`, accumulating a ~45% bias relative to peak debt by t=69. The T60-based `cohIdx_actuarial` corrects this without requiring any downstream equation change.
+
+### Linkage audit result (see §6 of `DemographicKernel_plan.md`)
+
+All downstream linkages are already correct:
+- **`C_s_t`, `C_e_t`**: flow entirely through `W_t` which uses `activePop_t`. Actuarial mode improves `activePop_t`; no equation change needed.
+- **`GDP_t`**: already `baseGDP × Omega_t × empFactor × activePop_t`. Inherits actuarial improvement automatically.
+- **`legacyShareAvg_t` held-flat**: fully fixed in v2.0 via a per-cohort population mask. Each capi sub-cohort is tracked with its entry-year `legacyShare` and its T60 survival is applied yearly; `legacyShareAvg_t` is then a population-weighted average across surviving sub-cohorts, naturally capturing the higher mortality of older (higher-`legacyShare`) cohorts.
+
+### Backward compatibility
+
+`demoMode: 'parametric'` (default in v2.0 during validation period) reproduces bit-identical output to v1.x. The existing `v1.1-default-trace.json` fixture remains the parametric-mode regression contract. A new `v2.0-actuarial-cor-central-trace.json` fixture is created when actuarial mode is validated.
+
+### New demographic settings
+
+Three new config parameters: `demoMode` (`'parametric' | 'actuarial'`), `demoScenario` (`'cor_central' | 'cor_high' | 'cor_low'`), `mortalityFemaleFraction` (default 0.52). A new **Démographie** UI section exposes scenario selection (non-expert) and the mortality mix (Tier B expert). The `reformed` parametric profile has no COR-table equivalent and is preserved as parametric-only.
+
 ## Open questions (v1.1 wishlist, spec §10.13–§10.14)
 
 - **`r_c` exposure.** Currently 0.045 hardcoded; v1.1 should expose as a sensitivity slider [0.025, 0.06] for stress-testing realised returns.

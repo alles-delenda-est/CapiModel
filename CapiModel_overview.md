@@ -75,7 +75,7 @@ React 19 + Vite 7 + Recharts. Single-page application, no backend. Auto-deployed
 
 ## Key assumptions and limitations
 
-- **Demographic kernel is parametric, 45-year extinction.** Smoothstep envelope (eqs 7a–c) with `T_extinct = 45` aligned to COR June 2025 central-scenario mortality tables. Actuarial replacement using exact INSEE/COR tables is a v1.1 candidate (§10.4).
+- **Demographic kernel is parametric, 45-year extinction.** Smoothstep envelope (eqs 7a–c) with `T_extinct = 45` aligned to COR June 2025 central-scenario mortality tables. Actuarial replacement using exact INSEE/COR tables is planned for **v2.0** — see `DemographicKernel_plan.md`.
 - **No behavioural responses.** Retirement-timing decisions (beyond `retirementAge*`), labour-supply elasticity, precautionary savings — all out of scope.
 - **`E0` doesn't respond to retirement age** (§10.7) — raising retirement age in v1.0a moves only timing, not benefit amount. Real systems also adjust accrual; v1.1 candidate.
 - **Cohort kernel parameters decoupled from `A_R(t)`** (§10.6) — known limitation; with INSEE T60 actuarial replacement they would couple.
@@ -128,9 +128,39 @@ If future fiscal pressure requires more economies than v1.1 produces, this lever
 
 v1.1's `legacyShareAvg_t` is held flat once `R^capi_t` plateaus. This overstates surviving-cohort outflow because older transitional cohorts (higher legacy share) die first under realistic mortality. Linear-in-age mortality proxy estimates a 1.7% peak-debt bias under the default preset — within the 2% threshold for v1.1, but the cumulative bias accumulates substantially through the late horizon. v1.2 with INSEE T60 actuarial tables would refine this; the bias direction is conservative.
 
+## v2.0: actuarial demographic kernel (planned — see `DemographicKernel_plan.md`)
+
+v2.0 replaces the parametric smoothstep demographic kernel (eqs 7a–7e) with a table-driven actuarial model sourced directly from COR and INSEE official data. Full specification: `DemographicKernel_plan.md`.
+
+### What v2.0 changes
+
+| Kernel function | Current (parametric) | v2.0 (actuarial) |
+|-----------------|---------------------|-----------------|
+| `retireeIdx(t)` | Smoothstep envelope, 3 params | COR juin 2025 `P_ret_t / P_ret_0` |
+| `activePopFactor(t)` | Piecewise linear, 5 anchors | COR juin 2025 `P_act_t / P_act_0` |
+| `cohIdx(t)` | `1 − smoothstep(t, 0, 45)` | INSEE T60 cumulative survival of 2027 retiree pool |
+
+### New demographic settings
+
+- **`demoMode`**: `'parametric'` (default, backward-compat) or `'actuarial'` (v2.0)
+- **`demoScenario`**: `'cor_central'` / `'cor_high'` / `'cor_low'` — replaces the three parametric profiles for actuarial mode
+- **`mortalityFemaleFraction`**: T60 mix (default 0.52, matching COR retiree gender split)
+
+### Labour-force linkages (audit result)
+
+All downstream equations already propagate the demographic correction correctly:
+- **Contributions** (`C_s_t`, `C_e_t`): flow through `W_t = W0 × Ω_t × empFactor × activePop_t` — no equation change, better `activePop_t`.
+- **GDP** (`GDP_t`): `baseGDP × Ω_t × empFactor × activePop_t` — inherits actuarial improvement automatically.
+- **`legacyShareAvg_t` held-flat bias**: **fully fixed in v2.0** via a per-cohort population mask — each capi sub-cohort is tracked with its entry-year `legacyShare` and aged via T60 survival, so `legacyShareAvg_t` is a true population-weighted average rather than a held-flat approximation.
+
+### Backward compatibility
+
+`demoMode: 'parametric'` (the v2.0 default during the validation period) produces **bit-identical output** to v1.x. The existing `v1.1-default-trace.json` fixture remains the parametric regression contract. A new `v2.0-actuarial-cor-central-trace.json` fixture is created at v2.0 release.
+
 ## Source documents
 
 - `CapiModelSpec_v1.0a.md` — Full model specification (60 equations + invariants + calibration sources)
 - `THEORY.md` — Operating theory and engineering philosophy
+- `DemographicKernel_plan.md` — v2.0 actuarial kernel specification
 - `tests/fixtures/v1.0a-default-trace.json` — Canonical 70-year × every-field reference trace (§11.3 contract)
 - `critique.md` — Structured critique
