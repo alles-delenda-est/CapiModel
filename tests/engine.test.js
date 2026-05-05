@@ -21,6 +21,9 @@ import {
   retireeIdx,
   activePopFactor,
   cohIdx,
+  activePopFactor_actuarial,
+  retireeIdx_actuarial,
+  cohIdx_actuarial,
   runSimulation,
   legacyShareOfCohort,
   buildCounterfactualParams,
@@ -1047,6 +1050,133 @@ describe('panel ↔ engine reconciliation (v1.1)', () => {
       expect(diff,
         `Test 11 reconciliation at t=${t} (year ${cfg.Y0 + t}): |Σ uniform_size×share×E0×I − transitionalPaygExp| = ${diff.toExponential(3)} Md€ exceeds ε = ${EPS_MD} Md€`)
         .toBeLessThan(EPS_MD);
+    }
+  });
+});
+
+// ── Demographic kernel v2.0: actuarial functions (structural tests) ─────────
+// These tests check invariants and monotonicity only — not exact values,
+// since demographic-tables.js uses placeholder data pending primary-source
+// transcription (COR juin 2025 + INSEE T60 2023).
+
+const ACT_CFG = {
+  ...DEFAULT_CONFIG,
+  demoMode: 'actuarial',
+  demoScenario: 'cor_central',
+  mortalityFemaleFraction: 0.52,
+};
+
+describe('activePopFactor_actuarial (7d′)', () => {
+  it('returns a positive finite number for all t in [0, N-1]', () => {
+    for (let t = 0; t < ACT_CFG.N; t++) {
+      const v = activePopFactor_actuarial(t, ACT_CFG);
+      expect(isFinite(v) && v > 0, `t=${t}: activePopFactor_actuarial=${v}`).toBe(true);
+    }
+  });
+
+  it('normalises to ≈1.0 at t=0', () => {
+    expect(activePopFactor_actuarial(0, ACT_CFG)).toBeCloseTo(1.0, 3);
+  });
+
+  it('is monotonically non-increasing over the 70-year horizon (cor_central)', () => {
+    let prev = activePopFactor_actuarial(0, ACT_CFG);
+    for (let t = 1; t < ACT_CFG.N; t++) {
+      const v = activePopFactor_actuarial(t, ACT_CFG);
+      expect(v, `activePopFactor_actuarial should not increase at t=${t}`).toBeLessThanOrEqual(prev + 1e-9);
+      prev = v;
+    }
+  });
+
+  it('cor_high ≥ cor_central at every t (optimistic labour scenario)', () => {
+    const cfgHigh = { ...ACT_CFG, demoScenario: 'cor_high' };
+    for (let t = 0; t < ACT_CFG.N; t++) {
+      const central = activePopFactor_actuarial(t, ACT_CFG);
+      const high    = activePopFactor_actuarial(t, cfgHigh);
+      expect(high, `t=${t}: cor_high should be ≥ cor_central`).toBeGreaterThanOrEqual(central - 1e-9);
+    }
+  });
+
+  it('cor_central ≥ cor_low at every t (pessimistic labour scenario)', () => {
+    const cfgLow = { ...ACT_CFG, demoScenario: 'cor_low' };
+    for (let t = 0; t < ACT_CFG.N; t++) {
+      const central = activePopFactor_actuarial(t, ACT_CFG);
+      const low     = activePopFactor_actuarial(t, cfgLow);
+      expect(central, `t=${t}: cor_central should be ≥ cor_low`).toBeGreaterThanOrEqual(low - 1e-9);
+    }
+  });
+});
+
+describe('retireeIdx_actuarial (7c′)', () => {
+  it('returns a positive finite number for all t in [0, N-1]', () => {
+    for (let t = 0; t < ACT_CFG.N; t++) {
+      const v = retireeIdx_actuarial(t, ACT_CFG);
+      expect(isFinite(v) && v > 0, `t=${t}: retireeIdx_actuarial=${v}`).toBe(true);
+    }
+  });
+
+  it('normalises to ≈1.0 at t=0', () => {
+    expect(retireeIdx_actuarial(0, ACT_CFG)).toBeCloseTo(1.0, 3);
+  });
+
+  it('cor_high ≥ cor_central retiree index at every t', () => {
+    const cfgHigh = { ...ACT_CFG, demoScenario: 'cor_high' };
+    for (let t = 0; t < ACT_CFG.N; t++) {
+      const central = retireeIdx_actuarial(t, ACT_CFG);
+      const high    = retireeIdx_actuarial(t, cfgHigh);
+      expect(high, `t=${t}: cor_high retireeIdx should be ≥ cor_central`).toBeGreaterThanOrEqual(central - 1e-9);
+    }
+  });
+});
+
+describe('cohIdx_actuarial (7e′)', () => {
+  it('returns values in [0, 1] for all t in [0, N-1]', () => {
+    for (let t = 0; t < ACT_CFG.N; t++) {
+      const v = cohIdx_actuarial(t, ACT_CFG);
+      expect(v, `t=${t}: cohIdx_actuarial out of [0,1]`).toBeGreaterThanOrEqual(-1e-9);
+      expect(v, `t=${t}: cohIdx_actuarial out of [0,1]`).toBeLessThanOrEqual(1 + 1e-9);
+    }
+  });
+
+  it('starts at or near 1 (no capi retirees yet)', () => {
+    expect(cohIdx_actuarial(0, ACT_CFG)).toBeGreaterThanOrEqual(0.99);
+  });
+
+  it('is monotonically non-increasing (capi share of retirees never shrinks)', () => {
+    let prev = cohIdx_actuarial(0, ACT_CFG);
+    for (let t = 1; t < ACT_CFG.N; t++) {
+      const v = cohIdx_actuarial(t, ACT_CFG);
+      expect(v, `cohIdx_actuarial should be non-increasing at t=${t}`).toBeLessThanOrEqual(prev + 1e-9);
+      prev = v;
+    }
+  });
+});
+
+describe('actuarial mode — runSimulation backward compat', () => {
+  it('parametric mode output is bit-identical to default (demoMode omitted)', () => {
+    const rows_default = runSimulation(DEFAULT_CONFIG);
+    const rows_param   = runSimulation({ ...DEFAULT_CONFIG, demoMode: 'parametric' });
+    expect(rows_param.length).toBe(rows_default.length);
+    for (let t = 0; t < rows_default.length; t++) {
+      expect(rows_param[t].GDP_t).toBeCloseTo(rows_default[t].GDP_t, 8);
+      expect(rows_param[t].K_t).toBeCloseTo(rows_default[t].K_t, 8);
+      expect(rows_param[t].D_t).toBeCloseTo(rows_default[t].D_t, 8);
+    }
+  });
+
+  it('actuarial mode runs without error for all three COR scenarios', () => {
+    for (const scenario of ['cor_central', 'cor_high', 'cor_low']) {
+      const cfg = { ...ACT_CFG, demoScenario: scenario };
+      expect(() => runSimulation(cfg)).not.toThrow();
+      const rows = runSimulation(cfg);
+      expect(rows).toHaveLength(ACT_CFG.N);
+    }
+  });
+
+  it('actuarial mode K_t and D_t are finite positive/non-negative throughout', () => {
+    const rows = runSimulation(ACT_CFG);
+    for (const r of rows) {
+      expect(isFinite(r.K_t) && r.K_t >= 0, `K_t=${r.K_t} at t=${r.t}`).toBe(true);
+      expect(isFinite(r.D_t), `D_t=${r.D_t} at t=${r.t}`).toBe(true);
     }
   });
 });

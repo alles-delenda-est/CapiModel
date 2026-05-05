@@ -10,7 +10,6 @@
 //  2. HLM uniform geometric: ΔU_t = U0 × (1-ρ)^t × ρ for all t (eq 27).
 //  3. Capi pot owned by retirees by ASSET share, not headcount share (eq 53, 53a).
 //  4. Équinoxe split: benefit-side reductions vs tax-side CSG revenue (§5.5).
-//
 // v1.1 deltas vs v1.0a:
 //  5. Per-cohort PAYG accruals: transitional cohorts now collect prorated
 //     PAYG pension via eq 25b (transitionalPaygExp_t), fed into the §5.9
@@ -49,6 +48,15 @@
 //     GE feedback: tauK lowers K_t/GDP_t, which reduces gePenalty_t and raises
 //     r_c_eff_t. This first-order feedback partially offsets the levy impact
 //     when K_t/GDP_t is in the GE-penalty zone (geKneeRatio < K/GDP < geFloorRatio).
+
+// §4 (v2.0) actuarial demographic data — see DemographicKernel_plan.md.
+// Used by activePopFactor_actuarial / retireeIdx_actuarial / cohIdx_actuarial.
+import {
+  COR_SCENARIOS,
+  COR_YEARS,
+  RETIREE_AGE_WEIGHTS_2027,
+  S_mixed,
+} from './demographic-tables.js';
 
 // ---- §8.1 DREES 2022 pension distribution (€/month bracket bounds) ----
 
@@ -91,6 +99,19 @@ export const DEFAULT_CONFIG = {
   Y0: 2027,
   pi: 0.02,
   w_r: 0.004,
+  // §4 (v2.0) demographic kernel mode.
+  //   'parametric' — existing smoothstep kernel (eqs 7a–e). Backward-compat default.
+  //   'actuarial'  — COR juin 2025 + INSEE T60 table-driven kernel.
+  // 'parametric' is bit-identical to v1.x output; 'actuarial' will become the
+  // default in v2.1 once the placeholder data in src/demographic-tables.js is
+  // replaced with primary-source transcriptions.
+  demoMode: 'parametric',
+  // §4 (v2.0) actuarial-mode scenario (ignored when demoMode === 'parametric').
+  // 'cor_central' | 'cor_high' | 'cor_low'
+  demoScenario: 'cor_central',
+  // §4 (v2.0) female fraction in the 2027 retiree pool (T60 mortality blend).
+  // COR retiree pool ≈ 48% male / 52% female. Affects cohIdx_actuarial only.
+  mortalityFemaleFraction: 0.52,
   // §3.1 v1.0a: r_f split into two distinct rates.
   // r_f_portfolio (eq 36 fundReturn, eq 58 spread) — diversified Legacy Fund
   //   return; OECD 60/40 historical median.
@@ -404,6 +425,65 @@ export function cohIdx(t) {
   return 1 - smoothstep(t, 0, 45);
 }
 
+// =================== §5.2 (v2.0) actuarial kernel ===================
+//
+// Three table-driven replacements for eqs 7c′, 7d′, 7e′.  All three return
+// normalised indices (ratio to t=0 value) so downstream equations 9, 10, 11,
+// 23, 24, 25, 25b, 31 are structurally unchanged.
+//
+// See DemographicKernel_plan.md §5.1–5.3 for the full design rationale.
+
+/** Linear interpolation of `value` against a `years` array.
+ *  Both arrays are aligned (same length, monotonically increasing years).
+ *  Years outside the range clamp to the boundary value. */
+function _interpYears(year, years, values) {
+  if (year <= years[0]) return values[0];
+  if (year >= years[years.length - 1]) return values[values.length - 1];
+  // Binary search would be O(log n) but the array is small (73 entries) and
+  // year always lands within ±1 of the integer index — direct lookup is fine.
+  const idx = year - years[0];
+  if (Number.isInteger(year) && idx >= 0 && idx < years.length) {
+    return values[idx];
+  }
+  // Non-integer year: linear interpolation between floor and ceil.
+  const lo = Math.floor(idx);
+  const hi = lo + 1;
+  const frac = idx - lo;
+  return values[lo] + frac * (values[hi] - values[lo]);
+}
+
+/** §5.2 eq (7d′): activePopFactor_actuarial = P_act_t / P_act_0.
+ *  cfg must define `demoScenario` (one of cor_central/cor_high/cor_low). */
+export function activePopFactor_actuarial(t, cfg) {
+  const scen = COR_SCENARIOS[cfg.demoScenario];
+  if (!scen) throw new Error(`Unknown demoScenario: ${cfg.demoScenario}`);
+  const Y0 = cfg.Y0 ?? 2027;
+  const P_act_0 = _interpYears(Y0, COR_YEARS, scen.P_act);
+  const P_act_t = _interpYears(Y0 + t, COR_YEARS, scen.P_act);
+  return P_act_t / P_act_0;
+}
+
+/** §5.2 eq (7c′): retireeIdx_actuarial = P_ret_t / P_ret_0. */
+export function retireeIdx_actuarial(t, cfg) {
+  const scen = COR_SCENARIOS[cfg.demoScenario];
+  if (!scen) throw new Error(`Unknown demoScenario: ${cfg.demoScenario}`);
+  const Y0 = cfg.Y0 ?? 2027;
+  const P_ret_0 = _interpYears(Y0, COR_YEARS, scen.P_ret);
+  const P_ret_t = _interpYears(Y0 + t, COR_YEARS, scen.P_ret);
+  return P_ret_t / P_ret_0;
+}
+
+/** §5.2 eq (7e′): cohIdx_actuarial — age-weighted T60 survival of the 2027
+ *  retiree pool, with male/female blended at the SURVIVAL-CURVE level. */
+export function cohIdx_actuarial(t, cfg) {
+  const f = cfg.mortalityFemaleFraction ?? 0.52;
+  let acc = 0;
+  for (let aOffset = 0; aOffset < 22; aOffset++) {
+    acc += RETIREE_AGE_WEIGHTS_2027[aOffset] * S_mixed(aOffset, t, f);
+  }
+  return clamp(acc, 0, 1); // weights sum to ≈1.0; clamp guards float rounding
+}
+
 // =================== runSimulation ===================
 
 // §5.5 phasing modes (UI exposure of equinoxePhasing is Task 3 scope; engine
@@ -463,10 +543,16 @@ export function runSimulation(userConfig = {}) {
     const I_factor_t = Math.pow(1 + iota, t);                                   // (5)
     const H_factor_t = Math.pow((1 + g_h_eff) * (1 + cfg.pi), t);               // (6)
 
-    // ---------- §5.2 Demographic indices ----------
-    const retireeIdx_t = retireeIdx(t, cfg.demoProfile);                        // (7c)
-    const activePop_t  = activePopFactor(t, cfg.demoProfile);                   // (7d)
-    const cohIdx_t     = cohIdx(t);                                             // (7e)
+    // ---------- §5.2 Demographic indices — dispatched by demoMode ----------
+    const retireeIdx_t = cfg.demoMode === 'actuarial'                           // (7c / 7c′)
+      ? retireeIdx_actuarial(t, cfg)
+      : retireeIdx(t, cfg.demoProfile);
+    const activePop_t  = cfg.demoMode === 'actuarial'                           // (7d / 7d′)
+      ? activePopFactor_actuarial(t, cfg)
+      : activePopFactor(t, cfg.demoProfile);
+    const cohIdx_t     = cfg.demoMode === 'actuarial'                           // (7e / 7e′)
+      ? cohIdx_actuarial(t, cfg)
+      : cohIdx(t);
     const dependencyRatio_t = retireeIdx_t / activePop_t;                       // §5.2 diagnostic
 
     // ---------- §5.3 Wage bill & contributions ----------
