@@ -1181,3 +1181,81 @@ describe('actuarial mode — runSimulation backward compat', () => {
   });
 });
 
+// PR #17 (v2.0) overlapping cash-flow mode tests.  The toggle replaces the
+// E0-indexed capi floor with a K_t-share annuity floor that scales with the
+// fund.  State guarantee continues to post any annual shortfall to D_t — but
+// because the floor is much smaller than legacy in late years, K_t no longer
+// depletes and the terminal-year D_t spike (PR #15 diagnosis) is eliminated.
+describe('PR #17 overlapping cashFlowMode — backward compat', () => {
+  it('default cashFlowMode is "legacy" (preserves v1.3 output bit-identical)', () => {
+    expect(DEFAULT_CONFIG.cashFlowMode).toBe('legacy');
+  });
+
+  it('legacy mode output is bit-identical to default (cashFlowMode omitted)', () => {
+    const rows_default = runSimulation(DEFAULT_CONFIG);
+    const rows_legacy  = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'legacy' });
+    expect(rows_legacy.length).toBe(rows_default.length);
+    for (let t = 0; t < rows_default.length; t++) {
+      expect(rows_legacy[t].K_t).toBe(rows_default[t].K_t);
+      expect(rows_legacy[t].D_t).toBe(rows_default[t].D_t);
+      expect(rows_legacy[t].capiPayoutFloor_t).toBe(rows_default[t].capiPayoutFloor_t);
+    }
+  });
+});
+
+describe('PR #17 overlapping cashFlowMode — floor mechanics', () => {
+  const OL_CFG = { ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' };
+
+  it('runs without error for default config', () => {
+    expect(() => runSimulation(OL_CFG)).not.toThrow();
+  });
+
+  it('capiPayoutFloor_t = K_start × capiAssetShare × annuityFloorRate every period', () => {
+    // Floor is computed at the start of the period (pre-payout K_t = K_start_t).
+    const rows = runSimulation(OL_CFG);
+    for (const r of rows) {
+      const expected = r.K_start_t * r.capiAssetShare_t * (OL_CFG.annuityFloorRate ?? 0.015);
+      expect(r.capiPayoutFloor_t, `t=${r.t}`).toBeCloseTo(expected, 9);
+    }
+  });
+
+  it('floor is zero in pre-capi years (K_t = 0 or capiAssetShare = 0)', () => {
+    const rows = runSimulation(OL_CFG);
+    expect(rows[0].capiPayoutFloor_t).toBe(0);
+  });
+
+  it('K_t is finite, non-negative, and never depletes terminally', () => {
+    const rows = runSimulation(OL_CFG);
+    for (const r of rows) {
+      expect(isFinite(r.K_t) && r.K_t >= 0, `K_t=${r.K_t} at t=${r.t}`).toBe(true);
+    }
+    // Terminal K_t in legacy mode is 0; in overlapping mode it should be substantial
+    expect(rows[rows.length - 1].K_t).toBeGreaterThan(1000);
+  });
+
+  it('terminal D_t spike (PR #15 diagnosis) is eliminated', () => {
+    const rows = runSimulation(OL_CFG);
+    // Final year D_t should not exceed prior year by an order of magnitude
+    const D_final = rows[rows.length - 1].D_t;
+    const D_prev  = rows[rows.length - 2].D_t;
+    expect(D_final, 'no terminal-year D_t spike').toBeLessThan(D_prev * 10 + 100);
+  });
+
+  it('total interest is lower than legacy mode (fewer late-year debt issuances)', () => {
+    const rows_legacy  = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'legacy' });
+    const rows_overlap = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' });
+    const CI_legacy  = rows_legacy[rows_legacy.length - 1].CI_t;
+    const CI_overlap = rows_overlap[rows_overlap.length - 1].CI_t;
+    expect(CI_overlap).toBeLessThan(CI_legacy);
+  });
+
+  it('shortfall_t accumulates into CK_t consistently', () => {
+    const rows = runSimulation(OL_CFG);
+    let cumShortfall = 0;
+    for (const r of rows) {
+      cumShortfall += r.shortfall_t;
+      expect(r.CK_t, `t=${r.t} CK_t = sum shortfall`).toBeCloseTo(cumShortfall, 6);
+    }
+  });
+});
+

@@ -197,6 +197,22 @@ export const DEFAULT_CONFIG = {
   // T_capi_start. Without this scaling the model expropriates worker savings
   // and masks the transition's fiscal cost (the v1.0 bug).
   capiAssetShareSteadyState: 0.35,
+  // §5.9/§5.13 (v2.0) cash-flow mode — see PR #17.
+  //   'legacy'      — v1.3 waterfall: E0-indexed capi floor + terminal K_t draw.
+  //   'overlapping' — K_t-share annuity floor (annuityFloorRate × capiAssetShare × K_t),
+  //                   state guarantee posts ΔD_t annually rather than draining K_t.
+  // 'legacy' is bit-identical to v1.3 output. 'overlapping' will become the
+  // user-facing default once the fund-return cascade is calibrated; for now
+  // the toggle is wired so v1.3 invariants/tests keep passing.
+  cashFlowMode: 'legacy',
+  // §5.13 (v2.0, overlapping mode only) guaranteed real annuity rate on
+  // K_t × capiAssetShare. 1.5% matches r_f_annuity (sovereign-hedge real
+  // rate); represents a guaranteed FLOOR — bonus from the cascade adds upside.
+  annuityFloorRate: 0.015,
+  // §5.9 (v2.0, overlapping mode only) cap on fund return reinvested into K_t.
+  // 20% is the design starting point pending calibration so K_t stabilises
+  // over 2027–2096; tunable via expert UI once cascade is wired.
+  reinvestCap: 0.20,
   // §3.7 endogenous rate premium
   rpThreshold1: 150,
   rpSlope1: 0.0002,
@@ -759,7 +775,6 @@ export function runSimulation(userConfig = {}) {
     // Équinoxe is a reform of the legacy PAYG payout structure only — by design
     // it does not reduce capi pensions. Spec §5.13 eq (51) is correct as written;
     // do not "harmonise" by substituting E0_net_t.
-    const capiPayoutFloor_t = cfg.E0 * capiRetirees_t * I_factor_t;             // (51)
     const LE_at_A_R_t = cfg.lifeExpAt65_Y0 + (65 - cfg.retirementAgeBase)
                       + (t / 10) * cfg.lifeExpAt65_per_decade
                       - (A_R_t - cfg.retirementAgeBase);                        // (52a)
@@ -785,6 +800,18 @@ export function runSimulation(userConfig = {}) {
     // diagnostics) but DOES NOT feed the payout formula in v1.0a.
     const capiRetireeShare_t = retireeIdx_t > 0 ? capiRetirees_t / retireeIdx_t : 0;
     const potBasedPayout_t   = K_t * annuityRate_t * capiAssetShare_t;          // (53)
+
+    // v2.0 (PR #17) — cashFlowMode dispatch.
+    // 'legacy':     E0 × capiRetirees × I_factor (v1.3 floor; can deplete K_t).
+    // 'overlapping': K_t × capiAssetShare × annuityFloorRate (1.5% real).
+    //   The K_t-share floor scales with the actual fund and avoids terminal-year
+    //   K_t depletion. State guarantee continues to post any shortfall to D_t
+    //   each year (annually, not at depletion) via the existing shortfall_t →
+    //   D_t mechanism below.
+    const capiPayoutFloor_t = cfg.cashFlowMode === 'overlapping'
+      ? K_t * capiAssetShare_t * (cfg.annuityFloorRate ?? 0.015)
+      : cfg.E0 * capiRetirees_t * I_factor_t;                                   // (51)
+
     const capiPayoutDesired_t = Math.max(capiPayoutFloor_t, potBasedPayout_t);  // (54)
     const shortfall_t  = Math.max(0, capiPayoutDesired_t - K_avail_t);
     const capiPayout_t = capiPayoutDesired_t;
