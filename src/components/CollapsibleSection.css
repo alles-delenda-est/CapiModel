@@ -102,12 +102,12 @@
 }
 
 .cs-open {
-  max-height: 800px;
+  max-height: 6000px;
   opacity: 1;
   /* Switch overflow to visible after the open animation completes so that
      absolutely-positioned tooltips can escape the clipping boundary. */
   overflow: visible;
-  transition: max-height 0.3s ease, opacity 0.25s ease, overflow 0s 0.3s;
+  transition: max-height 0.6s ease, opacity 0.25s ease, overflow 0s 0.3s;
 }
 
 .cs-content {
