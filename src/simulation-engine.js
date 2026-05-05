@@ -873,7 +873,7 @@ export function runSimulation(userConfig = {}) {
       U_t, delta_U_t, units_sold, priceDiscount_t, P_eff_t, gain_t, hlmActive_t,
       H_t_proceeds,
       // §5.8 borrowing rate
-      GDP_t, D_ext_t, debtRatio_t, r_d_t, debtInterest_t,
+      GDP_t, D_ext_t, debtRatio_t, D_t_to_gdp_pct: GDP_t > 0 ? D_t / GDP_t * 100 : 0, r_d_t, debtInterest_t,
       // §5.9 waterfall
       fundReturn_t, abatement_t, nonEmplrNet_t, deficit_t, emplrAvail_t,
       emplrToLeg_t, emplrToCap_t, netFlow_t,
