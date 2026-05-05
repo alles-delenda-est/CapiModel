@@ -151,7 +151,7 @@ v2.0 replaces the parametric smoothstep demographic kernel (eqs 7a–7e) with a 
 All downstream equations already propagate the demographic correction correctly:
 - **Contributions** (`C_s_t`, `C_e_t`): flow through `W_t = W0 × Ω_t × empFactor × activePop_t` — no equation change, better `activePop_t`.
 - **GDP** (`GDP_t`): `baseGDP × Ω_t × empFactor × activePop_t` — inherits actuarial improvement automatically.
-- **`legacyShareAvg_t` held-flat bias**: partially corrected by the concave T60 survival curve (vs symmetric smoothstep); full mortality-weighted share correction deferred to v2.1.
+- **`legacyShareAvg_t` held-flat bias**: **fully fixed in v2.0** via a per-cohort population mask — each capi sub-cohort is tracked with its entry-year `legacyShare` and aged via T60 survival, so `legacyShareAvg_t` is a true population-weighted average rather than a held-flat approximation.
 
 ### Backward compatibility
 

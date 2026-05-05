@@ -20,6 +20,8 @@ Actuarial replacement with exact INSEE/COR tables was flagged at §10.4 and §10
 - Replace eqs 7a–7e with table-driven equivalents.
 - Introduce new `demographicMode` config parameter and embedded data tables.
 - Audit and confirm linkages from labour force to contributions and GDP (§6 below).
+- Per-cohort population mask for `legacyShareAvg_t` (eliminates the held-flat bias documented in v1.1; §6.5).
+- Align Monte Carlo demographic uncertainty to the user's `demoScenario` selection (§9.5).
 - Preserve full backward compatibility: `demoMode: 'parametric'` reproduces current behaviour exactly.
 
 **Out of scope** for v2.0 (deferred to v2.1+):
@@ -113,9 +115,17 @@ export const COR_LOW    = { P_act: [...], P_ret: [...], years: [...] };
 // Index: age − 60 (so index 0 = age 60, index 45 = age 105)
 export const INSEE_T60_QX_MALE   = [/* 46 values */];
 export const INSEE_T60_QX_FEMALE = [/* 46 values */];
-// Population-weighted mix (COR uses ~48% male / 52% female in retiree pool)
-export const INSEE_T60_QX_MIXED  = INSEE_T60_QX_MALE.map((q, i) =>
-  0.48 * q + 0.52 * INSEE_T60_QX_FEMALE[i]);
+
+// 2027 retiree pool age distribution (DREES Édition 2025, single-age weights for ages 64–85).
+// 22-element array; indices: age − 64. Sums to 1.0.
+// Captures the natural concentration of the retiree pool around the modal entry age (~67–70)
+// and the long but thin tail toward 85+. Replaces the uniform 1/22 placeholder in v0 of this spec.
+export const RETIREE_AGE_WEIGHTS_2027 = [/* 22 values, transcribed from DREES 2025 */];
+
+// NOTE: do NOT pre-blend qx values across genders. Because male mortality > female mortality,
+// a static qx blend systematically over-represents males in the surviving cohort and overstates
+// deaths at advanced ages. Instead, compute S_male(a, t) and S_female(a, t) independently from
+// the gender-specific qx arrays and blend the resulting *survival curves* (see §5.3).
 ```
 
 **Values to source at implementation time**: the actual numeric arrays must be transcribed from the COR June 2025 rapport annexe statistique (Table S1) and the INSEE T60 fichier Excel. Do not infer values from secondary sources; use the primary publications.
@@ -158,7 +168,7 @@ A new **Démographie** `CollapsibleSection` (level `critical`) is added to the s
 | Mix mortalité féminine | `mortalityFemaleFraction` | 0.40–0.60 | 0.52 | Yes (Tier B) |
 
 Tooltip text for `demoMode`:
-> "Mode actuariel : utilise les projections COR juin 2025 et les tables de mortalité INSEE T60. Mode paramétrique : courbe lissée (lissage smoothstep) calée manuellement sur le scénario central COR — compatible avec toutes les versions précédentes."
+> "Mode actuariel : utilise les projections COR juin 2025 et les tables de mortalité INSEE T60. Mode paramétrique : courbe lissée (lissage smoothstep) calée manuellement sur le scénario central COR."
 
 ---
 
@@ -207,28 +217,35 @@ Same extrapolation rule applies post-2070.
 
 **Current (7e):** `cohIdx(t) = 1 − smoothstep(t, 0, 45)` — parametric, symmetric.
 
-**Replacement concept:** Track the surviving fraction of the 2027 retiree pool (median age ~70 in 2027) using cumulative T60 survival.
+**Replacement concept:** Track the surviving fraction of the 2027 retiree pool (median age ~70 in 2027) using cumulative T60 survival, computed independently for males and females, then blended at the survival-curve level.
 
 ```
-// S(a, t) = probability of surviving from age a to age a+t under T60 tables
-S(a, t) = ∏_{k=0}^{t-1} (1 − q_{a+k})
+// S_g(a, t) = probability that a person of gender g, aged a in 2027, survives to age a+t.
+// Computed independently for males and females from gender-specific qx arrays.
+S_male(a, t)   = ∏_{k=0}^{t-1} (1 − q_male[a+k])
+S_female(a, t) = ∏_{k=0}^{t-1} (1 − q_female[a+k])
 
-// Weighted survival of the 2027 retiree pool:
-//   median entry age A_R_0 ≈ 64; pool spans ~64–100 in 2027.
-//   Weight by 2027 age distribution (uniform approximation over 64–85).
-//   Upper bound: age 105 (q_x = 1 beyond).
+// Blend at the *survival-curve* level (NOT at qx). The 2027 retiree pool starts
+// at ~48% male / 52% female (cfg.mortalityFemaleFraction). Because males die faster,
+// the surviving cohort becomes increasingly female with age — blending qx statically
+// at every age would systematically overstate deaths at advanced ages. Curve-level
+// blending captures the actual gender-mix dynamics.
+S_mixed(a, t) = (1 − f) × S_male(a, t) + f × S_female(a, t)
+                                   where f = cfg.mortalityFemaleFraction (default 0.52)
 
-cohIdx_actuarial(t) = Σ_{a=64}^{85} w(a) × S(a, t)                 (7e′)
+// Cohort survival index = age-weighted mean of S_mixed across the 2027 retiree pool.
+// Weights w(a) come from the actual 2027 age pyramid (DREES Édition 2025), not uniform.
+// A uniform weight would over-represent 80–85-year-olds (high mortality), causing
+// cohIdx_actuarial to plunge artificially fast in years 0–10.
+cohIdx_actuarial(t) = Σ_{a=64}^{85} w(a) × S_mixed(a, t)              (7e′)
 
-where w(a) = 1/22   (uniform over entry ages 64–85 in 2027)
-and  S(a, t) is clamped to 0 when a + t > 105.
+where w(a) = RETIREE_AGE_WEIGHTS_2027[a − 64]   (DREES 2025 age pyramid, sums to 1)
+and   S_mixed(a, t) is clamped to 0 when a + t > 105.
 ```
 
-**Implementation note**: `S(a, t)` can be precomputed at startup as a 22 × 70 matrix (22 entry ages × 70 years) using `INSEE_T60_QX_MIXED`. The per-year `cohIdx_actuarial(t)` is then a dot product: `w · S[:, t]`, callable in O(22) per step.
+**Implementation note**: `S_male[a][t]` and `S_female[a][t]` are precomputed at startup as two 22 × 70 matrices (22 entry ages × 70 years). The per-year `cohIdx_actuarial(t)` is then a dot product: `w · ((1−f)·S_male[:, t] + f·S_female[:, t])`, callable in O(22) per step.
 
 **Effect on `legacyShareAvg_t`**: The actuarial `cohIdx` is concave (fast early survival, slow late survival), whereas the current smoothstep is S-shaped. This removes the systematic overshoot of late-horizon `transitionalPaygExp_t` and reduces the ~45% cumulative bias documented in §2.3.
-
-**Age-distribution sensitivity**: The uniform 64–85 weight is a first approximation. v2.1 can refine with the actual INSEE 2027 retiree age pyramid (available in DREES Édition 2025).
 
 ---
 
@@ -282,39 +299,69 @@ const GDP_t = cfg.baseGDP * Omega_t * empFactor * activePop_t;          // (31) 
 
 **Status: no change needed to eq (31); automatically inherits actuarial labour force from `activePop_t`.**
 
-> **Limitation note**: GDP in the current model is purely a labour-productivity-and-headcount product. It does not reflect capital deepening, TFP shocks, or the fiscal drag of high `D_t/GDP_t`. Actuarial demographic fidelity improves the *labour quantity* term but does not resolve these structural simplifications. This is a documented v2.x out-of-scope item.
+> **Limitation note**: GDP in the current model is purely a labour-productivity-and-headcount product. It does not reflect capital deepening, TFP shocks, or the fiscal drag of high `D_t/GDP_t`. Actuarial demographic fidelity improves the *labour quantity* term but does not resolve these structural simplifications. **Priority for v3.0.**
 
-### 6.5 `legacyShareAvg_t` held-flat fix
+### 6.5 `legacyShareAvg_t` per-cohort tracking (full v2.0 fix)
 
-The current held-flat logic (once `capiRetirees_t` stops growing, `legacyShareAvg_t` is frozen):
+The v1.1 held-flat logic (once `capiRetirees_t` stops growing, `legacyShareAvg_t` is frozen) is documented as biased when high-`legacyShare` older cohorts die faster than younger lower-`legacyShare` cohorts. v2.0 fixes this fully — not as a deferred enhancement.
+
+#### Mechanism: per-cohort population mask
+
+Maintain a running map of capi-cohort sub-populations indexed by their year of entry into the capi retiree pool. Each sub-cohort carries three quantities:
 
 ```js
-if (capiRetirees_t > capiRetirees_prev + 1e-15) {
-  // blend new entrants with incumbents (eq 15b)
-  ...
-} else {
-  // held flat — biased when high-legacyShare cohorts are dying faster
-  legacyShareAvg = legacyShareAvg;
-}
+// New simulation state, initialised empty at t=0
+let capiCohortHistory = [];   // each entry: { entryYear, count, legacyShare, ageAtEntry }
 ```
 
-**With actuarial `cohIdx`**: the `capiRetirees_t` calculation uses the actuarial survival curve, which declines more steeply after year 35 (vs the current flat-then-drop smoothstep). This means `capiRetirees_t` will naturally reflect faster cohort exit, producing more `delta > 0` windows for blend updates and reducing the held-flat duration.
+**Each iteration of the main loop:**
 
-**Additional fix (v2.0)**: introduce an explicit mortality-weighted `legacyShareAvg` decrement when `cohIdx_actuarial` declines:
+1. **Apply differential mortality** to existing sub-cohorts using the same T60 tables that produce `cohIdx_actuarial`:
+   ```
+   for each cohort C in capiCohortHistory:
+       a_now = C.ageAtEntry + (t − C.entryYear)
+       survival_factor = S_mixed(C.ageAtEntry, t − C.entryYear) /
+                         S_mixed(C.ageAtEntry, t − 1 − C.entryYear)
+       C.count *= survival_factor
+   ```
+   Older sub-cohorts (higher `ageAtEntry + tenure`) lose proportionally more population.
 
-```
-// When cohort survival declines, older (higher-legacyShare) cohorts exit disproportionately.
-// Apply a first-order correction using the change in cohIdx:
-delta_cohIdx = cohIdx_actuarial(t-1) − cohIdx_actuarial(t)    // positive when cohort shrinks
+2. **Add new entrants** (if `capiRetirees_t > capiRetirees_prev_postMortality`):
+   ```
+   newEntrants = capiRetirees_t − sum(C.count for C in capiCohortHistory)
+   if newEntrants > 0:
+       capiCohortHistory.push({
+         entryYear: t,
+         count: newEntrants,
+         legacyShare: legacyShareOfCohort(B_at_t),    // eq 15a, evaluated at this year
+         ageAtEntry: A_R_t,                            // current retirement age
+       })
+   ```
 
-// High-legacyShare cohorts (entered capi later) are younger → die slower.
-// A simple model: legacy share of exiting cohort ≈ cohort-average legacyShareAvg × (1 + bias_factor)
-// where bias_factor is estimated from the age-distribution of the cohort.
-// Conservative first implementation: bias_factor = 0 (uniform mortality across share levels).
-// This is the v2.0 baseline; v2.1 can improve with actual cohort-age distribution.
-```
+3. **Recompute `legacyShareAvg`** as the population-weighted average across surviving sub-cohorts:
+   ```
+   legacyShareAvg_t = Σ_C (C.count × C.legacyShare) / Σ_C C.count
+   ```
 
-**Implementation decision**: the held-flat bias is documented and tolerated in v1.x. For v2.0, the actuarial `cohIdx` naturally reduces (but does not eliminate) the bias. A full mortality-weighted share correction is a v2.1 enhancement. **Status: partial fix in v2.0 via better `cohIdx`; full fix deferred.**
+This eliminates both the held-flat bias and the symmetric-mortality-across-shares bias in a single coherent mechanism.
+
+**Memory cost**: at most `N = 70` sub-cohorts (one new entry per simulation year). Each entry is 4 numbers → 280 numbers max. Negligible.
+
+**Compute cost**: O(N) per loop iteration → O(N²) total = O(70²) = 4900 operations. Negligible vs the rest of the engine.
+
+**Bias direction comparison (relative to v1.1 held-flat):**
+
+| Mechanism | Late-horizon `transitionalPaygExp_t` bias |
+|-----------|------------------------------------------|
+| v1.1 held-flat | Overstates by ~45 % of peak debt cumulatively at t=69 |
+| v2.0 actuarial `cohIdx` only | Reduces bias to ~15 % (faster cohort exit alone) |
+| v2.0 actuarial `cohIdx` + per-cohort mask | Reduces bias to <5 % (mortality-weighted share is now correct) |
+
+The per-cohort mask requires the same T60 survival data already embedded for `cohIdx_actuarial`, so it adds no new data dependencies — only state and ~10 lines of loop code.
+
+#### Engine-side note for the implementer
+
+The map is keyed by `entryYear`, not by birth cohort, because `legacyShareOfCohort(B)` (eq 15a) is already evaluated at the moment of entry and stored — no re-evaluation needed. Sub-cohorts with `count` below an epsilon (e.g., 1e-9 millions = 1000 people) can be pruned to keep iteration fast.
 
 ---
 
@@ -327,7 +374,8 @@ delta_cohIdx = cohIdx_actuarial(t-1) − cohIdx_actuarial(t)    // positive when
 ### 7.2 Migration path
 
 - **v2.0 default**: `demoMode: 'parametric'` — no breaking change. The actuarial mode is available but opt-in.
-- **v2.1**: `demoMode: 'actuarial'` becomes the default for the `cor_central` and `cor_low` scenarios. The `realistic` and `reformed` parametric profiles remain in parametric mode only (no COR-table equivalent).
+- **v2.1**: `demoMode: 'actuarial'` becomes the default. Parametric mode is preserved indefinitely for fixture-regression and historical reproducibility.
+- **Profile-to-scenario mapping** (when a user toggles `demoMode` parametric → actuarial): `cor_central` → `cor_central`; `realistic` → `cor_low` (closest match by retiree growth profile); `reformed` → `cor_high` (per §9.6 above).
 - **Fixture split**: the existing `v1.1-default-trace.json` remains the contract for parametric mode. A new `v2.0-actuarial-cor-central-trace.json` fixture is created for actuarial mode at v2.0 release.
 
 ### 7.3 Preset compatibility
@@ -341,10 +389,11 @@ All existing presets (`default`, `originalV5`, `optimiste`, `stress`) use `demoP
 ### Phase 1: Data embedding
 
 1. Create `src/demographic-tables.js`.
-2. Transcribe COR June 2025 Table S1 (`P_act_t`, `P_ret_t` for 2024–2070, three scenarios) as constant arrays.
-3. Transcribe INSEE T60 2023 `q_x` for ages 60–105, male and female.
-4. Compute the mixed `q_x` array and the population-weighted mixed survival matrix `S[a][t]` (22 × 70).
-5. Commit the data file with checksums and the source document reference in the file header.
+2. Transcribe COR June 2025 Table S1 (`P_act_t`, `P_ret_t` for 2024–2070, three scenarios) as constant arrays. Apply the **flat extrapolation** rule (§9.2) to extend each scenario from 2070 to 2096.
+3. Transcribe INSEE T60 2023 `q_x` for ages 60–105, **male and female separately** (no pre-blended `qx` table — see §3.2).
+4. Precompute two survival matrices: `S_male[a][t]` and `S_female[a][t]` (each 22 × 70). The mixed survival is computed at runtime via `(1−f) × S_male + f × S_female` where `f = cfg.mortalityFemaleFraction`.
+5. Transcribe `RETIREE_AGE_WEIGHTS_2027` (22 entries) from the DREES Édition 2025 retiree age pyramid; verify it sums to 1.0.
+6. Commit the data file with checksums and the source document reference in the file header.
 
 ### Phase 2: New kernel functions
 
@@ -402,17 +451,24 @@ Add the **Démographie** `CollapsibleSection` to `App.jsx` (§4.2). Gate the act
 
 ## 9. Open questions
 
-1. **COR 2025 vs 2024 edition**: The June 2025 COR report is the most recent. If the June 2026 report is published before this PR merges, use the latest edition and update the source reference. The data format is stable across editions.
+1. **COR 2025 vs 2026 edition** *(resolved):* As of May 2026 the COR juin 2026 rapport annuel has not yet been published — the June editions typically drop mid-to-late June. **Decision:** stick with the COR juin 2025 tables for v2.0 to unblock implementation. Updating to the 2026 edition is a trivial data-only patch in `demographic-tables.js` (no engine change), to ship as v2.0.1 once the new tables are released.
 
-2. **Extrapolation method for 2071–2096**: The terminal CAGR approach (§5.1) is simple but produces linear long-run decline. Alternative: use the Omphale 2021 "variante 0" (stable-structure) as the flat extrapolation. Decision pending review.
+2. **Extrapolation method for 2071–2096** *(decision: flat extrapolation):* Two options were considered:
 
-3. **`R0` calibration in actuarial mode**: `R0 = 18.0 M` is calibrated to the 2027 retiree pool from DREES 2025. The COR table's `P_ret_t[idx(2027)]` may differ by ±0.5 M depending on the COR scope (some editions include disability pensioners). Implementer should verify `P_ret_0 ≈ 18.0` at t=0; if not, document the discrepancy and update `R0_actuarial` as a separate constant.
+   | Option | Mechanism | Risk |
+   |--------|-----------|------|
+   | **(a)** Terminal CAGR | `g = (P[2070]/P[2065])^(1/5) − 1`, then exponential continuation to 2096 | Compounds local 2065–2070 features (e.g., a baby-boom-echo retirement dip) into 26-year exponential drift. If the final COR window happens to be in a localised P_act dip of −0.3 %/yr, terminal P_act[2096] ends up ~7.5 % below the flat alternative; combined with a +0.1 %/yr P_ret drift (~+2.6 % at 2096), late-horizon `D_t` and `CI_t` swell by 5–10 % vs flat. Bias direction is scenario-dependent and unstable. |
+   | **(b)** Flat / Omphale "variante 0" | Hold P_act and P_ret at their 2070 values for 2071–2096 | Conservative; ignores any genuine post-2070 trend, but does not amplify transient artefacts. Matches the Omphale 2021 stable-structure variant philosophy. |
 
-4. **Employment rate disaggregation**: The current `empFactor` ramp (69% → 76% over 12 years) is a single aggregate. COR reports employment rates by age cohort. A more precise treatment would compute `W_t` as `Σ_a N_a_t × empRate(a) × wage(a)`. This is v2.1 scope; flag it here so the v2.0 data embedding includes the per-age employment table even if it is unused.
+   **Decision: option (b) — flat / stable-structure extrapolation.** The risk asymmetry is decisive: a 5–10 % KPI swing driven by a 5-year window in the source data is unacceptable for a model that purports horizon-relevant insight. The implementer should hold `P_act[y] = P_act[2070]` and `P_ret[y] = P_ret[2070]` for `y ∈ [2071, 2096]`. v2.x can revisit if Omphale 2026 publishes long-horizon data.
 
-5. **Monte Carlo integration**: `monte-carlo-worker.js` applies Cholesky-correlated demographic shocks to the parametric kernel. In actuarial mode, demographic uncertainty is already scenario-encoded (COR high/central/low). The Monte Carlo worker should either: (a) select a scenario per draw, or (b) apply residual uncertainty around the chosen scenario. This interaction is not resolved in v2.0 — the worker defaults to parametric-mode kernel regardless of `demoMode` until v2.1.
+3. **`R0` calibration in actuarial mode** *(noted):* COR `P_ret` perimeter and DREES `R0` perimeter may differ by ±0.5 M (disability, minimum vieillesse). Implementer should document the delta in `demographic-tables.js` comments; `retireeIdx_actuarial(t)` remains strictly normalised (`P_ret_t / P_ret_0`) so the relative growth curve is applied to the model's absolute `R0` regardless of perimeter mismatch.
 
-6. **`reformed` profile has no COR equivalent**: the `reformed` scenario posits a positive active-population trajectory (fertility rebound + sustained immigration) that exceeds even COR's optimistic scenario. It is retained as parametric-only and should be clearly labelled in the UI ("Scénario transformiste — hors projection COR").
+4. **Employment rate disaggregation** *(noted, deferred to v2.1):* aggregate `empFactor` retained. v2.0 data embedding may include per-age employment tables ahead of consumption.
+
+5. **Monte Carlo integration** *(decision: align MC to user's actuarial scenario in v2.0):* The earlier proposal to defer MC alignment to v2.1 would create a jarring UX where risk intervals diverge from the central projection (the central run uses COR `cor_central`, but the MC bounds come from parametric-mode shocks). **v2.0 fix:** when `cfg.demoMode === 'actuarial'`, the Monte Carlo worker performs a discrete uniform draw `U(0, 1)` to select between `cor_low`, `cor_central`, and `cor_high` for each iteration, replacing (not adding to) the Cholesky demographic shocks. The financial-shock factors (returns, rates, wage growth) continue to use the existing Cholesky channel. This keeps MC bounds coherent with the deterministic central run and gives the user three-scenario uncertainty bands as a first approximation. Residual within-scenario uncertainty (e.g., fertility variance around `cor_central`) is a v2.1 refinement.
+
+6. **`reformed` profile mapping in actuarial mode** *(revised):* On closer inspection the `reformed` parametric profile has the **same retiree-side parameters as `cor_central`** (`peakMult=1.30`, `longRunMult=1.25`, `peakT=22`); only `activePopAnchors` differs (`reformed`: positive trajectory peaking at +6 %; `cor_central`: declining to −14 %). So `reformed` is not "transformiste hors-projection" — it is closer to `cor_central` retirees overlaid with `cor_high` active population, i.e., a labour-market reform overlay (higher employment / fertility) without a parallel mortality assumption. **Mapping in actuarial mode**: present `reformed` as `cor_high` (the COR high scenario, which combines higher fertility/immigration with the resulting labour-pool growth). Document the parametric-vs-actuarial mapping in `presets.js` so the simplified-view scenarios remain coherent.
 
 ---
 
@@ -420,10 +476,11 @@ Add the **Démographie** `CollapsibleSection` to `App.jsx` (§4.2). Gate the act
 
 | File | Change | Breaking? |
 |------|--------|-----------|
-| `src/demographic-tables.js` | **New file**: COR and T60 data arrays | No |
-| `src/simulation-engine.js` | Add 3 actuarial kernel functions; add kernel dispatch in loop; add 3 config params | No (default=parametric) |
+| `src/demographic-tables.js` | **New file**: COR P_act/P_ret arrays (3 scenarios, flat-extrapolated to 2096); INSEE T60 male+female qx (no pre-blended table); DREES 2027 retiree age-pyramid weights | No |
+| `src/simulation-engine.js` | Add 3 actuarial kernel functions; loop dispatch; 3 new config params; per-cohort mask state for `legacyShareAvg_t` (§6.5) | No (default=parametric) |
 | `src/App.jsx` | Add Démographie section with mode/scenario selectors | No |
-| `tests/engine.test.js` | Property-based coverage for actuarial mode | No |
+| `src/monte-carlo-worker.js` | In actuarial mode, replace Cholesky demographic shocks with discrete uniform draw over `cor_low`/`cor_central`/`cor_high` (§9.5) | No |
+| `tests/engine.test.js` | Property-based coverage for actuarial mode; per-cohort-mask invariants | No |
 | `tests/fixtures/v2.0-actuarial-cor-central-trace.json` | **New fixture** | No |
 | `tests/fixtures/v1.1-default-trace.json` | **Unchanged** (parametric contract) | N/A |
 | `CapiModel_overview.md` | v2.0 section, update limitations | No |

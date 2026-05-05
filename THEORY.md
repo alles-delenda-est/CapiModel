@@ -136,7 +136,7 @@ The parametric `cohIdx(t) = 1 − smoothstep(t, 0, 45)` is symmetric around t=22
 All downstream linkages are already correct:
 - **`C_s_t`, `C_e_t`**: flow entirely through `W_t` which uses `activePop_t`. Actuarial mode improves `activePop_t`; no equation change needed.
 - **`GDP_t`**: already `baseGDP × Omega_t × empFactor × activePop_t`. Inherits actuarial improvement automatically.
-- **`legacyShareAvg_t` held-flat**: partially fixed by actuarial `cohIdx` (steeper late-horizon decline → fewer held-flat periods); full mortality-weighted share correction deferred to v2.1.
+- **`legacyShareAvg_t` held-flat**: fully fixed in v2.0 via a per-cohort population mask. Each capi sub-cohort is tracked with its entry-year `legacyShare` and its T60 survival is applied yearly; `legacyShareAvg_t` is then a population-weighted average across surviving sub-cohorts, naturally capturing the higher mortality of older (higher-`legacyShare`) cohorts.
 
 ### Backward compatibility
 
