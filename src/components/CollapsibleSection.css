@@ -102,12 +102,15 @@
 }
 
 .cs-open {
+  /* 6000px ceiling — large enough that no section ever hits it, so the
+     overflow: visible below never causes content to paint outside the
+     container and overlap the next section. overflow: visible is still
+     needed so EnhancedSlider's CSS tooltip pseudo-elements (position:
+     absolute, bottom: 100%) can escape the clipping boundary upward. */
   max-height: 6000px;
   opacity: 1;
-  /* Switch overflow to visible after the open animation completes so that
-     absolutely-positioned tooltips can escape the clipping boundary. */
   overflow: visible;
-  transition: max-height 0.6s ease, opacity 0.25s ease, overflow 0s 0.3s;
+  transition: max-height 0.4s ease, opacity 0.25s ease, overflow 0s 0.3s;
 }
 
 .cs-content {

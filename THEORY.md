@@ -77,6 +77,75 @@ The largest ongoing simplification is the **held-flat mortality assumption** for
 
 The peak-debt impact of v1.1 vs v1.0a on the default preset is +24% in peak `r_d(t)` (4.45% → 5.50%) and a peak-debt year shift from 2057 to 2065. Three of the six presets — `v1_stress`, `equinoxeOnly`, `labourHousingOnly` — hit the 0.20 `r_d_cap` under v1.1; all three are designated "DESIGNED CATASTROPHIC" in `presets.js` and likely hit the cap under v1.0a too (v1.0a fixtures for non-default presets are not captured in the repo).
 
+## τ_K: annual levy on the capitalisation stock (v1.2)
+
+`tauK` is an annual levy on the end-of-year K_t stock routed to transition-debt repayment. It fires only while D_t > 0 and respects a solvency floor (`K_floor_t = annuity-reserve minimum`) to prevent K_t from falling below what is needed to serve guaranteed pensions.
+
+The optimum is structurally determined by two opposing forces: higher τ_K accelerates D_t → 0, shrinking interest payments, but simultaneously erodes K_t, reducing the ongoing levy base and eventually triggering guaranteed-annuity exposure. The empirical optimum at default demographics is τ_K ≈ 3.0 % (peak debt −75 %, total interest −88 %, terminal debt 12 Md€). At 3.5 % K_t = 0 by t = 69 and terminal debt spikes due to State-guarantee activation.
+
+GE feedback: τ_K reduces K_t/GDP_t, which lowers the general-equilibrium penalty `gePenalty_t` and therefore raises the effective capi return `r_c_eff_t` modestly. This makes the optimum slightly higher than a naive revenue-matching calculation would suggest.
+
+## Δτ_e: employer contribution-rate cut and infeasibility analysis (v1.3) {#employer-cut}
+
+The employer PAYG contribution rate `τ_e = 16.5 %` of the wage bill is the primary revenue source for the legacy-pension waterfall (eqs 39–40). v1.3 allows a permanent step reduction `deltaTauxPatronal` activated at t = `taxCutStartT` (default: t = 2, year 2029), plus an optional annual increment `deltaTauxPatronalPA` for phased relief.
+
+### Why any annual increment is catastrophic
+
+The net-flow identity at the transition period (while the capi levy τ_K compensates) is:
+
+```
+netFlow_t = nonEmplrNet_t + emplrRevenue_t − legacyExp_t − tauKLevy_t
+```
+
+When `deltaTauxPatronalPA > 0`, `emplrRevenue_t` falls by `W_t × PA` per year. At t = 2 (2029), K_t ≈ 2,800 Md€ while the levy base of a 0.5%/yr annual cut is ≈ 370 Md€/yr at year 1, growing every year. Because `tauKLevy_t = τ_K × K_t`, offsetting a 0.5%/yr cut requires τ_K ≈ 370/2800 ≈ 13 %/yr at inception — far beyond the 3.5 % safety ceiling. Total 70-year employer relief from a 0.5%/yr cut ≈ 33,380 Md€ >> 15,100 Md€ from optimal τ_K savings. Result: catastrophic debt spiral regardless of τ_K value.
+
+### Viable regime for permanent step cuts
+
+An exhaustive 2D sweep over (`deltaTauxPatronal ∈ [0, 1.0 %]`, `tauK ∈ [0, 5.0 %]`) confirmed:
+- Any `deltaTauxPatronal > 0.5 %` causes terminal K_t depletion at all τ_K levels.
+- Joint optimum: `deltaTauxPatronal = 0.5 %`, `tauK = 2.5 %` → total interest 3,508 Md€ (−80 % vs no cut), terminal debt 17 Md€, initial employer relief ≈ 7 Md€/yr (2029), eventual organic relief ≈ 630 Md€/yr by t = 69.
+
+The "eventual" relief arises because as the legacy-pension obligation winds down (demographic extinction by ~2075), `emplrToLeg_t` falls to zero; the freed employer contributions that were flowing to `emplrToCap_t` then represent a structural ongoing payroll-tax reduction that can be permanently removed without fiscal cost.
+
+### Default and UI exposure
+
+Both `deltaTauxPatronal` and `deltaTauxPatronalPA` default to 0. The mechanic is pedagogically complex and the viable parameter range is narrow enough that accidental misconfiguration is highly likely. Both sliders are exposed only in the expert Tier B section ("Baisse des charges patronales v1.3") alongside τ_K. The two KPI cards (initial and eventual employer relief) are also gated behind `expertMode`.
+
+## Demographic kernel v2.0 — actuarial replacement (planned)
+
+The parametric kernel (§5.2, eqs 7a–7e) was flagged at §10.4 and §10.6 as the highest-priority structural limitation. `DemographicKernel_plan.md` specifies the full replacement. Summary of the design:
+
+### What changes
+
+Three kernel functions are replaced by table-driven equivalents:
+
+| Current | Replacement | Source |
+|---------|------------|--------|
+| `retireeIdx(t)` — smoothstep envelope (peakMult, longRunMult, peakT) | `retireeIdx_actuarial(t)` — `P_ret_t / P_ret_0` from COR table | COR juin 2025, Table S1 |
+| `activePopFactor(t)` — piecewise linear over 5 anchors | `activePopFactor_actuarial(t)` — `P_act_t / P_act_0` from COR table | COR juin 2025, Table S1 |
+| `cohIdx(t)` — `1 − smoothstep(t, 0, 45)`, symmetric | `cohIdx_actuarial(t)` — cumulative T60 survival of 2027 retiree pool | INSEE T60 2023 |
+
+All three replacements produce normalised indices (ratio to t=0) so downstream equations (9, 10, 11, 23, 24, 25, 25b, 31) are **structurally unchanged**.
+
+### Why `cohIdx` matters most
+
+The parametric `cohIdx(t) = 1 − smoothstep(t, 0, 45)` is symmetric around t=22 — it loses the 1960s cohort at a constant rate. Real T60 mortality is concave: the survivor mass drops slowly in years 0–20 (most 60-year-olds in 2027 reach 80) then steeply in years 25–45 (few 90-year-olds survive). The symmetric form overstates late-horizon `transitionalPaygExp_t`, accumulating a ~45% bias relative to peak debt by t=69. The T60-based `cohIdx_actuarial` corrects this without requiring any downstream equation change.
+
+### Linkage audit result (see §6 of `DemographicKernel_plan.md`)
+
+All downstream linkages are already correct:
+- **`C_s_t`, `C_e_t`**: flow entirely through `W_t` which uses `activePop_t`. Actuarial mode improves `activePop_t`; no equation change needed.
+- **`GDP_t`**: already `baseGDP × Omega_t × empFactor × activePop_t`. Inherits actuarial improvement automatically.
+- **`legacyShareAvg_t` held-flat**: fully fixed in v2.0 via a per-cohort population mask. Each capi sub-cohort is tracked with its entry-year `legacyShare` and its T60 survival is applied yearly; `legacyShareAvg_t` is then a population-weighted average across surviving sub-cohorts, naturally capturing the higher mortality of older (higher-`legacyShare`) cohorts.
+
+### Backward compatibility
+
+`demoMode: 'parametric'` (default in v2.0 during validation period) reproduces bit-identical output to v1.x. The existing `v1.1-default-trace.json` fixture remains the parametric-mode regression contract. A new `v2.0-actuarial-cor-central-trace.json` fixture is created when actuarial mode is validated.
+
+### New demographic settings
+
+Three new config parameters: `demoMode` (`'parametric' | 'actuarial'`), `demoScenario` (`'cor_central' | 'cor_high' | 'cor_low'`), `mortalityFemaleFraction` (default 0.52). A new **Démographie** UI section exposes scenario selection (non-expert) and the mortality mix (Tier B expert). The `reformed` parametric profile has no COR-table equivalent and is preserved as parametric-only.
+
 ## Open questions (v1.1 wishlist, spec §10.13–§10.14)
 
 - **`r_c` exposure.** Currently 0.045 hardcoded; v1.1 should expose as a sensitivity slider [0.025, 0.06] for stress-testing realised returns.
