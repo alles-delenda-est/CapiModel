@@ -165,10 +165,12 @@ export const DEFAULT_CONFIG = {
   // user-facing default once the fund-return cascade is calibrated; for now
   // the toggle is wired so v1.3 invariants/tests keep passing.
   cashFlowMode: 'legacy',
-  // §5.13 (v2.0, overlapping mode only) guaranteed real annuity rate on
-  // K_t × capiAssetShare. 1.5% matches r_f_annuity (sovereign-hedge real
-  // rate); represents a guaranteed FLOOR — bonus from the cascade adds upside.
-  annuityFloorRate: 0.015,
+  // §5.13 (v2.0, overlapping mode only) guaranteed annual payout rate on
+  // K_t × capiAssetShare, drawn from K_avail before the cascade budget.
+  // 2.0% was calibrated to maximise payout to the 2047-2066 cohort while
+  // limiting terminal K_t loss; below 1.5% (r_f_annuity) offers no real
+  // return guarantee, above ~2.5% depresses pot-based payouts from t=33+.
+  annuityFloorRate: 0.020,
   // §5.9 (v2.0, overlapping mode only) cap on fund return reinvested into K_t.
   // 20% is the design starting point pending calibration so K_t stabilises
   // over 2027–2096; tunable via expert UI once cascade is wired.
@@ -835,7 +837,15 @@ export function runSimulation(userConfig = {}) {
         budget    -= xsubFromReturns;
       }
 
-      // Bucket 3: Debt principal reduction.
+      // Bucket 4b: Capi top-up to pot-based annuity target — BEFORE debt repayment.
+      // Ensures capi retirees receive their full pot-based annuity (annuityRate × share × K_t)
+      // whenever the returns budget allows, prioritising pensioners over debt service.
+      // Any residual beyond the target flows through as bonus after bucket 3.
+      const capiTarget_t = Math.max(0, potBasedPayout_t - capiPayoutFloor_t);
+      const capiTopUp_t  = Math.min(budget, capiTarget_t);
+      budget -= capiTopUp_t;
+
+      // Bucket 3: Debt principal reduction (from returns remaining after capi target).
       capiDebtRepaid_t = Math.min(budget, D_t);
       budget   -= capiDebtRepaid_t;
       D_t      -= capiDebtRepaid_t;
@@ -844,8 +854,9 @@ export function runSimulation(userConfig = {}) {
       capiReinvest_t = Math.min(budget, (cfg.reinvestCap ?? 0.20) * fundReturnCapi_t);
       budget -= capiReinvest_t;
 
-      // Bucket 6: Capi bonus (residual distributed as upside to capi retirees).
-      capiBonus_t = budget;
+      // Bucket 6: Residual bonus — capiTopUp already paid + any leftover above target.
+      // Identity: capiBonus_t + capiLegacyXSub_t + capiDebtRepaid_t + capiReinvest_t = fundReturnCapi_t.
+      capiBonus_t = capiTopUp_t + budget;
 
       capiPayout_t = capiPayoutFloor_t + capiBonus_t;                          // (54′)
       capiPayoutDesired_t = capiPayout_t;                                       // alias
