@@ -141,7 +141,9 @@ const CHART_TABS = [
 // --- Main App ---
 export default function App() {
   const { currentPage, navigateTo } = useHashNavigation('simulateur')
-  const [params, setParams] = useState({ ...DEFAULT_CONFIG })
+  // PR #17: user-facing default is the overlapping waterfall. Engine DEFAULT_CONFIG
+  // keeps 'legacy' so v1.3 tests stay bit-identical; App overrides here.
+  const [params, setParams] = useState({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' })
   const [activePreset, setActivePreset] = useState('v1_default')
   const [showParams, setShowParams] = useState(true)
   const [showTable, setShowTable] = useState(true)
