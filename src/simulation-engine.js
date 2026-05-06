@@ -715,7 +715,11 @@ export function runSimulation(userConfig = {}) {
     // alone. legacyExp_t is preserved as a separate diagnostic; the waterfall
     // consumes totalLegacyOutflow_t.
     const deficit_t = totalLegacyOutflow_t - nonEmplrNet_t;                     // (39')
-    const emplrAvail_t = C_e_t * (1 - cfg.phiF);                                // (40)
+    // phiF (employer floor to capi) is only active in legacy mode.
+    // In overlapping mode the cascade covers capi payout from K_t directly,
+    // so all employer contributions flow to legacy first (phiF = 0 effective).
+    const phiF_eff = cfg.cashFlowMode === 'overlapping' ? 0 : (cfg.phiF ?? 0);
+    const emplrAvail_t = C_e_t * (1 - phiF_eff);                               // (40)
 
     let emplrToLeg_t, emplrToCap_t;
     if (deficit_t <= 0) {
@@ -723,7 +727,7 @@ export function runSimulation(userConfig = {}) {
     } else if (deficit_t <= emplrAvail_t) {
       emplrToLeg_t = deficit_t;    emplrToCap_t = C_e_t - deficit_t;
     } else {
-      emplrToLeg_t = emplrAvail_t; emplrToCap_t = C_e_t * cfg.phiF;
+      emplrToLeg_t = emplrAvail_t; emplrToCap_t = C_e_t * phiF_eff;
     }
     const netFlow_t = nonEmplrNet_t + emplrToLeg_t - totalLegacyOutflow_t;      // (41) v1.1
     // v1.3 diagnostics: employer tax-cut channels.
@@ -742,24 +746,30 @@ export function runSimulation(userConfig = {}) {
       D_t = D_t + borrowed_t;                                                   // (42)
       F_t = F_t * (1 + cfg.pi);       // v1.2: compound at π (was: unchanged eq 26)
     } else {
-      const repaid_t = Math.min(cfg.alpha * netFlow_t, D_t);
+      // alpha (PAYG-surplus-to-debt routing) is only active in legacy mode.
+      // In overlapping mode the cascade handles all debt repayment from returns.
+      const alpha_eff = cfg.cashFlowMode === 'overlapping' ? 0 : (cfg.alpha ?? 1);
+      const repaid_t = Math.min(alpha_eff * netFlow_t, D_t);
       D_t = D_t - repaid_t;
       F_t = F_t * (1 + cfg.pi) + (netFlow_t - repaid_t);                       // (43) v1.2
     }
 
     // ---------- §5.11 Transition levy (smoothed) ----------
+    // lambda levy is only active in legacy mode. In overlapping mode, cascade
+    // bucket 4 incorporates its effect: contributions top up returns when the
+    // PAYG deficit exceeds the returns budget (see §5.13 below).
     // SPEC AMBIGUITY 2: spec writes T_capi_start(t) suggesting time-variation,
-    // but T_capi_start is a constant in v1.0 per eq (14). v1.1 / v1.2 plan to
-    // expose T_capi_start (and cutoffAge) as user parameters that may vary
-    // over the lifetime of the run; for v1.0 it is treated as a constant.
+    // but T_capi_start is a constant in v1.0 per eq (14).
     // SPEC AMBIGUITY 4: D_t in levyPhaseOut is post-§5.10 value.
-    const T_lambda_eff   = Math.max(cfg.Tlambda, T_capi_start);
-    const levyActivation = smoothstep(t, T_lambda_eff - 1, T_lambda_eff + 1);
-    const levyPhaseOut   = GDP_t > 0 ? smoothstep(D_t / GDP_t, 0, 0.05) : 0;
+    const T_lambda_eff   = Math.max(cfg.Tlambda ?? 15, T_capi_start);
+    const levyActivation = cfg.cashFlowMode === 'overlapping' ? 0
+      : smoothstep(t, T_lambda_eff - 1, T_lambda_eff + 1);
+    const levyPhaseOut   = cfg.cashFlowMode === 'overlapping' ? 0
+      : (GDP_t > 0 ? smoothstep(D_t / GDP_t, 0, 0.05) : 0);
     const levyFactor     = levyActivation * levyPhaseOut;
-    const grossLevy_t = levyFactor * cfg.lambda * (C_s_capi_t + emplrToCap_t);
+    const grossLevy_t    = levyFactor * (cfg.lambda ?? 0) * (C_s_capi_t + emplrToCap_t);
     const levy_t = Math.min(grossLevy_t, D_t);
-    D_t = Math.max(0, D_t - levy_t);                                            // (44)
+    if (levy_t > 0) D_t = Math.max(0, D_t - levy_t);                           // (44)
     const netCapiFlow_t = C_s_capi_t + emplrToCap_t - levy_t;                   // (45)
 
     // ---------- §5.12 Capi accumulation & GE penalty ----------
@@ -779,8 +789,8 @@ export function runSimulation(userConfig = {}) {
     let capiPayoutDesired_t, shortfall_t, capiPayout_t;
     let K_floor_t, tauKLevy_t, K_growth_t, surplusAboveBuffer_t, surplusPhaseIn_t, surplusLevy_t;
     // Overlapping-only diagnostics (zero in legacy mode for row schema consistency)
-    let fundReturnCapi_t = 0, capiLegacyXSub_t = 0, capiDebtRepaid_t = 0;
-    let capiReinvest_t = 0, capiBonus_t = 0;
+    let fundReturnCapi_t = 0, capiLegacyXSub_t = 0, capiContribXSub_t = 0;
+    let capiDebtRepaid_t = 0, capiReinvest_t = 0, capiBonus_t = 0;
 
     // Annuity rate (used in both branches)
     LE_at_A_R_t = cfg.lifeExpAt65_Y0 + (65 - cfg.retirementAgeBase)
@@ -844,13 +854,22 @@ export function runSimulation(userConfig = {}) {
       fundReturnCapi_t = K_t * r_c_eff_t;
       let budget = fundReturnCapi_t;
 
-      // Bucket 4: Legacy cross-subsidy (covers residual PAYG borrowing first).
-      // netFlow_t < 0 means §5.10 borrowed for the PAYG gap; cascade covers part.
+      // Bucket 4: Legacy cross-subsidy — returns first, then contributions.
+      // lambda levy is removed in overlapping mode; instead, when returns are
+      // insufficient to cover the PAYG deficit, net capi contributions top up
+      // the remainder. This incorporates lambda's early-years effect structurally
+      // without a free parameter. Contribution-sourced cross-sub is tracked
+      // separately in capiContribXSub_t and deducted from K_after_floor.
       if (netFlow_t < 0) {
-        capiLegacyXSub_t = Math.min(budget, -netFlow_t);
+        const deficit = -netFlow_t;
+        const xsubFromReturns = Math.min(budget, deficit);
+        const xsubFromContrib = Math.min(netCapiFlow_t, deficit - xsubFromReturns);
+        capiLegacyXSub_t  = xsubFromReturns + xsubFromContrib;
+        capiContribXSub_t = xsubFromContrib;
         D_t        = Math.max(0, D_t - capiLegacyXSub_t);
         borrowed_t = Math.max(0, borrowed_t - capiLegacyXSub_t);
-        budget    -= capiLegacyXSub_t;
+        budget    -= xsubFromReturns;
+        K_after_floor -= xsubFromContrib;                  // contributions diverted leave K_t
       }
 
       // Bucket 3: Debt principal reduction.
@@ -982,7 +1001,8 @@ export function runSimulation(userConfig = {}) {
       potBasedPayout_t, capiPayoutDesired_t,
       shortfall_t, capiPayout_t,
       // §5.13 overlapping cascade buckets (zero in legacy mode)
-      fundReturnCapi_t, capiLegacyXSub_t, capiDebtRepaid_t, capiReinvest_t, capiBonus_t,
+      fundReturnCapi_t, capiLegacyXSub_t, capiContribXSub_t,
+      capiDebtRepaid_t, capiReinvest_t, capiBonus_t,
       // §5.10.1 (v1.2) tauK debt-reduction channel
       K_floor_t, tauKLevy_t,
       // §5.10.2 (v1.3) surplus-growth levy

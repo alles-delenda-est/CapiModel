@@ -339,21 +339,6 @@ export default function App() {
                   ]}
                   tip={TIPS.cutoffAge}
                 />
-                <EnhancedSlider id="alpha" label="Fraction surplus → dette α" value={p.alpha}
-                  onChange={v => setParam('alpha', v)} min={0} max={1} step={0.05} unit="" decimals={2}
-                  defaultValue={DEFAULT_CONFIG.alpha} />
-                <EnhancedSlider id="lambda" label="Prélèvement transition λ" value={p.lambda}
-                  onChange={v => setParam('lambda', v)} min={0} max={0.5} step={0.025} unit="" decimals={3} tip={TIPS.lambda}
-                  defaultValue={DEFAULT_CONFIG.lambda} warningAbove={0.30} />
-                <EnhancedSlider id="Tlambda" label="Activation T_λ" value={p.Tlambda}
-                  onChange={v => setParam('Tlambda', v)} min={5} max={30} step={1} unit="ans" decimals={0} tip={TIPS.Tlambda}
-                  defaultValue={DEFAULT_CONFIG.Tlambda} />
-                <EnhancedSlider id="phiF" label="Plancher employeur φ_f" value={p.phiF}
-                  onChange={v => setParam('phiF', v)} min={0} max={0.5} step={0.025} unit="" decimals={3} tip={TIPS.phiF}
-                  defaultValue={DEFAULT_CONFIG.phiF} />
-                <EnhancedSlider id="thetaBuffer" label="Réserve croissance fonds θ" value={p.thetaBuffer}
-                  onChange={v => setParam('thetaBuffer', v)} min={0} max={0.05} step={0.005} unit="" decimals={3} tip={TIPS.thetaBuffer}
-                  defaultValue={DEFAULT_CONFIG.thetaBuffer} />
               </CollapsibleSection>
 
               <CollapsibleSection title="HLM" level="critical" defaultOpen={true}>
@@ -506,20 +491,6 @@ export default function App() {
                 </CollapsibleSection>
               )}
 
-              {expertMode && (
-                <CollapsibleSection title="Tier B — Optimisation de la dette τ_K (v1.2)" level="advanced">
-                  <div className="input-help" style={{ color: 'var(--color-warning, #b45309)', marginBottom: 8 }}>
-                    ⚠️ Paramètre v1.2 expérimental. Optimum&nbsp;: ≈&nbsp;3,0&nbsp;% (peak
-                    debt&nbsp;−75&nbsp;%, intérêts&nbsp;−88&nbsp;%, dette terminale ≈&nbsp;12&nbsp;Md€).
-                    Plafond de sécurité&nbsp;: &lt;&nbsp;3,5&nbsp;% — au-delà, K_t tombe à 0 en fin
-                    d'horizon et un pic terminal de dette annule le gain. Réduire λ si τ_K&nbsp;&gt;&nbsp;0
-                    (les deux prélèvements sont additifs sur K_t).
-                  </div>
-                  <EnhancedSlider id="tauK" label="Prélèvement fonds capi τ_K" value={p.tauK}
-                    onChange={v => setParam('tauK', v)} min={0} max={0.05} step={0.0025} unit="" decimals={4}
-                    defaultValue={DEFAULT_CONFIG.tauK} tip={TIPS.tauK} warningAbove={0.035} />
-                </CollapsibleSection>
-              )}
 
               {expertMode && (
                 <CollapsibleSection title="Tier B — Baisse des charges patronales (v1.3)" level="advanced">

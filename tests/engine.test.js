@@ -1253,12 +1253,16 @@ describe('PR #17 overlapping cashFlowMode — cascade waterfall', () => {
     expect(CI_overlap).toBeLessThan(CI_legacy * 0.70);
   });
 
-  it('cascade budget identity: fundReturnCapi = xSub + debtRep + reinvest + bonus (when budget > 0)', () => {
+  it('cascade budget identity: fundReturnCapi = xSubFromReturns + debtRep + reinvest + bonus', () => {
+    // capiLegacyXSub_t = xSubFromReturns + capiContribXSub_t.
+    // Only xSubFromReturns draws from the returns budget; the contribution
+    // portion (capiContribXSub_t) is accounted for separately via K_after_floor.
     for (const r of rows) {
       if (r.fundReturnCapi_t < 1e-6) continue; // skip zero-return periods
-      const allocated = r.capiLegacyXSub_t + r.capiDebtRepaid_t
+      const xSubFromReturns = r.capiLegacyXSub_t - r.capiContribXSub_t;
+      const allocated = xSubFromReturns + r.capiDebtRepaid_t
                       + r.capiReinvest_t + r.capiBonus_t;
-      expect(allocated, `t=${r.t} cascade should fully allocate budget`)
+      expect(allocated, `t=${r.t} cascade should fully allocate returns budget`)
         .toBeCloseTo(r.fundReturnCapi_t, 6);
     }
   });
@@ -1276,6 +1280,28 @@ describe('PR #17 overlapping cashFlowMode — cascade waterfall', () => {
     for (const r of rows) {
       expect(r.capiReinvest_t, `t=${r.t}`)
         .toBeLessThanOrEqual((OL_CFG.reinvestCap ?? 0.20) * r.fundReturnCapi_t + 1e-9);
+    }
+  });
+
+  it('capiContribXSub_t ≥ 0 and ≤ netCapiFlow_t (contribution deficit cover is bounded)', () => {
+    for (const r of rows) {
+      expect(r.capiContribXSub_t, `t=${r.t}`).toBeGreaterThanOrEqual(-1e-9);
+      // Can never exceed net contributions that period
+      expect(r.capiContribXSub_t, `t=${r.t} ≤ netCapiFlow`)
+        .toBeLessThanOrEqual(r.netCapiFlow_t + 1e-9);
+    }
+  });
+
+  it('capiContribXSub_t is 0 when returns budget covers the full deficit', () => {
+    // When K_t is large enough that fund returns ≥ PAYG deficit, no contribution
+    // cross-sub is needed. Check that the field is zero whenever returns ≥ deficit.
+    for (const r of rows) {
+      if (r.netFlow_t >= 0) {
+        expect(r.capiContribXSub_t, `t=${r.t} no deficit`).toBeCloseTo(0, 9);
+      }
+      if (r.fundReturnCapi_t >= -r.netFlow_t && r.netFlow_t < 0) {
+        expect(r.capiContribXSub_t, `t=${r.t} returns cover deficit`).toBeCloseTo(0, 6);
+      }
     }
   });
 
