@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import {
   DEFAULT_CONFIG,
   DEMOGRAPHIC_PROFILES,
@@ -1203,58 +1203,96 @@ describe('PR #17 overlapping cashFlowMode — backward compat', () => {
   });
 });
 
-describe('PR #17 overlapping cashFlowMode — floor mechanics', () => {
+describe('PR #17 overlapping cashFlowMode — cascade waterfall', () => {
   const OL_CFG = { ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' };
+  let rows;
+  beforeAll(() => { rows = runSimulation(OL_CFG); });
 
   it('runs without error for default config', () => {
-    expect(() => runSimulation(OL_CFG)).not.toThrow();
+    expect(rows).toHaveLength(OL_CFG.N);
   });
 
   it('capiPayoutFloor_t = K_start × capiAssetShare × annuityFloorRate every period', () => {
-    // Floor is computed at the start of the period (pre-payout K_t = K_start_t).
-    const rows = runSimulation(OL_CFG);
     for (const r of rows) {
       const expected = r.K_start_t * r.capiAssetShare_t * (OL_CFG.annuityFloorRate ?? 0.015);
       expect(r.capiPayoutFloor_t, `t=${r.t}`).toBeCloseTo(expected, 9);
     }
   });
 
-  it('floor is zero in pre-capi years (K_t = 0 or capiAssetShare = 0)', () => {
-    const rows = runSimulation(OL_CFG);
+  it('floor is zero in pre-capi years (capiAssetShare = 0)', () => {
     expect(rows[0].capiPayoutFloor_t).toBe(0);
   });
 
   it('K_t is finite, non-negative, and never depletes terminally', () => {
-    const rows = runSimulation(OL_CFG);
     for (const r of rows) {
       expect(isFinite(r.K_t) && r.K_t >= 0, `K_t=${r.K_t} at t=${r.t}`).toBe(true);
     }
-    // Terminal K_t in legacy mode is 0; in overlapping mode it should be substantial
     expect(rows[rows.length - 1].K_t).toBeGreaterThan(1000);
   });
 
-  it('terminal D_t spike (PR #15 diagnosis) is eliminated', () => {
-    const rows = runSimulation(OL_CFG);
-    // Final year D_t should not exceed prior year by an order of magnitude
-    const D_final = rows[rows.length - 1].D_t;
-    const D_prev  = rows[rows.length - 2].D_t;
-    expect(D_final, 'no terminal-year D_t spike').toBeLessThan(D_prev * 10 + 100);
+  it('D_t is fully repaid by end of horizon (cascade debt-reduction)', () => {
+    // Cascade bucket 3 routes surplus real return to D repayment once PAYG is covered.
+    // Under default parameters this achieves debt-free status well before year 69.
+    expect(rows[rows.length - 1].D_t).toBeCloseTo(0, 0);
   });
 
-  it('total interest is lower than legacy mode (fewer late-year debt issuances)', () => {
-    const rows_legacy  = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'legacy' });
-    const rows_overlap = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' });
-    const CI_legacy  = rows_legacy[rows_legacy.length - 1].CI_t;
-    const CI_overlap = rows_overlap[rows_overlap.length - 1].CI_t;
-    expect(CI_overlap).toBeLessThan(CI_legacy);
+  it('no state shortfall at all (floor always covered by K_avail)', () => {
+    // Because floor ≈ 0.5% × K_t and K_avail grows nominally, K_avail always covers.
+    for (const r of rows) {
+      expect(r.shortfall_t, `t=${r.t} shortfall_t should be 0`).toBeCloseTo(0, 6);
+    }
+    expect(rows[rows.length - 1].CK_t).toBeCloseTo(0, 6);
+  });
+
+  it('total interest is substantially lower than legacy (cascade debt repayment)', () => {
+    const legacy = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'legacy' });
+    const CI_legacy  = legacy[legacy.length - 1].CI_t;
+    const CI_overlap = rows[rows.length - 1].CI_t;
+    // Cascade routes capi fund return to debt repayment in early years, cutting
+    // total interest by > 30 % under default parameters.
+    expect(CI_overlap).toBeLessThan(CI_legacy * 0.70);
+  });
+
+  it('cascade budget identity: fundReturnCapi = xSub + debtRep + reinvest + bonus (when budget > 0)', () => {
+    for (const r of rows) {
+      if (r.fundReturnCapi_t < 1e-6) continue; // skip zero-return periods
+      const allocated = r.capiLegacyXSub_t + r.capiDebtRepaid_t
+                      + r.capiReinvest_t + r.capiBonus_t;
+      expect(allocated, `t=${r.t} cascade should fully allocate budget`)
+        .toBeCloseTo(r.fundReturnCapi_t, 6);
+    }
+  });
+
+  it('capiLegacyXSub_t ≥ 0 and does not exceed PAYG deficit', () => {
+    for (const r of rows) {
+      expect(r.capiLegacyXSub_t, `t=${r.t}`).toBeGreaterThanOrEqual(-1e-9);
+      // Cross-sub can only cover what was actually borrowed for PAYG
+      const maxXSub = Math.max(0, -r.netFlow_t);
+      expect(r.capiLegacyXSub_t, `t=${r.t}`).toBeLessThanOrEqual(maxXSub + 1e-9);
+    }
+  });
+
+  it('capiReinvest_t ≤ reinvestCap × fundReturnCapi_t every period', () => {
+    for (const r of rows) {
+      expect(r.capiReinvest_t, `t=${r.t}`)
+        .toBeLessThanOrEqual((OL_CFG.reinvestCap ?? 0.20) * r.fundReturnCapi_t + 1e-9);
+    }
   });
 
   it('shortfall_t accumulates into CK_t consistently', () => {
-    const rows = runSimulation(OL_CFG);
     let cumShortfall = 0;
     for (const r of rows) {
       cumShortfall += r.shortfall_t;
-      expect(r.CK_t, `t=${r.t} CK_t = sum shortfall`).toBeCloseTo(cumShortfall, 6);
+      expect(r.CK_t, `t=${r.t}`).toBeCloseTo(cumShortfall, 6);
+    }
+  });
+
+  it('overlapping mode runs without error for all three COR scenarios', () => {
+    for (const scenario of ['cor_central', 'cor_high', 'cor_low']) {
+      const cfg = { ...OL_CFG, demoMode: 'actuarial', demoScenario: scenario };
+      expect(() => runSimulation(cfg)).not.toThrow();
+      const r = runSimulation(cfg);
+      expect(r[r.length - 1].D_t).toBeGreaterThanOrEqual(0);
     }
   });
 });
