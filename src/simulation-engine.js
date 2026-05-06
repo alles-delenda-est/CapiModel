@@ -539,6 +539,9 @@ export function runSimulation(userConfig = {}) {
   //   capiRetirees_prev — last-period capi retiree count for the running blend.
   let legacyShareAvg = 0;
   let capiRetirees_prev = 0;
+  // PR #17 accounting identity: cumulative net capi contributions (C_s_capi + employer − levy).
+  // Used in overlapping mode to derive capiAssetShare_t without a free parameter.
+  let sumCapiContrib = 0;
 
   // ---- Constants per-config (no t dependence) ----
   const w_n   = fisher(cfg.w_r, cfg.pi);                       // §5.1 eq (1)
@@ -788,11 +791,22 @@ export function runSimulation(userConfig = {}) {
       ? cfg.r_f_annuity / (1 - Math.pow(1 + cfg.r_f_annuity, -T_ret_t))
       : 1 / T_ret_t;                                                            // (53)
 
-    // Asset-share ramp (53a) — parametric smoothstep, used by both branches.
-    // In overlapping mode this will eventually be replaced by an accounting
-    // identity; until then the smoothstep ramp still applies.
-    capiAssetShare_t = smoothstep(t, T_capi_start, T_capi_start + 30)
-                     * cfg.capiAssetShareSteadyState;                           // (53a)
+    // Accumulate net capi contributions for the accounting-identity asset share.
+    // Must happen before §5.12 uses capiAssetShare_t so the running sum reflects
+    // contributions that entered K_t this period (netCapiFlow_t was already added
+    // to K_t implicitly via K_avail_t below).
+    sumCapiContrib += netCapiFlow_t;
+
+    // capiAssetShare_t (53a):
+    //   overlapping — accounting identity: cumulative net capi contributions / K_t.
+    //     Anchored at 0 in 2027, rises as capi cohorts accumulate; no free parameter.
+    //   legacy       — parametric smoothstep ramp (backward-compat, bit-identical).
+    if (cfg.cashFlowMode === 'overlapping') {
+      capiAssetShare_t = K_t > 0 ? Math.min(1, Math.max(0, sumCapiContrib / K_t)) : 0; // (53a′)
+    } else {
+      capiAssetShare_t = smoothstep(t, T_capi_start, T_capi_start + 30)
+                       * cfg.capiAssetShareSteadyState;                         // (53a)
+    }
     capiRetireeShare_t = retireeIdx_t > 0 ? capiRetirees_t / retireeIdx_t : 0;
     potBasedPayout_t   = K_t * annuityRate_t * capiAssetShare_t;               // (53) diagnostic
 
@@ -964,7 +978,7 @@ export function runSimulation(userConfig = {}) {
       capiToGdp_t, gePenalty_t, r_c_eff_t, r_cn_eff_t, K_avail_t,
       // §5.13 payouts
       capiPayoutFloor_t, LE_at_A_R_t, T_ret_t, annuityRate_t,
-      capiRetireeShare_t, capiAssetShare_t,
+      capiRetireeShare_t, capiAssetShare_t, sumCapiContrib_t: sumCapiContrib,
       potBasedPayout_t, capiPayoutDesired_t,
       shortfall_t, capiPayout_t,
       // §5.13 overlapping cascade buckets (zero in legacy mode)

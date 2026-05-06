@@ -1297,3 +1297,52 @@ describe('PR #17 overlapping cashFlowMode — cascade waterfall', () => {
   });
 });
 
+describe('PR #17 capiAssetShare_t — accounting identity (overlapping mode)', () => {
+  const OL_CFG = { ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' };
+  let rows;
+  beforeAll(() => { rows = runSimulation(OL_CFG); });
+
+  it('capiAssetShare_t is 0 at t=0 (K_t = 0, nothing to divide)', () => {
+    expect(rows[0].capiAssetShare_t).toBe(0);
+  });
+
+  it('capiAssetShare_t ∈ [0, 1] for all t', () => {
+    for (const r of rows) {
+      expect(r.capiAssetShare_t, `t=${r.t}`).toBeGreaterThanOrEqual(0);
+      expect(r.capiAssetShare_t, `t=${r.t}`).toBeLessThanOrEqual(1 + 1e-12);
+    }
+  });
+
+  it('capiAssetShare_t equals min(1, sumCapiContrib / K_start) for t > 0', () => {
+    for (const r of rows.slice(1)) {
+      if (r.K_start_t < 1e-6) continue; // skip effectively-zero fund
+      const expected = Math.min(1, Math.max(0, r.sumCapiContrib_t / r.K_start_t));
+      expect(r.capiAssetShare_t, `t=${r.t}`).toBeCloseTo(expected, 9);
+    }
+  });
+
+  it('sumCapiContrib_t is non-decreasing when net contributions are positive', () => {
+    for (let i = 1; i < rows.length; i++) {
+      // sumCapiContrib can only decrease if levy > (C_s_capi + emplrToCap), which the
+      // engine prevents (levy ≤ min(gross, D_t)), so it should be non-decreasing.
+      expect(rows[i].sumCapiContrib_t, `t=${i}`)
+        .toBeGreaterThanOrEqual(rows[i - 1].sumCapiContrib_t - 1e-9);
+    }
+  });
+
+  it('accounting identity produces higher share than smoothstep in mature phase', () => {
+    // smoothstep reaches steady-state 0.35 around t=30. By t=30, the accounting
+    // identity should be higher (most of K_t is still contributions-dominated).
+    const legacyRows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'legacy' });
+    expect(rows[30].capiAssetShare_t).toBeGreaterThan(legacyRows[30].capiAssetShare_t);
+  });
+
+  it('legacy mode still uses smoothstep (bounded by capiAssetShareSteadyState)', () => {
+    const legacyRows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'legacy' });
+    for (const r of legacyRows) {
+      expect(r.capiAssetShare_t, `legacy t=${r.t}`)
+        .toBeLessThanOrEqual(DEFAULT_CONFIG.capiAssetShareSteadyState + 1e-12);
+    }
+  });
+});
+
