@@ -466,10 +466,15 @@ function assertInvariants(rows, cfg, label = '') {
     expect(r.cumDF_t).toBeGreaterThan(0);
 
     // ===== §6 v1.0a NEW INVARIANTS =====
-    // (a) HLM mass conservation: U_t ≡ U0 × (1-ρ)^t exactly, ΔU_t ≡ U_t × ρ.
-    const U_t_expected = cfg.U0 * Math.pow(1 - cfg.rho, r.t);
-    expect(r.U_t, `${tag} U_t = U0×(1-ρ)^t`).toBeCloseTo(U_t_expected, 12);
-    expect(r.delta_U_t, `${tag} ΔU_t = U_t×ρ`).toBeCloseTo(r.U_t * cfg.rho, 12);
+    // (a) HLM: analytic formula holds only before the taper window (t < T_hlm−5).
+    // During taper hlmActive_t < 1 slows the drawdown, so U_t stays above the
+    // analytic curve. The fundamental invariant for all t is delta_U_t = U_t×ρ×hlmActive_t.
+    if (r.t < (cfg.T_hlm ?? 20) - 5) {
+      const U_t_expected = cfg.U0 * Math.pow(1 - cfg.rho, r.t);
+      expect(r.U_t, `${tag} U_t = U0×(1-ρ)^t (pre-taper)`).toBeCloseTo(U_t_expected, 12);
+    }
+    const hlmActive_t = 1 - smoothstep(r.t, (cfg.T_hlm ?? 20) - 5, cfg.T_hlm ?? 20);
+    expect(r.delta_U_t, `${tag} ΔU_t = U_t×ρ×hlmActive`).toBeCloseTo(r.U_t * cfg.rho * hlmActive_t, 12);
 
     // (b) capiAssetShare bounded in [0, capiAssetShareSteadyState].
     expect(r.capiAssetShare_t, `${tag} capiAssetShare ≥ 0`).toBeGreaterThanOrEqual(0);
@@ -1369,6 +1374,96 @@ describe('PR #17 capiAssetShare_t — accounting identity (overlapping mode)', (
       expect(r.capiAssetShare_t, `legacy t=${r.t}`)
         .toBeLessThanOrEqual(DEFAULT_CONFIG.capiAssetShareSteadyState + 1e-12);
     }
+  });
+});
+
+// ===========================================================================
+// buildCounterfactualParams purity (v2.0 engine fixes)
+// ===========================================================================
+describe('buildCounterfactualParams — employer-cut purity', () => {
+  it('zeroes deltaTauxPatronal and deltaTauxPatronalPA so employer cuts do not bleed into baseline', () => {
+    const reformCfg = {
+      ...DEFAULT_CONFIG,
+      deltaTauxPatronal: 0.005,
+      deltaTauxPatronalPA: 0.002,
+    };
+    const cfCfg = buildCounterfactualParams(reformCfg);
+    expect(cfCfg.deltaTauxPatronal).toBe(0);
+    expect(cfCfg.deltaTauxPatronalPA).toBe(0);
+  });
+
+  it('counterfactual with employer cuts has same tau_e_eff as no-cut baseline', () => {
+    const reformCfg = {
+      ...DEFAULT_CONFIG,
+      deltaTauxPatronal: 0.01,
+      deltaTauxPatronalPA: 0.001,
+    };
+    const cfRows  = runSimulation(buildCounterfactualParams(reformCfg));
+    const baseRows = runSimulation({ ...DEFAULT_CONFIG });
+    for (let t = 0; t < cfRows.length; t++) {
+      expect(cfRows[t].tau_e_eff, `t=${t}`).toBeCloseTo(baseRows[t].tau_e_eff, 12);
+    }
+  });
+});
+
+// ===========================================================================
+// surplusLevy_t floor protection (v2.0 engine fixes)
+// ===========================================================================
+describe('surplusLevy_t — K_floor_t capacity cap', () => {
+  it('when surplusLevy fires, K_t ends up at or above K_floor_t', () => {
+    // The cap is surplusLevyCap = max(0, K_before_levy - K_floor). So if levy > 0,
+    // K_before was ≥ K_floor and K_after = K_before − levy ≥ K_floor.
+    // (Payouts in §5.12 can independently put K_t below floor, but that is handled
+    // by the shortfall mechanism, not this levy cap.)
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      cashFlowMode: 'legacy',
+      thetaBuffer: 0,
+      tauK: 0,
+    };
+    const rows = runSimulation(cfg);
+    for (const r of rows) {
+      if (r.surplusLevy_t > 1e-9) {
+        const kFloor = r.annuityRate_t > 1e-6 ? r.capiPayoutFloor_t / r.annuityRate_t : 0;
+        expect(r.K_t, `t=${r.t}: surplusLevy fired, K_t should be ≥ K_floor`)
+          .toBeGreaterThanOrEqual(kFloor - 1e-6);
+      }
+    }
+  });
+});
+
+// ===========================================================================
+// Employer-cut off-by-one fix (v2.0 engine fixes)
+// ===========================================================================
+describe('employer-cut §5.3 — off-by-one fix', () => {
+  it('tau_e_eff equals tau_e on activation year (step fires, PA=0 terms)', () => {
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      deltaTauxPatronal: 0.005,
+      deltaTauxPatronalPA: 0,
+      taxCutStartT: 3,
+    };
+    const rows = runSimulation(cfg);
+    // At t=3 (activation year): yearsAfterStart=0, totalCut = 0.005, tau_e_eff = tau_e - 0.005
+    expect(rows[3].tau_e_eff).toBeCloseTo(DEFAULT_CONFIG.tau_e - 0.005, 9);
+    // At t=2 (one year before): no cut
+    expect(rows[2].tau_e_eff).toBeCloseTo(DEFAULT_CONFIG.tau_e, 9);
+  });
+
+  it('PA increment first applies on activation+1 (one year after step)', () => {
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      deltaTauxPatronal: 0.005,
+      deltaTauxPatronalPA: 0.002,
+      taxCutStartT: 3,
+    };
+    const rows = runSimulation(cfg);
+    // t=3: yearsAfterStart=0, totalCut = 0.005 + 0.002×0 = 0.005
+    expect(rows[3].tau_e_eff).toBeCloseTo(DEFAULT_CONFIG.tau_e - 0.005, 9);
+    // t=4: yearsAfterStart=1, totalCut = 0.005 + 0.002×1 = 0.007
+    expect(rows[4].tau_e_eff).toBeCloseTo(DEFAULT_CONFIG.tau_e - 0.007, 9);
+    // t=5: yearsAfterStart=2, totalCut = 0.005 + 0.002×2 = 0.009
+    expect(rows[5].tau_e_eff).toBeCloseTo(DEFAULT_CONFIG.tau_e - 0.009, 9);
   });
 });
 

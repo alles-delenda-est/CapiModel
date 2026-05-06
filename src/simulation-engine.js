@@ -1,54 +1,14 @@
-// CapiModel v1.1 simulation engine.
-// Spec source of truth: CapiModelSpec_v1.1.md (branch spec/v1.1).
-// This file implements §1–§9 of the spec. Every non-trivial line of the
-// simulation loop carries a `// Spec §X.Y eq (N)` comment.
-// Naming follows the Greek→Latin map in docs/superpowers/plans/2026-04-26-capimodel-v1-task1.md;
-// do not rename.
+// CapiModel simulation engine — current consolidated implementation.
+// Legacy v1.0a/v1.1/v1.2/v1.3 branches are deprecated.
+// This file implements the full current model, including:
+//   - per-cohort PAYG accruals (eq 15a/15b/25b);
+//   - tauK stock levy and surplus-growth levy (§5.10.1/§5.10.2, legacy mode);
+//   - employer contribution-rate cut mechanics (§5.3);
+//   - optional actuarial demographic kernel (demoMode='actuarial');
+//   - overlapping cash-flow cascade (cashFlowMode='overlapping', v2.0 default).
+// Spec source of truth: cdc_legacy_fund_model.md.
+// Every non-trivial line of the simulation loop carries a `// eq (N)` comment.
 //
-// v1.0a deltas vs v1.0:
-//  1. Two risk-free rates: r_f_portfolio (eq 36 / 58) vs r_f_annuity (eq 53).
-//  2. HLM uniform geometric: ΔU_t = U0 × (1-ρ)^t × ρ for all t (eq 27).
-//  3. Capi pot owned by retirees by ASSET share, not headcount share (eq 53, 53a).
-//  4. Équinoxe split: benefit-side reductions vs tax-side CSG revenue (§5.5).
-// v1.1 deltas vs v1.0a:
-//  5. Per-cohort PAYG accruals: transitional cohorts now collect prorated
-//     PAYG pension via eq 25b (transitionalPaygExp_t), fed into the §5.9
-//     waterfall via eq 25c (totalLegacyOutflow_t) and revised eq 39'.
-//     `legacyShareOfCohort(B)` (eq 15a) is the closed-form per-cohort share;
-//     `legacyShareAvg_t` (eq 15b) is the population-weighted running average
-//     across capi-cohort retirees alive at year t. Held flat when
-//     R^capi_t declines (mortality > new entries). See §5.6.1.
-//
-// v1.2 deltas vs v1.1 (branch v1.2/capi-debt-optimisation):
-//  7. fundReturn fix (eq 36 / eq 26): F_t now compounds at π in deficit years
-//     (real value preserved) instead of staying flat. fundReturn_t uses the
-//     REAL rate r_f_portfolio (not the Fisher nominal r_f_portfolio_n), so the
-//     income paid to operations = F_t × r_f_portfolio and the inflation component
-//     πF_t is retained in the fund. In surplus years F_t compounds at π before
-//     the waterfall surplus is added.  Over 70 years this causes F_t to grow from
-//     F0=340 to ≈1350 Md€ and fundReturn_t to grow from ≈15 to ≈61 Md€/yr.
-//     r_f_portfolio_n is retained in the row schema as a diagnostic field.
-//  6. tauK (§5.10.1): annual levy on K_t stock → transition-debt repayment.
-//
-// v1.3 deltas vs v1.2 (branch feat/employer-tax-cut):
-//  8. Employer tax cut phasing (§5.3): deltaTauxPatronal now activates at
-//     t = taxCutStartT (default: 2, year 2029) instead of t = 0. tau_e_eff
-//     is time-varying in the loop. New diagnostic fields:
-//       employerCutInitial_t = W_t × deltaTauxPatronal (when t ≥ taxCutStartT)
-//       employerCutEventual_t = emplrToCap_t (freed employer legacy obligation)
-//     Eventual cut quantifies employer contributions freed from legacy as the
-//     transition matures — the annual amount that could be returned as tax relief.
-//     Fires after §5.13 (post-payout K_t). Guarded by K_t solvency floor
-//     (K_t may not fall below capiPayoutFloor_t / annuityRate_t). Only active
-//     while D_t > 0; self-limits once debt is repaid.
-//     Ordering note: §5.11 lambda levy fires on INFLOWS (netCapiFlow_t, eq 45),
-//     tauK fires on the STOCK (post-eq 57). Mechanically decoupled — lambda
-//     reduces what enters K_t, tauK reduces what stays in K_t. Running both
-//     simultaneously is additive; reduce lambda if tauK is active.
-//     GE feedback: tauK lowers K_t/GDP_t, which reduces gePenalty_t and raises
-//     r_c_eff_t. This first-order feedback partially offsets the levy impact
-//     when K_t/GDP_t is in the GE-penalty zone (geKneeRatio < K/GDP < geFloorRatio).
-
 // §4 (v2.0) actuarial demographic data — see DemographicKernel_plan.md.
 // Used by activePopFactor_actuarial / retireeIdx_actuarial / cohIdx_actuarial.
 import {
@@ -542,6 +502,8 @@ export function runSimulation(userConfig = {}) {
   // PR #17 accounting identity: cumulative net capi contributions (C_s_capi + employer − levy).
   // Used in overlapping mode to derive capiAssetShare_t without a free parameter.
   let sumCapiContrib = 0;
+  // §5.7 HLM stock tracker: recursive so hlmActive_t taper stops depleting U_state.
+  let U_state = cfg.U0;
 
   // ---- Constants per-config (no t dependence) ----
   const w_n   = fisher(cfg.w_r, cfg.pi);                       // §5.1 eq (1)
@@ -583,10 +545,12 @@ export function runSimulation(userConfig = {}) {
     const C_s_t = W_t * cfg.tau_s;                                              // (10)
     // v1.3: deltaTauxPatronal (step) + deltaTauxPatronalPA × years-since-start (annual glide).
     // Total cut is capped at tau_e (employer rate cannot go negative).
-    const taxCutYears = t >= (cfg.taxCutStartT ?? 2) ? (t - (cfg.taxCutStartT ?? 2) + 1) : 0;
+    // yearsAfterStart = 0 on activation year (step only), 1 on the following year (step + 1×PA), etc.
+    const taxCutStartT = cfg.taxCutStartT ?? 2;
+    const yearsAfterStart = t >= taxCutStartT ? (t - taxCutStartT) : 0;
     const totalCut_t = Math.min(cfg.tau_e, (cfg.deltaTauxPatronal ?? 0)
-      + (cfg.deltaTauxPatronalPA ?? 0) * taxCutYears);
-    const tau_e_eff = taxCutYears > 0
+      + (cfg.deltaTauxPatronalPA ?? 0) * yearsAfterStart);
+    const tau_e_eff = t >= taxCutStartT
       ? Math.max(0, cfg.tau_e - totalCut_t)
       : cfg.tau_e;                                                              // §5.3 (v1.3)
     const C_e_t = W_t * tau_e_eff;                                              // (11)
@@ -678,20 +642,22 @@ export function runSimulation(userConfig = {}) {
     capiRetirees_prev = capiRetirees_t;
 
     // ---------- §5.7 HLM proceeds ----------
-    // v1.0a eq (27): uniform geometric form. ΔU_t = U_t × ρ where U_t = U0×(1-ρ)^t.
-    // Mass conservation: U_{t+1} = U_t − ΔU_t exactly. (v1.0 had a piecewise form
-    // ΔU_t = (t==0)?U0·ρ : U0·(1-ρ)^(t-1)·ρ which forced ΔU_0 = ΔU_1 and violated
-    // mass conservation by an extra year-1 cession.)
-    const U_t       = cfg.U0 * Math.pow(1 - cfg.rho, t);                        // (26)
-    const delta_U_t = U_t * cfg.rho;                                            // (27)
-    const units_sold = delta_U_t * 1e6;
+    // v2.0: recursive stock tracking. ΔU_t = U_t × ρ × hlmActive_t so the taper
+    // reduces actual sales (and U_state stops declining) rather than just zeroing
+    // proceeds while the stock silently empties. hlmActive_t is applied here, not
+    // in H_t_proceeds, so both stock and revenue taper together.
+    // Mass conservation: U_{t+1} = U_t − ΔU_t holds exactly for all t.
+    const U_t          = U_state;                                                // (26) recursive
+    const hlmActive_t  = 1 - smoothstep(t, cfg.T_hlm - 5, cfg.T_hlm);
+    const delta_U_t    = U_t * cfg.rho * hlmActive_t;                           // (27) taper applied
+    const units_sold   = delta_U_t * 1e6;
     const priceDiscount_t = (cfg.hlmDiscount && delta_eff > 0)
       ? Math.min(0.30, delta_eff * units_sold / cfg.baselineTransactions)
       : 0;                                                                      // (28)
     const P_eff_t = cfg.P0 * H_factor_t * (1 - priceDiscount_t);                // (29)
     const gain_t  = Math.max(0, P_eff_t - cfg.Pbook);
-    const hlmActive_t  = 1 - smoothstep(t, cfg.T_hlm - 5, cfg.T_hlm);
-    const H_t_proceeds = delta_U_t * gain_t * 0.95 * hlmActive_t;               // (30)
+    const H_t_proceeds = delta_U_t * gain_t * 0.95;                             // (30)
+    U_state = U_state - delta_U_t;                                               // stock update
 
     // ---------- §5.8 Endogenous borrowing rate ----------
     const GDP_t   = cfg.baseGDP * Omega_t * empFactor * activePop_t;            // (31)
@@ -930,8 +896,9 @@ export function runSimulation(userConfig = {}) {
       K_growth_t           = K_t - K_start_t;
       surplusAboveBuffer_t = Math.max(0, K_growth_t - (cfg.thetaBuffer ?? 0.01) * K_start_t);
       surplusPhaseIn_t     = GDP_t > 0 ? smoothstep(D_t / GDP_t, 0.10, 0.50) : 0;
+      const surplusLevyCap = Math.max(0, K_t - K_floor_t);
       surplusLevy_t        = D_t > 0
-        ? Math.min(surplusPhaseIn_t * surplusAboveBuffer_t, D_t)
+        ? Math.min(surplusPhaseIn_t * surplusAboveBuffer_t, D_t, surplusLevyCap)
         : 0;
       K_t = Math.max(0, K_t - surplusLevy_t);
       D_t = Math.max(0, D_t - surplusLevy_t);
@@ -1048,6 +1015,8 @@ export function buildCounterfactualParams(reformParams) {
     delta: 0,
     rho: 0,
     lambda: 0,
+    deltaTauxPatronal: 0,
+    deltaTauxPatronalPA: 0,
     employmentRateTarget: reformParams.employmentRate0,
   };
 }
