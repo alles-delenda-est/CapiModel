@@ -808,8 +808,10 @@ export function runSimulation(userConfig = {}) {
       // Unlike Stage 1, floor is paid from here so GE-penalty years are safe.
       K_avail_t = K_t * (1 + r_cn_eff_t) + netCapiFlow_t;                      // (50′)
 
-      // Floor: guaranteed minimum drawn from K_avail (not from cascade budget).
-      capiPayoutFloor_t = K_t * capiAssetShare_t * (cfg.annuityFloorRate ?? 0.015); // (51′)
+      // Floor: full pot-based annuity drawn from K_avail (not from cascade budget).
+      // annuityRate_t ≈ 5.59%/yr ensures every capi retiree receives their actuarially
+      // fair share; bucket 4b (capiTarget) is structurally 0 but kept for robustness.
+      capiPayoutFloor_t = K_t * capiAssetShare_t * annuityRate_t;                  // (51′)
       shortfall_t = Math.max(0, capiPayoutFloor_t - K_avail_t);   // state tops up
       D_t        += shortfall_t;
       borrowed_t += shortfall_t;
@@ -1112,17 +1114,14 @@ export function computeIndividualPerspective(cfg, reformRows, cfRows, birthYear)
   const perCapitaLegacyKE_CF = (cfR.E0_legacy_t * cfR.I_factor_t) / cfg.R0;
   const monthlyPensionCF = perCapitaLegacyKE_CF * KE_TO_EUR / 12;
 
-  // Capi annuity from personal pot. Annuity factor uses real return r_c
-  // over (LIFE_EXPECTANCY − RETIREMENT_AGE) years. Capi-portion taxation
-  // (CSG) is modelled at the macro level (S0_csg_revenue_t) — not
-  // applied per-individual here.
-  const r_c_n = (1 + cfg.r_c) * (1 + cfg.pi) - 1;
-  const retYears = Math.max(1, LIFE_EXPECTANCY - RETIREMENT_AGE);
-  const annuityFactor = r_c_n > 0
-    ? (1 - Math.pow(1 + r_c_n, -retYears)) / r_c_n
-    : retYears;
+  // Capi annuity from personal pot. Use the engine's annuityRate_t at the
+  // retirement year so individual payouts are consistent with the macro cascade.
+  // annuityRate_t ≈ 5.59%/yr (r_f_annuity=1.5%, 21-yr life expectancy at 64).
+  const annuityRate_at_ret = (retT < reformRows.length
+    ? reformRows[retT]
+    : reformRows[reformRows.length - 1]).annuityRate_t ?? 0;
   const monthlyCapiAnnuity = inCapi && capiPotAtRet > 0
-    ? (capiPotAtRet / annuityFactor) * KE_TO_EUR / 12
+    ? capiPotAtRet * annuityRate_at_ret * KE_TO_EUR / 12
     : 0;
 
   const monthlyPensionTotal = monthlyPensionLegacy + monthlyCapiAnnuity;
