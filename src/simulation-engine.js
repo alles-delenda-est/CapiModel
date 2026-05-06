@@ -820,22 +820,19 @@ export function runSimulation(userConfig = {}) {
       fundReturnCapi_t = K_t * r_c_eff_t;
       let budget = fundReturnCapi_t;
 
-      // Bucket 4: Legacy cross-subsidy — returns first, then contributions.
-      // lambda levy is removed in overlapping mode; instead, when returns are
-      // insufficient to cover the PAYG deficit, net capi contributions top up
-      // the remainder. This incorporates lambda's early-years effect structurally
-      // without a free parameter. Contribution-sourced cross-sub is tracked
-      // separately in capiContribXSub_t and deducted from K_after_floor.
+      // Bucket 4: Legacy cross-subsidy — funded from returns budget only.
+      // Contributions always flow to K_t; D_t accumulates in early years (when
+      // returns are small) and is repaid by bucket 3 as K_t matures.
+      // capiContribXSub_t is retained in the row schema but is structurally 0
+      // in overlapping mode (no contribution diversion).
       if (netFlow_t < 0) {
         const deficit = -netFlow_t;
         const xsubFromReturns = Math.min(budget, deficit);
-        const xsubFromContrib = Math.min(netCapiFlow_t, deficit - xsubFromReturns);
-        capiLegacyXSub_t  = xsubFromReturns + xsubFromContrib;
-        capiContribXSub_t = xsubFromContrib;
-        D_t        = Math.max(0, D_t - capiLegacyXSub_t);
-        borrowed_t = Math.max(0, borrowed_t - capiLegacyXSub_t);
+        capiLegacyXSub_t  = xsubFromReturns;
+        capiContribXSub_t = 0;
+        D_t        = Math.max(0, D_t - xsubFromReturns);
+        borrowed_t = Math.max(0, borrowed_t - xsubFromReturns);
         budget    -= xsubFromReturns;
-        K_after_floor -= xsubFromContrib;                  // contributions diverted leave K_t
       }
 
       // Bucket 3: Debt principal reduction.

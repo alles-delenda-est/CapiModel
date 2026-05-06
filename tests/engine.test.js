@@ -1249,23 +1249,23 @@ describe('PR #17 overlapping cashFlowMode — cascade waterfall', () => {
     expect(rows[rows.length - 1].CK_t).toBeCloseTo(0, 6);
   });
 
-  it('total interest is substantially lower than legacy (cascade debt repayment)', () => {
+  it('total interest is lower than legacy (cascade debt repayment)', () => {
     const legacy = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'legacy' });
     const CI_legacy  = legacy[legacy.length - 1].CI_t;
     const CI_overlap = rows[rows.length - 1].CI_t;
-    // Cascade routes capi fund return to debt repayment in early years, cutting
-    // total interest by > 30 % under default parameters.
-    expect(CI_overlap).toBeLessThan(CI_legacy * 0.70);
+    // Cascade bucket 3 routes real capi returns to debt repayment, ensuring
+    // D_t reaches 0 by end of horizon. Legacy mode leaves a residual balance.
+    // Net effect: overlapping CI is lower than legacy CI.
+    expect(CI_overlap).toBeLessThan(CI_legacy);
+    expect(rows[rows.length - 1].D_t).toBeCloseTo(0, 3);
   });
 
   it('cascade budget identity: fundReturnCapi = xSubFromReturns + debtRep + reinvest + bonus', () => {
-    // capiLegacyXSub_t = xSubFromReturns + capiContribXSub_t.
-    // Only xSubFromReturns draws from the returns budget; the contribution
-    // portion (capiContribXSub_t) is accounted for separately via K_after_floor.
+    // capiContribXSub_t = 0 in v2.0 (no contribution diversion); identity simplifies to
+    // fundReturnCapi = capiLegacyXSub + capiDebtRepaid + capiReinvest + capiBonus.
     for (const r of rows) {
       if (r.fundReturnCapi_t < 1e-6) continue; // skip zero-return periods
-      const xSubFromReturns = r.capiLegacyXSub_t - r.capiContribXSub_t;
-      const allocated = xSubFromReturns + r.capiDebtRepaid_t
+      const allocated = r.capiLegacyXSub_t + r.capiDebtRepaid_t
                       + r.capiReinvest_t + r.capiBonus_t;
       expect(allocated, `t=${r.t} cascade should fully allocate returns budget`)
         .toBeCloseTo(r.fundReturnCapi_t, 6);
