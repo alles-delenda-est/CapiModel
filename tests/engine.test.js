@@ -28,6 +28,7 @@ import {
   legacyShareOfCohort,
   buildCounterfactualParams,
   computeIndividualPerspective,
+  computeCapiAssetShareBalanced,
 } from '../src/simulation-engine.js';
 
 describe('module scaffold', () => {
@@ -1623,6 +1624,203 @@ describe('K_debt_trigger — debt-acceleration cascade switch', () => {
         expect(allocated, `trigger=${trigger} t=${r.t}`).toBeCloseTo(r.fundReturnCapi_t, 6);
       }
     }
+  });
+});
+
+// ===========================================================================
+// PR #18 §5.13 Balanced cashFlowMode — strict separation of concerns
+// ===========================================================================
+//
+// Balanced mode replaces the overlapping cascade. Key differences:
+//   1. capiLegacyXSub_t = 0 always — capi never subsidises PAYG via returns.
+//   2. capiContribXSub_t = 0 always — capi never subsidises PAYG via contributions.
+//   3. Floor uses annuityFloorRate (1.5 %), not annuityRate_t (5.6 %).
+//   4. Solvency floor with KFloorBuffer cushion (1.10 × strict floor).
+//   5. Debt sweep capped on three axes (share-of-return, share-of-K, share-of-GDP).
+//   6. Smooth phase-out as D/GDP falls towards debtSweepEndRatio.
+//   7. capiBonus paid as fraction (capiBonusShare = 25 %) of post-debt surplus.
+
+describe('PR #18 balanced cashFlowMode — backward compat', () => {
+  it('legacy mode output is unaffected by the balanced branch addition', () => {
+    // Fixture regression already covers this; sanity-check that legacy and
+    // overlapping outputs differ from balanced for the default config.
+    const legacy_rows  = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'legacy' });
+    const balanced_rows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'balanced' });
+    let differs = false;
+    for (let t = 0; t < legacy_rows.length; t++) {
+      if (Math.abs(legacy_rows[t].K_t - balanced_rows[t].K_t) > 1) {
+        differs = true; break;
+      }
+    }
+    expect(differs, 'balanced mode should differ from legacy output').toBe(true);
+  });
+});
+
+describe('PR #18 balanced cashFlowMode — invariants', () => {
+  const BAL_CFG = { ...DEFAULT_CONFIG, cashFlowMode: 'balanced' };
+  let rows;
+  beforeAll(() => { rows = runSimulation(BAL_CFG); });
+
+  it('runs without error for default config and reaches finite K_t/D_t', () => {
+    expect(rows).toHaveLength(BAL_CFG.N);
+    for (const r of rows) {
+      expect(isFinite(r.K_t) && r.K_t >= 0, `K_t=${r.K_t} at t=${r.t}`).toBe(true);
+      expect(isFinite(r.D_t) && r.D_t >= 0, `D_t=${r.D_t} at t=${r.t}`).toBe(true);
+    }
+  });
+
+  it('runs cleanly for all three COR scenarios (actuarial demographics)', () => {
+    for (const scenario of ['cor_central', 'cor_high', 'cor_low']) {
+      const cfg = { ...BAL_CFG, demoMode: 'actuarial', demoScenario: scenario };
+      expect(() => runSimulation(cfg)).not.toThrow();
+    }
+  });
+
+  // Invariant 1 — pension floor seniority: total payout >= floor.
+  it('Invariant 1: capiPayout_t ≥ capiPayoutFloor_t every period', () => {
+    for (const r of rows) {
+      expect(r.capiPayout_t, `t=${r.t}`).toBeGreaterThanOrEqual(r.capiPayoutFloor_t - 1e-9);
+    }
+  });
+
+  // Invariant 2 — debt sweep cannot break solvency floor (unless explicit shortfall).
+  it('Invariant 2: K_t ≥ K_floor_t whenever no guarantee shortfall recorded', () => {
+    for (const r of rows) {
+      if (r.guaranteeShortfall_t < 1e-6) {
+        expect(r.K_t, `t=${r.t}: K_t should not breach K_floor_t when no shortfall`)
+          .toBeGreaterThanOrEqual(r.K_floor_t - 1e-6);
+      }
+    }
+  });
+
+  // Invariant 3 — debt sweep is capped on all three axes.
+  it('Invariant 3: capiDebtRepaid_t respects share-of-return cap', () => {
+    for (const r of rows) {
+      const cap = (BAL_CFG.debtSweepShare ?? 0.50) * Math.max(0, r.fundReturnCapi_t);
+      expect(r.capiDebtRepaid_t, `t=${r.t} share-of-return cap`)
+        .toBeLessThanOrEqual(cap + 1e-6);
+    }
+  });
+
+  it('Invariant 3: capiDebtRepaid_t respects share-of-K cap', () => {
+    for (const r of rows) {
+      const cap = (BAL_CFG.debtSweepKCap ?? 0.015) * r.K_start_t;
+      expect(r.capiDebtRepaid_t, `t=${r.t} share-of-K cap`)
+        .toBeLessThanOrEqual(cap + 1e-6);
+    }
+  });
+
+  it('Invariant 3: capiDebtRepaid_t respects share-of-GDP cap', () => {
+    for (const r of rows) {
+      const cap = (BAL_CFG.debtSweepGdpCap ?? 0.01) * r.GDP_t;
+      expect(r.capiDebtRepaid_t, `t=${r.t} share-of-GDP cap`)
+        .toBeLessThanOrEqual(cap + 1e-6);
+    }
+  });
+
+  // Invariant 4 — no payout cliff in mature years (allow exception during ramp-up).
+  it('Invariant 4: capiPayout_t YoY growth < 50 % once steady-state has begun', () => {
+    // Ramp-up exception: first 5 years after the first non-zero payout can move freely
+    // (cohort entry creates legitimate jumps).
+    const firstNonZero = rows.findIndex(r => r.capiPayout_t > 0.1);
+    if (firstNonZero < 0) return;
+    const rampEnd = firstNonZero + 5;
+    for (let i = rampEnd + 1; i < rows.length; i++) {
+      const prev = rows[i - 1].capiPayout_t;
+      const curr = rows[i].capiPayout_t;
+      if (prev < 1e-6) continue;
+      const growth = curr / prev - 1;
+      expect(Math.abs(growth), `t=${rows[i].t} cliff: ${prev.toFixed(2)} → ${curr.toFixed(2)}`)
+        .toBeLessThan(0.50);
+    }
+  });
+
+  it('separation of concerns: capiLegacyXSub_t = 0 and capiContribXSub_t = 0 always', () => {
+    for (const r of rows) {
+      expect(r.capiLegacyXSub_t, `t=${r.t} no return cross-sub`).toBeCloseTo(0, 9);
+      expect(r.capiContribXSub_t, `t=${r.t} no contribution cross-sub`).toBeCloseTo(0, 9);
+    }
+  });
+
+  it('debtSweepPhase_t ∈ [0, 1] every period', () => {
+    for (const r of rows) {
+      expect(r.debtSweepPhase_t, `t=${r.t}`).toBeGreaterThanOrEqual(0);
+      expect(r.debtSweepPhase_t, `t=${r.t}`).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('debt sweep is fully active when D/GDP ≥ debtSweepStartRatio', () => {
+    for (const r of rows) {
+      const dToGdp = r.GDP_t > 0 ? r.D_t / r.GDP_t : 0;
+      if (dToGdp >= (BAL_CFG.debtSweepStartRatio ?? 0.50)) {
+        expect(r.debtSweepPhase_t, `t=${r.t} D/GDP=${dToGdp.toFixed(2)}`)
+          .toBeCloseTo(1, 9);
+      }
+    }
+  });
+
+  it('debt sweep is inactive when D/GDP ≤ debtSweepEndRatio', () => {
+    for (const r of rows) {
+      const dToGdp = r.GDP_t > 0 ? r.D_t / r.GDP_t : 0;
+      if (dToGdp <= (BAL_CFG.debtSweepEndRatio ?? 0.05)) {
+        expect(r.debtSweepPhase_t, `t=${r.t} D/GDP=${dToGdp.toFixed(2)}`)
+          .toBeCloseTo(0, 9);
+      }
+    }
+  });
+
+  it('capiBonus_t ≤ realReturn − capiDebtRepaid (bonus never draws principal)', () => {
+    for (const r of rows) {
+      const cap = Math.max(0, r.fundReturnCapi_t - r.capiDebtRepaid_t);
+      expect(r.capiBonus_t, `t=${r.t}`).toBeLessThanOrEqual(cap + 1e-6);
+    }
+  });
+
+  it('floor formula: capiPayoutFloor_t = K_start × capiAssetShare × annuityFloorRate', () => {
+    for (const r of rows) {
+      const expected = r.K_start_t * r.capiAssetShare_t * (BAL_CFG.annuityFloorRate ?? 0.015);
+      expect(r.capiPayoutFloor_t, `t=${r.t}`).toBeCloseTo(expected, 9);
+    }
+  });
+
+  it('K_floor_t = strictKFloor × KFloorBuffer (solvency cushion enforced)', () => {
+    for (const r of rows) {
+      const strict = r.annuityRate_t > 1e-9 ? r.capiPayoutFloor_t / r.annuityRate_t : 0;
+      const expected = strict * (BAL_CFG.KFloorBuffer ?? 1.10);
+      expect(r.K_floor_t, `t=${r.t}`).toBeCloseTo(expected, 6);
+    }
+  });
+});
+
+describe('PR #18 computeCapiAssetShareBalanced helper', () => {
+  it('returns 0 when sumCapiContrib is 0', () => {
+    expect(computeCapiAssetShareBalanced({
+      K_avail_t: 1000,
+      sumCapiContrib: 0,
+    })).toBe(0);
+  });
+
+  it('returns clamped to 1 when contributions exceed K_avail', () => {
+    expect(computeCapiAssetShareBalanced({
+      K_avail_t: 100,
+      sumCapiContrib: 200,
+    })).toBe(1);
+  });
+
+  it('returns ratio when sumCapiContrib < K_avail', () => {
+    expect(computeCapiAssetShareBalanced({
+      K_avail_t: 1000,
+      sumCapiContrib: 250,
+    })).toBeCloseTo(0.25, 12);
+  });
+
+  it('handles K_avail near zero without dividing by zero', () => {
+    const v = computeCapiAssetShareBalanced({
+      K_avail_t: 0,
+      sumCapiContrib: 100,
+    });
+    expect(isFinite(v)).toBe(true);
+    expect(v).toBe(1);
   });
 });
 

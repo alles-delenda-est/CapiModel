@@ -165,11 +165,11 @@ export const DEFAULT_CONFIG = {
   // user-facing default once the fund-return cascade is calibrated; for now
   // the toggle is wired so v1.3 invariants/tests keep passing.
   cashFlowMode: 'legacy',
-  // §5.13 (v2.0, overlapping mode only) guaranteed annual payout rate on
-  // K_t × capiAssetShare, drawn from K_avail before the cascade budget.
-  // Now set to annuityRate_t (≈5.59%/yr) so the floor equals the full
-  // pot-based annuity. annuityFloorRate is retained for legacy-mode compat.
-  annuityFloorRate: 0.020,
+  // §5.13 (v2.0, balanced/overlapping mode) guaranteed annual payout rate on
+  // K_t × capiAssetShare. Drawn from K_avail before any debt sweep.
+  // 1.5% ≈ r_f_annuity, the actuarial floor below which there's no real return
+  // guarantee. Bonus payments above floor come from capped surplus return.
+  annuityFloorRate: 0.015,
   // §5.9 (v2.0, overlapping mode only) cap on fund return reinvested into K_t.
   // 20% is the design starting point pending calibration so K_t stabilises
   // over 2027–2096; tunable via expert UI once cascade is wired.
@@ -182,6 +182,26 @@ export const DEFAULT_CONFIG = {
   // Typical calibration: 10 000 Md€ → capi-first until the fund is mature,
   // then aggressive amortisation; Infinity = always defer debt (capi-first).
   K_debt_trigger: 0,
+  // §5.13 (v2.0, balanced mode only — PR #18) — explicit cascade ordering
+  // with strict separation of concerns: PAYG borrows for its own deficit,
+  // K is preserved as a pension reserve, and only capped surplus return
+  // (above a buffered solvency floor) is available to repay transition debt.
+  // Capi contributions never cross-subsidise legacy PAYG (capiContribXSub=0).
+  //
+  // debtSweepShare      — share of real return available for debt repayment
+  // debtSweepKCap       — max sweep as fraction of K_t (prevents draining)
+  // debtSweepGdpCap     — max sweep as fraction of GDP_t (macro stability)
+  // capiBonusShare      — share of post-debt surplus paid as bonus
+  // KFloorBuffer        — solvency cushion above strict annuity reserve
+  // debtSweepStartRatio — D/GDP at which sweep is fully active (smoothstep)
+  // debtSweepEndRatio   — D/GDP at which sweep is fully inactive
+  debtSweepShare: 0.50,
+  debtSweepKCap: 0.015,
+  debtSweepGdpCap: 0.01,
+  capiBonusShare: 0.25,
+  KFloorBuffer: 1.10,
+  debtSweepStartRatio: 0.50,
+  debtSweepEndRatio: 0.05,
   // §3.7 endogenous rate premium
   rpThreshold1: 150,
   rpSlope1: 0.0002,
@@ -473,6 +493,23 @@ export function cohIdx_actuarial(t, cfg) {
 
 // §5.5 phasing modes (UI exposure of equinoxePhasing is Task 3 scope; engine
 // must implement all five modes per the spec).
+// §5.13 (v2.0, balanced mode — PR #18) capi asset share helper.
+// Uses post-contribution numerator AND denominator to avoid the timing
+// distortion of overlapping mode (which divides by K_open_t, the start-of-period
+// stock, while the numerator already includes this period's contributions).
+// Aligning both sides on K_avail_t (= K_open_t × (1+r_cn) + netCapiFlow_t)
+// gives a consistent end-of-period share before any payout.
+// `sumCapiContrib` is passed post-increment (i.e., already includes the current
+// period's netCapiFlow_t per the engine loop's accumulation order).
+export function computeCapiAssetShareBalanced({
+  K_avail_t,
+  sumCapiContrib,
+}) {
+  const numerator = Math.max(0, sumCapiContrib);
+  const denominator = Math.max(K_avail_t, 1e-9);
+  return clamp(numerator / denominator, 0, 1);
+}
+
 function equinoxePhaseFactor(t, cfg) {
   switch (cfg.equinoxePhasing) {
     case 'immediate':  return 1;
@@ -691,9 +728,10 @@ export function runSimulation(userConfig = {}) {
     // consumes totalLegacyOutflow_t.
     const deficit_t = totalLegacyOutflow_t - nonEmplrNet_t;                     // (39')
     // phiF (employer floor to capi) is only active in legacy mode.
-    // In overlapping mode the cascade covers capi payout from K_t directly,
+    // In overlapping/balanced modes the cascade covers capi payout from K_t directly,
     // so all employer contributions flow to legacy first (phiF = 0 effective).
-    const phiF_eff = cfg.cashFlowMode === 'overlapping' ? 0 : (cfg.phiF ?? 0);
+    const phiF_eff = (cfg.cashFlowMode === 'overlapping' || cfg.cashFlowMode === 'balanced')
+      ? 0 : (cfg.phiF ?? 0);
     const emplrAvail_t = C_e_t * (1 - phiF_eff);                               // (40)
 
     let emplrToLeg_t, emplrToCap_t;
@@ -722,8 +760,9 @@ export function runSimulation(userConfig = {}) {
       F_t = F_t * (1 + cfg.pi);       // v1.2: compound at π (was: unchanged eq 26)
     } else {
       // alpha (PAYG-surplus-to-debt routing) is only active in legacy mode.
-      // In overlapping mode the cascade handles all debt repayment from returns.
-      const alpha_eff = cfg.cashFlowMode === 'overlapping' ? 0 : (cfg.alpha ?? 1);
+      // In overlapping/balanced modes the K-side cascade owns debt repayment.
+      const alpha_eff = (cfg.cashFlowMode === 'overlapping' || cfg.cashFlowMode === 'balanced')
+        ? 0 : (cfg.alpha ?? 1);
       const repaid_t = Math.min(alpha_eff * netFlow_t, D_t);
       D_t = D_t - repaid_t;
       F_t = F_t * (1 + cfg.pi) + (netFlow_t - repaid_t);                       // (43) v1.2
@@ -731,15 +770,16 @@ export function runSimulation(userConfig = {}) {
 
     // ---------- §5.11 Transition levy (smoothed) ----------
     // lambda levy is only active in legacy mode. In overlapping mode, cascade
-    // bucket 4 incorporates its effect: contributions top up returns when the
-    // PAYG deficit exceeds the returns budget (see §5.13 below).
+    // bucket 4 incorporates its effect. In balanced mode (PR #18) lambda is
+    // disabled — capi contributions never cross-subsidise legacy PAYG.
     // SPEC AMBIGUITY 2: spec writes T_capi_start(t) suggesting time-variation,
     // but T_capi_start is a constant in v1.0 per eq (14).
     // SPEC AMBIGUITY 4: D_t in levyPhaseOut is post-§5.10 value.
+    const isCascadeMode  = (cfg.cashFlowMode === 'overlapping' || cfg.cashFlowMode === 'balanced');
     const T_lambda_eff   = Math.max(cfg.Tlambda ?? 15, T_capi_start);
-    const levyActivation = cfg.cashFlowMode === 'overlapping' ? 0
+    const levyActivation = isCascadeMode ? 0
       : smoothstep(t, T_lambda_eff - 1, T_lambda_eff + 1);
-    const levyPhaseOut   = cfg.cashFlowMode === 'overlapping' ? 0
+    const levyPhaseOut   = isCascadeMode ? 0
       : (GDP_t > 0 ? smoothstep(D_t / GDP_t, 0, 0.05) : 0);
     const levyFactor     = levyActivation * levyPhaseOut;
     const grossLevy_t    = levyFactor * (cfg.lambda ?? 0) * (C_s_capi_t + emplrToCap_t);
@@ -766,6 +806,9 @@ export function runSimulation(userConfig = {}) {
     // Overlapping-only diagnostics (zero in legacy mode for row schema consistency)
     let fundReturnCapi_t = 0, capiLegacyXSub_t = 0, capiContribXSub_t = 0;
     let capiDebtRepaid_t = 0, capiReinvest_t = 0, capiBonus_t = 0;
+    // Balanced-mode (PR #18) diagnostics (zero in other modes)
+    let surplusAboveFloor_t = 0, debtSweepPhase_t = 0, debtSweepCapacity_t = 0;
+    let guaranteeShortfall_t = 0;
 
     // Annuity rate (used in both branches)
     LE_at_A_R_t = cfg.lifeExpAt65_Y0 + (65 - cfg.retirementAgeBase)
@@ -783,10 +826,19 @@ export function runSimulation(userConfig = {}) {
     sumCapiContrib += netCapiFlow_t;
 
     // capiAssetShare_t (53a):
-    //   overlapping — accounting identity: cumulative net capi contributions / K_t.
-    //     Anchored at 0 in 2027, rises as capi cohorts accumulate; no free parameter.
-    //   legacy       — parametric smoothstep ramp (backward-compat, bit-identical).
-    if (cfg.cashFlowMode === 'overlapping') {
+    //   overlapping — accounting identity: cumulative net capi contributions / K_open_t.
+    //   balanced    — same numerator but K_avail_t denominator (post-contribution),
+    //                 avoiding the start-of-period timing distortion.
+    //   legacy      — parametric smoothstep ramp (backward-compat, bit-identical).
+    if (cfg.cashFlowMode === 'balanced') {
+      // K_avail must be computed early in balanced mode so the share denominator
+      // is internally consistent. Compute it here; the cascade reuses it.
+      K_avail_t = K_t * (1 + r_cn_eff_t) + netCapiFlow_t;                        // (50″)
+      capiAssetShare_t = computeCapiAssetShareBalanced({
+        K_avail_t,
+        sumCapiContrib,
+      });                                                                        // (53a″)
+    } else if (cfg.cashFlowMode === 'overlapping') {
       capiAssetShare_t = K_t > 0 ? Math.min(1, Math.max(0, sumCapiContrib / K_t)) : 0; // (53a′)
     } else {
       capiAssetShare_t = smoothstep(t, T_capi_start, T_capi_start + 30)
@@ -885,6 +937,101 @@ export function runSimulation(userConfig = {}) {
       surplusPhaseIn_t   = 0;
       surplusLevy_t      = 0;
       // ======== END OVERLAPPING CASCADE ========
+
+    } else if (cfg.cashFlowMode === 'balanced') {
+      // ======== §5.13 BALANCED CASCADE (PR #18) ========
+      //
+      // Strict separation of concerns:
+      //   1. PAYG side has already updated F_t/D_t against its own deficit
+      //      (§5.10 above). alpha_eff = 0 in balanced mode, so no capi side
+      //      contribution to PAYG debt repayment via the legacy waterfall.
+      //   2. K accumulates returns and contributions; pays the floor first.
+      //   3. Solvency floor is enforced with a buffer (KFloorBuffer × strict).
+      //   4. Only capped surplus return above the buffered solvency floor is
+      //      available to repay transition debt (debt sweep), with caps on
+      //      share-of-return, share-of-K, and share-of-GDP.
+      //   5. After debt sweep, a fraction (capiBonusShare) of any remaining
+      //      surplus is paid as capi bonus; the rest stays in K (reinvested).
+      //   6. capiLegacyXSub_t = capiContribXSub_t = 0 — capi never subsidises
+      //      PAYG via contribution diversion. Eliminates the "early cohorts
+      //      pay twice" pathology.
+
+      const K_open_t = K_t;
+      const realReturn_t = K_open_t * r_c_eff_t;
+      // K_avail_t was computed above for capiAssetShare; reused here unchanged.
+
+      // 3. Guaranteed capi pension floor (annuityFloorRate × share × K_open).
+      capiPayoutFloor_t = K_open_t * capiAssetShare_t * (cfg.annuityFloorRate ?? 0.015);
+
+      // 4. State guarantee only fires if K_avail itself cannot cover the floor.
+      guaranteeShortfall_t = Math.max(0, capiPayoutFloor_t - K_avail_t);
+      shortfall_t = guaranteeShortfall_t;
+      if (guaranteeShortfall_t > 0) {
+        D_t        += guaranteeShortfall_t;
+        borrowed_t += guaranteeShortfall_t;
+        CK_t       += guaranteeShortfall_t;
+      }
+
+      // 5. Pay floor from K.
+      let K_after_floor = Math.max(0, K_avail_t - capiPayoutFloor_t);
+
+      // 6. Solvency floor with KFloorBuffer cushion. strictKFloor is the
+      //    reserve required to keep paying the floor at the actuarial annuityRate.
+      const strictKFloor_t = annuityRate_t > 1e-9
+        ? capiPayoutFloor_t / annuityRate_t
+        : 0;
+      K_floor_t = strictKFloor_t * (cfg.KFloorBuffer ?? 1.10);
+
+      // 7. Surplus above buffered floor.
+      surplusAboveFloor_t = Math.max(0, K_after_floor - K_floor_t);
+
+      // 8. Debt-sweep phase-out: linearly clamped between end and start ratios.
+      const D_to_GDP_t = GDP_t > 0 ? D_t / GDP_t : 0;
+      const sweepStart = cfg.debtSweepStartRatio ?? 0.50;
+      const sweepEnd   = cfg.debtSweepEndRatio ?? 0.05;
+      debtSweepPhase_t = sweepStart > sweepEnd
+        ? clamp((D_to_GDP_t - sweepEnd) / (sweepStart - sweepEnd), 0, 1)
+        : (D_to_GDP_t >= sweepStart ? 1 : 0);
+
+      // 9. Debt sweep capacity: min of all caps and remaining D.
+      const returnSweepCap_t = (cfg.debtSweepShare  ?? 0.50) * Math.max(0, realReturn_t);
+      const kSweepCap_t      = (cfg.debtSweepKCap   ?? 0.015) * K_open_t;
+      const gdpSweepCap_t    = (cfg.debtSweepGdpCap ?? 0.01)  * GDP_t;
+      debtSweepCapacity_t = Math.min(
+        surplusAboveFloor_t,
+        returnSweepCap_t,
+        kSweepCap_t,
+        gdpSweepCap_t,
+        D_t,
+      );
+      capiDebtRepaid_t = debtSweepPhase_t * debtSweepCapacity_t;
+      D_t -= capiDebtRepaid_t;
+      K_after_floor -= capiDebtRepaid_t;
+
+      // 10. Bonus from remaining surplus, capped by realReturn − debtRepaid so
+      //     bonus never draws principal as "yield".
+      const surplusAfterDebt_t = Math.max(0, K_after_floor - K_floor_t);
+      capiBonus_t = (cfg.capiBonusShare ?? 0.25) * surplusAfterDebt_t;
+      capiBonus_t = Math.min(capiBonus_t, Math.max(0, realReturn_t - capiDebtRepaid_t));
+
+      K_t = Math.max(0, K_after_floor - capiBonus_t);
+
+      capiPayout_t        = capiPayoutFloor_t + capiBonus_t;
+      capiPayoutDesired_t = capiPayout_t;
+
+      // Diagnostics — balanced mode does NOT use the cross-subsidy / reinvest
+      // / tauK / surplusLevy mechanisms; clear them and report capiReinvest as
+      // the implied K growth above contributions.
+      tauKLevy_t           = 0;
+      K_growth_t           = K_t - K_start_t;
+      surplusAboveBuffer_t = 0;
+      surplusPhaseIn_t     = 0;
+      surplusLevy_t        = 0;
+      fundReturnCapi_t     = realReturn_t;
+      capiLegacyXSub_t     = 0;
+      capiContribXSub_t    = 0;
+      capiReinvest_t       = Math.max(0, K_t - K_open_t - netCapiFlow_t);
+      // ======== END BALANCED CASCADE ========
 
     } else {
       // ======== §5.12 / §5.13 LEGACY WATERFALL (v1.3) ========
@@ -987,6 +1134,9 @@ export function runSimulation(userConfig = {}) {
       // §5.13 overlapping cascade buckets (zero in legacy mode)
       fundReturnCapi_t, capiLegacyXSub_t, capiContribXSub_t,
       capiDebtRepaid_t, capiReinvest_t, capiBonus_t,
+      // §5.13 balanced cascade diagnostics (PR #18; zero in non-balanced modes)
+      surplusAboveFloor_t, debtSweepPhase_t, debtSweepCapacity_t,
+      guaranteeShortfall_t,
       // §5.10.1 (v1.2) tauK debt-reduction channel
       K_floor_t, tauKLevy_t,
       // §5.10.2 (v1.3) surplus-growth levy

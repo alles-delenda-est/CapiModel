@@ -142,9 +142,9 @@ const CHART_TABS = [
 // --- Main App ---
 export default function App() {
   const { currentPage, navigateTo } = useHashNavigation('simulateur')
-  // PR #17: user-facing default is the overlapping waterfall. Engine DEFAULT_CONFIG
+  // PR #18: user-facing default is the BALANCED cascade. Engine DEFAULT_CONFIG
   // keeps 'legacy' so v1.3 tests stay bit-identical; App overrides here.
-  const [params, setParams] = useState({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: 8000 })
+  const [params, setParams] = useState({ ...DEFAULT_CONFIG, cashFlowMode: 'balanced' })
   const [activePreset, setActivePreset] = useState('v1_default')
   const [showParams, setShowParams] = useState(true)
   const [showTable, setShowTable] = useState(true)
@@ -376,25 +376,61 @@ export default function App() {
               {/* ===== TIER B — expert menu ===== */}
 
               {expertMode && (
-                <CollapsibleSection title="Tier B — Cascade v2.0 (mode chevauchant)" level="advanced">
-                  <EnhancedSlider id="K_debt_trigger" label="Déclencheur remboursement dette K_t (Md€)"
-                    value={p.K_debt_trigger === Infinity ? 30000 : (p.K_debt_trigger ?? 8000)}
-                    onChange={v => setParam('K_debt_trigger', v >= 30000 ? Infinity : v)}
-                    min={0} max={30000} step={1000} unit="Md€" decimals={0}
-                    defaultValue={8000} />
-                  <div className="input-help">
-                    En dessous du seuil, le surplus de rendement va aux retraités capi (bonus) plutôt
-                    qu'au remboursement de la dette. Au-dessus : remboursement prioritaire.
-                    Valeur optimale ≈ 8 000 Md€ (génération transitionnelle 2047–2066 +30 %).
-                    30 000 Md€ = report total (jamais remboursé sur l'horizon).
+                <CollapsibleSection title="Tier B — Cascade v2.0 (mode équilibré, PR #18)" level="advanced">
+                  <div className="toggle-row">
+                    <label style={{ minWidth: 140 }}>Mode cascade</label>
+                    <select value={p.cashFlowMode}
+                      onChange={e => setParam('cashFlowMode', e.target.value)}>
+                      <option value="balanced">balanced (PR #18 — défaut)</option>
+                      <option value="overlapping">overlapping (PR #17 — historique)</option>
+                      <option value="legacy">legacy (v1.3 — historique)</option>
+                    </select>
                   </div>
+                  <div className="input-help">
+                    <strong>balanced</strong> : K préservé, dette repayée uniquement par surplus
+                    plafonné, capi jamais ne subventionne PAYG. <strong>overlapping</strong> : ancien
+                    cascade PR #17. <strong>legacy</strong> : waterfall v1.3.
+                  </div>
+
+                  <EnhancedSlider id="annuityFloorRate" label="Plancher rente capi (annuityFloorRate)"
+                    value={p.annuityFloorRate}
+                    onChange={v => setParam('annuityFloorRate', v)}
+                    min={0.005} max={0.030} step={0.001} unit="" decimals={3}
+                    defaultValue={DEFAULT_CONFIG.annuityFloorRate} />
+                  <EnhancedSlider id="debtSweepShare" label="Part rendement réel pour dette (debtSweepShare)"
+                    value={p.debtSweepShare}
+                    onChange={v => setParam('debtSweepShare', v)}
+                    min={0} max={1} step={0.05} unit="" decimals={2}
+                    defaultValue={DEFAULT_CONFIG.debtSweepShare} />
+                  <EnhancedSlider id="debtSweepKCap" label="Plafond sweep / K_t (debtSweepKCap)"
+                    value={p.debtSweepKCap}
+                    onChange={v => setParam('debtSweepKCap', v)}
+                    min={0} max={0.05} step={0.0025} unit="" decimals={4}
+                    defaultValue={DEFAULT_CONFIG.debtSweepKCap} />
+                  <EnhancedSlider id="debtSweepGdpCap" label="Plafond sweep / PIB (debtSweepGdpCap)"
+                    value={p.debtSweepGdpCap}
+                    onChange={v => setParam('debtSweepGdpCap', v)}
+                    min={0} max={0.05} step={0.0025} unit="" decimals={4}
+                    defaultValue={DEFAULT_CONFIG.debtSweepGdpCap} />
+                  <EnhancedSlider id="capiBonusShare" label="Part surplus → bonus capi (capiBonusShare)"
+                    value={p.capiBonusShare}
+                    onChange={v => setParam('capiBonusShare', v)}
+                    min={0} max={1} step={0.05} unit="" decimals={2}
+                    defaultValue={DEFAULT_CONFIG.capiBonusShare} />
+                  <EnhancedSlider id="KFloorBuffer" label="Coussin de solvabilité K (KFloorBuffer)"
+                    value={p.KFloorBuffer}
+                    onChange={v => setParam('KFloorBuffer', v)}
+                    min={1.0} max={2.0} step={0.05} unit="x" decimals={2}
+                    defaultValue={DEFAULT_CONFIG.KFloorBuffer} />
+
                   <EnhancedSlider id="r_f_annuity" label="Taux couverture rente r_f_annuity"
                     value={p.r_f_annuity}
                     onChange={v => setParam('r_f_annuity', v)} min={0.005} max={0.030} step={0.001} unit="" decimals={3} tip={TIPS.r_f_annuity}
                     defaultValue={DEFAULT_CONFIG.r_f_annuity} />
                   <div className="input-help">
-                    Détermine le taux de rente actuariel (annuityRate_t ≈ 5,6 %/an avec r_f_annuity=1,5 %)
-                    qui fixe à la fois le plancher de versement et le calcul «&nbsp;Et pour vous&nbsp;?».
+                    annuityRate_t (≈ 5,6 % avec r_f_annuity = 1,5 %) sert de référence
+                    actuarielle pour la réserve de solvabilité K_floor et la rente
+                    individuelle «&nbsp;Et pour vous&nbsp;?».
                   </div>
                 </CollapsibleSection>
               )}
