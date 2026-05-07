@@ -48,6 +48,7 @@ const TIPS = {
   T_hlm: "Durée du programme de cession HLM (5 ans de taper en fin).",
   capiAssetShareSteadyState: "Part actuarielle de long terme du pot capi détenue par les retraités (vs travailleurs en accumulation). Eq (53a) v1.0a remplace le partage par tête (qui exproprait les travailleurs).",
   equinoxePhasing: "Profil temporel de mise en œuvre Équinoxe : immediate, phased-5y/-10y, partial-50/-75.",
+  K_debt_trigger: "Seuil K_t (Md€) de déclenchement du remboursement de dette prioritaire dans la cascade v2.0. En dessous du seuil : le surplus de rendement réel va aux retraités capi (bonus). Au-dessus : il rembourse la dette de transition en priorité. Valeur optimale ≈ 8 000 Md€ — protège la génération transitionnelle 2047–2066 (+30 % de versement) tout en assurant une dette à zéro vers 2073. Régler à 0 pour le mode dette-en-priorité constant ; 30 000 Md€ = report total (jamais remboursé).",
 }
 
 function Toggle({ label, checked, onChange, tip }) {
@@ -143,7 +144,7 @@ export default function App() {
   const { currentPage, navigateTo } = useHashNavigation('simulateur')
   // PR #17: user-facing default is the overlapping waterfall. Engine DEFAULT_CONFIG
   // keeps 'legacy' so v1.3 tests stay bit-identical; App overrides here.
-  const [params, setParams] = useState({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' })
+  const [params, setParams] = useState({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: 8000 })
   const [activePreset, setActivePreset] = useState('v1_default')
   const [showParams, setShowParams] = useState(true)
   const [showTable, setShowTable] = useState(true)
@@ -375,14 +376,26 @@ export default function App() {
               {/* ===== TIER B — expert menu ===== */}
 
               {expertMode && (
-                <CollapsibleSection title="Tier B — Couverture annuité (v1.0a)" level="advanced">
-                  <EnhancedSlider id="r_f_annuity" label="Taux couverture annuité r_f_annuity" value={p.r_f_annuity}
+                <CollapsibleSection title="Tier B — Cascade v2.0 (mode chevauchant)" level="advanced">
+                  <EnhancedSlider id="K_debt_trigger" label="Déclencheur remboursement dette K_t (Md€)"
+                    value={p.K_debt_trigger === Infinity ? 30000 : (p.K_debt_trigger ?? 8000)}
+                    onChange={v => setParam('K_debt_trigger', v >= 30000 ? Infinity : v)}
+                    min={0} max={30000} step={1000} unit="Md€" decimals={0}
+                    defaultValue={8000} />
+                  <div className="input-help">
+                    En dessous du seuil, le surplus de rendement va aux retraités capi (bonus) plutôt
+                    qu'au remboursement de la dette. Au-dessus : remboursement prioritaire.
+                    Valeur optimale ≈ 8 000 Md€ (génération transitionnelle 2047–2066 +30 %).
+                    30 000 Md€ = report total (jamais remboursé sur l'horizon).
+                  </div>
+                  <EnhancedSlider id="r_f_annuity" label="Taux couverture rente r_f_annuity"
+                    value={p.r_f_annuity}
                     onChange={v => setParam('r_f_annuity', v)} min={0.005} max={0.030} step={0.001} unit="" decimals={3} tip={TIPS.r_f_annuity}
                     defaultValue={DEFAULT_CONFIG.r_f_annuity} />
-                  <EnhancedSlider id="capiAssetShareSteadyState" label="Part actuarielle retraités (steady state)"
-                    value={p.capiAssetShareSteadyState} onChange={v => setParam('capiAssetShareSteadyState', v)}
-                    min={0.20} max={0.50} step={0.025} unit="" decimals={3} tip={TIPS.capiAssetShareSteadyState}
-                    defaultValue={DEFAULT_CONFIG.capiAssetShareSteadyState} />
+                  <div className="input-help">
+                    Détermine le taux de rente actuariel (annuityRate_t ≈ 5,6 %/an avec r_f_annuity=1,5 %)
+                    qui fixe à la fois le plancher de versement et le calcul «&nbsp;Et pour vous&nbsp;?».
+                  </div>
                 </CollapsibleSection>
               )}
 

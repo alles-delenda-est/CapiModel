@@ -8,7 +8,15 @@ import { DEFAULT_CONFIG } from './simulation-engine.js';
 // UI-facing base config: inherits engine defaults but uses the v2.0 overlapping
 // waterfall. The engine DEFAULT_CONFIG keeps 'legacy' so existing tests stay
 // bit-identical; all user-facing presets override here.
-const UI_CONFIG = { ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' };
+// K_debt_trigger = 8 000 Md€: Pareto-optimal calibration.
+// Below this threshold, surplus cascade budget goes to capi retirees (bonus)
+// rather than debt repayment — protecting the transitional generation 2047–2066.
+// K_t crosses 8 000 Md€ around 2069; debt is still fully repaid by 2073.
+// Calibrated by sweeping 0–∞ under default demographics: any trigger ≥ 8 000
+// gives the same transitional-gen benefit (+30 % vs trigger=0) with D_t=0 at
+// end of horizon; lower trigger is better for the mature generation (less
+// interest drag), so 8 000 is the Pareto-optimal lower bound.
+const UI_CONFIG = { ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: 8000 };
 
 /**
  * v1_default — all §3 defaults exactly as the spec specifies them.
