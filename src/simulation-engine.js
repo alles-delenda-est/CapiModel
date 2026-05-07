@@ -167,14 +167,21 @@ export const DEFAULT_CONFIG = {
   cashFlowMode: 'legacy',
   // §5.13 (v2.0, overlapping mode only) guaranteed annual payout rate on
   // K_t × capiAssetShare, drawn from K_avail before the cascade budget.
-  // 2.0% was calibrated to maximise payout to the 2047-2066 cohort while
-  // limiting terminal K_t loss; below 1.5% (r_f_annuity) offers no real
-  // return guarantee, above ~2.5% depresses pot-based payouts from t=33+.
+  // Now set to annuityRate_t (≈5.59%/yr) so the floor equals the full
+  // pot-based annuity. annuityFloorRate is retained for legacy-mode compat.
   annuityFloorRate: 0.020,
   // §5.9 (v2.0, overlapping mode only) cap on fund return reinvested into K_t.
   // 20% is the design starting point pending calibration so K_t stabilises
   // over 2027–2096; tunable via expert UI once cascade is wired.
   reinvestCap: 0.20,
+  // §5.14 (v2.0, overlapping mode only) debt-acceleration trigger.
+  // When K_t ≥ K_debt_trigger (Md€), cascade routes surplus real return to
+  // debt repayment (bucket 3) before the capi bonus (bucket 6). When K_t is
+  // below the trigger, debt is deferred and the full surplus goes to capi.
+  // 0 (default) = always accelerate debt, preserving v2.0a behavior.
+  // Typical calibration: 10 000 Md€ → capi-first until the fund is mature,
+  // then aggressive amortisation; Infinity = always defer debt (capi-first).
+  K_debt_trigger: 0,
   // §3.7 endogenous rate premium
   rpThreshold1: 150,
   rpSlope1: 0.0002,
@@ -839,26 +846,26 @@ export function runSimulation(userConfig = {}) {
         budget    -= xsubFromReturns;
       }
 
-      // Bucket 4b: Capi top-up to pot-based annuity target — BEFORE debt repayment.
-      // Ensures capi retirees receive their full pot-based annuity (annuityRate × share × K_t)
-      // whenever the returns budget allows, prioritising pensioners over debt service.
-      // Any residual beyond the target flows through as bonus after bucket 3.
-      const capiTarget_t = Math.max(0, potBasedPayout_t - capiPayoutFloor_t);
-      const capiTopUp_t  = Math.min(budget, capiTarget_t);
-      budget -= capiTopUp_t;
-
-      // Bucket 3: Debt principal reduction (from returns remaining after capi target).
-      capiDebtRepaid_t = Math.min(budget, D_t);
-      budget   -= capiDebtRepaid_t;
-      D_t      -= capiDebtRepaid_t;
+      // §5.14 Debt-acceleration trigger: when K_t ≥ K_debt_trigger, route surplus
+      // real return to debt repayment (bucket 3) before the capi bonus (bucket 6).
+      // Below the trigger, debt is deferred and the surplus flows to capi retirees.
+      // K_debt_trigger = 0 (default) → K_t ≥ 0 always → debt-first (v2.0a compat).
+      // Identity: capiLegacyXSub_t + capiDebtRepaid_t + capiReinvest_t + capiBonus_t = fundReturnCapi_t.
+      const accelDebt = K_t >= (cfg.K_debt_trigger ?? 0);
+      if (accelDebt) {
+        // Bucket 3: Debt principal reduction (surplus real returns, debt-first mode).
+        capiDebtRepaid_t = Math.min(budget, D_t);
+        budget          -= capiDebtRepaid_t;
+        D_t             -= capiDebtRepaid_t;
+      }
 
       // Bucket 5: Reinvestment cap (stays in K_t; ≤ reinvestCap × fundReturn).
       capiReinvest_t = Math.min(budget, (cfg.reinvestCap ?? 0.20) * fundReturnCapi_t);
       budget -= capiReinvest_t;
 
-      // Bucket 6: Residual bonus — capiTopUp already paid + any leftover above target.
-      // Identity: capiBonus_t + capiLegacyXSub_t + capiDebtRepaid_t + capiReinvest_t = fundReturnCapi_t.
-      capiBonus_t = capiTopUp_t + budget;
+      // Bucket 6: Residual bonus (capiDebtRepaid_t = 0 when below trigger).
+      // Identity: capiLegacyXSub_t + capiDebtRepaid_t + capiReinvest_t + capiBonus_t = fundReturnCapi_t.
+      capiBonus_t = budget;
 
       capiPayout_t = capiPayoutFloor_t + capiBonus_t;                          // (54′)
       capiPayoutDesired_t = capiPayout_t;                                       // alias

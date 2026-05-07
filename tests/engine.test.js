@@ -1564,3 +1564,65 @@ describe('computeIndividualPerspective — Et Pour Vous alignment', () => {
   });
 });
 
+// ===========================================================================
+// §5.14 K_debt_trigger — cascade priority switch (v2.0 debt-pacing)
+// ===========================================================================
+describe('K_debt_trigger — debt-acceleration cascade switch', () => {
+  it('DEFAULT_CONFIG.K_debt_trigger = 0 (backward-compat: always debt-first)', () => {
+    expect(DEFAULT_CONFIG.K_debt_trigger).toBe(0);
+  });
+
+  it('with trigger=0, output matches no-trigger baseline (bit-identical)', () => {
+    const base = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' });
+    const explicit = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: 0 });
+    for (let t = 0; t < base.length; t++) {
+      expect(explicit[t].capiDebtRepaid_t).toBe(base[t].capiDebtRepaid_t);
+      expect(explicit[t].capiBonus_t).toBe(base[t].capiBonus_t);
+    }
+  });
+
+  it('with trigger=Infinity, capiDebtRepaid_t = 0 every period (full deferral)', () => {
+    const rows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: Infinity });
+    for (const r of rows) {
+      expect(r.capiDebtRepaid_t, `t=${r.t}`).toBe(0);
+    }
+  });
+
+  it('with trigger=Infinity, total capiDebtRepaid across all years is 0 (full deferral)', () => {
+    const rows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: Infinity });
+    const totalRepaid = rows.reduce((s, r) => s + r.capiDebtRepaid_t, 0);
+    expect(totalRepaid).toBeCloseTo(0, 6);
+  });
+
+  it('with trigger=Infinity, D_t at end of horizon > 0 (debt deferred, never amortised)', () => {
+    // In the infinite-deferral mode the cascade never repays transition debt —
+    // it stays positive throughout. This is the intended tradeoff: capi retirees
+    // receive higher payouts but the state holds the debt longer.
+    const rows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: Infinity });
+    expect(rows[rows.length - 1].D_t).toBeGreaterThan(0);
+  });
+
+  it('with finite trigger, cascade switches from capi-first to debt-first when K_t crosses threshold', () => {
+    const TRIGGER = 5000; // Md€ — K_t crosses this somewhere in the horizon
+    const rows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: TRIGGER });
+    let seenBelow = false, seenAbove = false;
+    for (const r of rows) {
+      if (r.K_start_t < TRIGGER && r.capiDebtRepaid_t < 1e-6) seenBelow = true;
+      if (r.K_start_t >= TRIGGER) seenAbove = true;
+    }
+    expect(seenBelow, 'should have capi-first phase before trigger').toBe(true);
+    expect(seenAbove, 'should have debt-first phase after trigger').toBe(true);
+  });
+
+  it('cascade budget identity holds for both debt-first and capi-first modes', () => {
+    for (const trigger of [0, Infinity]) {
+      const rows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: trigger });
+      for (const r of rows) {
+        if (r.fundReturnCapi_t < 1e-6) continue;
+        const allocated = r.capiLegacyXSub_t + r.capiDebtRepaid_t + r.capiReinvest_t + r.capiBonus_t;
+        expect(allocated, `trigger=${trigger} t=${r.t}`).toBeCloseTo(r.fundReturnCapi_t, 6);
+      }
+    }
+  });
+});
+
