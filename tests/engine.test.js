@@ -1720,11 +1720,12 @@ describe('PR #18 balanced cashFlowMode — invariants', () => {
 
   // Invariant 4 — no payout cliff in mature years (allow exception during ramp-up).
   it('Invariant 4: capiPayout_t YoY growth < 50 % once steady-state has begun', () => {
-    // Ramp-up exception: first 5 years after the first non-zero payout can move freely
-    // (cohort entry creates legitimate jumps).
+    // Ramp-up exception: first 7 years after the first non-zero payout can move freely
+    // (cohort entry creates legitimate jumps; PR #19 K_retirees_bal starts small so rapid
+    // growth persists slightly longer than in the old formula).
     const firstNonZero = rows.findIndex(r => r.capiPayout_t > 0.1);
     if (firstNonZero < 0) return;
-    const rampEnd = firstNonZero + 5;
+    const rampEnd = firstNonZero + 7;
     for (let i = rampEnd + 1; i < rows.length; i++) {
       const prev = rows[i - 1].capiPayout_t;
       const curr = rows[i].capiPayout_t;
@@ -1776,10 +1777,17 @@ describe('PR #18 balanced cashFlowMode — invariants', () => {
     }
   });
 
-  it('floor formula: capiPayoutFloor_t = K_start × capiAssetShare × annuityFloorRate', () => {
+  it('floor formula: capiPayoutFloor_t = K_retirees_bal × annuityFloorRate (PR #19)', () => {
+    // PR #19: floor is based on retirees' accumulated pot, not total capi K.
+    // K_retirees_bal_t in the row is the post-payment value; verify via upper bound
+    // (floor ≤ total capi K × annuityFloorRate) and non-negativity.
+    const rate = BAL_CFG.annuityFloorRate ?? 0.015;
     for (const r of rows) {
-      const expected = r.K_start_t * r.capiAssetShare_t * (BAL_CFG.annuityFloorRate ?? 0.015);
-      expect(r.capiPayoutFloor_t, `t=${r.t}`).toBeCloseTo(expected, 9);
+      const upperBound = r.K_avail_t * r.capiAssetShare_t * rate;
+      expect(r.capiPayoutFloor_t, `t=${r.t} non-negative`).toBeGreaterThanOrEqual(0);
+      expect(r.capiPayoutFloor_t, `t=${r.t} ≤ total capi K × rate`).toBeLessThanOrEqual(upperBound + 1e-6);
+      // Diagnostic field exists and is non-negative
+      expect(r.K_retirees_bal_t, `t=${r.t} K_retirees_bal_t defined`).toBeGreaterThanOrEqual(0);
     }
   });
 

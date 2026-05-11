@@ -194,8 +194,8 @@ export default function App() {
       const legacyShare = r.legacyShareAvg ?? 0;
       const retTransitionM = capiRetM * legacyShare;
       const retCapiPureM = capiRetM * (1 - legacyShare);
-      const avgLegacyKE = retLegacyM > 0.001 ? (r.legacyExp_t / retLegacyM) * 1000 : 0;
-      const avgCapiKE = capiRetM > 0.001 ? (r.capiPayout_t / capiRetM) * 1000 : 0;
+      const avgLegacyKE = retLegacyM > 0.001 ? r.legacyExp_t / retLegacyM : 0;
+      const avgCapiKE = capiRetM > 0.001 ? r.capiPayout_t / capiRetM : 0;
       return [
         r.year,
         r.legacyExp_t.toFixed(1), r.capiPayout_t.toFixed(1),
