@@ -5,13 +5,22 @@
 
 import { DEFAULT_CONFIG } from './simulation-engine.js';
 
+// UI-facing base config: inherits engine defaults but uses the v2.0 overlapping
+// waterfall. The engine DEFAULT_CONFIG keeps 'legacy' so existing tests stay
+// bit-identical; all user-facing presets override here.
+// PR #18: user-facing default is the BALANCED cascade (§5.13 v2.0). Strict
+// separation of concerns — capi never cross-subsidises PAYG, K is preserved
+// as a pension reserve, and only capped surplus return repays transition debt.
+// The legacy and overlapping modes remain available for comparison.
+const UI_CONFIG = { ...DEFAULT_CONFIG, cashFlowMode: 'balanced' };
+
 /**
  * v1_default — all §3 defaults exactly as the spec specifies them.
  */
 const v1_default = {
   label: 'Hypothèses de base (v1.0a)',
   description: 'Tous les paramètres aux valeurs par défaut du spec v1.0a §3.',
-  params: { ...DEFAULT_CONFIG },
+  params: { ...UI_CONFIG },
 };
 
 /**
@@ -27,7 +36,7 @@ const v1_optimiste = {
   label: 'Optimiste',
   description: 'Marchés porteurs, démographie réformée, plein-emploi.',
   params: {
-    ...DEFAULT_CONFIG,
+    ...UI_CONFIG,
     r_c: 0.05,
     r_f_portfolio: 0.05,
     w_r: 0.008,
@@ -47,7 +56,7 @@ const v1_stress = {
   label: 'Stress',
   description: 'Marchés baissiers, démographie pessimiste, Équinoxe partielle.',
   params: {
-    ...DEFAULT_CONFIG,
+    ...UI_CONFIG,
     r_c: 0.025,
     r_f_portfolio: 0.025,
     w_r: 0.001,
@@ -78,7 +87,7 @@ const equinoxeOnly = {
   label: 'Équinoxe seul',
   description: 'Réforme Équinoxe sans capi/HLM/travail. Démographie réaliste. Pédagogique : montre l\'insuffisance d\'une réforme côté prestations seule.',
   params: {
-    ...DEFAULT_CONFIG,
+    ...UI_CONFIG,
     demoProfile: 'realistic',
     enableCapi: false,
     hlmDiscount: false,
@@ -103,7 +112,7 @@ const labourHousingOnly = {
   label: 'Travail + Logement seul',
   description: 'Capi + HLM + réforme du travail sans Équinoxe. Démographie réaliste. Pédagogique : montre que la combinaison fiscale ne suffit pas seule.',
   params: {
-    ...DEFAULT_CONFIG,
+    ...UI_CONFIG,
     demoProfile: 'realistic',
     useEquinoxe: false,
     employmentRateTarget: 0.759,
@@ -133,7 +142,7 @@ const equinoxeAndLabour = {
   label: 'Équinoxe + Travail',
   description: 'Équinoxe + réforme du travail (sans capi/HLM). Démographie COR central (recalibrée v1.0a). Montre que cette combinaison soutient le système si les projections COR centrales se réalisent.',
   params: {
-    ...DEFAULT_CONFIG,
+    ...UI_CONFIG,
     demoProfile: 'cor_central',
     enableCapi: false,
     hlmDiscount: false,

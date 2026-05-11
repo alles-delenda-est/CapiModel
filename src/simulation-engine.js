@@ -1,54 +1,22 @@
-// CapiModel v1.1 simulation engine.
-// Spec source of truth: CapiModelSpec_v1.1.md (branch spec/v1.1).
-// This file implements §1–§9 of the spec. Every non-trivial line of the
-// simulation loop carries a `// Spec §X.Y eq (N)` comment.
-// Naming follows the Greek→Latin map in docs/superpowers/plans/2026-04-26-capimodel-v1-task1.md;
-// do not rename.
+// CapiModel simulation engine — current consolidated implementation.
+// Legacy v1.0a/v1.1/v1.2/v1.3 branches are deprecated.
+// This file implements the full current model, including:
+//   - per-cohort PAYG accruals (eq 15a/15b/25b);
+//   - tauK stock levy and surplus-growth levy (§5.10.1/§5.10.2, legacy mode);
+//   - employer contribution-rate cut mechanics (§5.3);
+//   - optional actuarial demographic kernel (demoMode='actuarial');
+//   - overlapping cash-flow cascade (cashFlowMode='overlapping', v2.0 default).
+// Spec source of truth: cdc_legacy_fund_model.md.
+// Every non-trivial line of the simulation loop carries a `// eq (N)` comment.
 //
-// v1.0a deltas vs v1.0:
-//  1. Two risk-free rates: r_f_portfolio (eq 36 / 58) vs r_f_annuity (eq 53).
-//  2. HLM uniform geometric: ΔU_t = U0 × (1-ρ)^t × ρ for all t (eq 27).
-//  3. Capi pot owned by retirees by ASSET share, not headcount share (eq 53, 53a).
-//  4. Équinoxe split: benefit-side reductions vs tax-side CSG revenue (§5.5).
-//
-// v1.1 deltas vs v1.0a:
-//  5. Per-cohort PAYG accruals: transitional cohorts now collect prorated
-//     PAYG pension via eq 25b (transitionalPaygExp_t), fed into the §5.9
-//     waterfall via eq 25c (totalLegacyOutflow_t) and revised eq 39'.
-//     `legacyShareOfCohort(B)` (eq 15a) is the closed-form per-cohort share;
-//     `legacyShareAvg_t` (eq 15b) is the population-weighted running average
-//     across capi-cohort retirees alive at year t. Held flat when
-//     R^capi_t declines (mortality > new entries). See §5.6.1.
-//
-// v1.2 deltas vs v1.1 (branch v1.2/capi-debt-optimisation):
-//  7. fundReturn fix (eq 36 / eq 26): F_t now compounds at π in deficit years
-//     (real value preserved) instead of staying flat. fundReturn_t uses the
-//     REAL rate r_f_portfolio (not the Fisher nominal r_f_portfolio_n), so the
-//     income paid to operations = F_t × r_f_portfolio and the inflation component
-//     πF_t is retained in the fund. In surplus years F_t compounds at π before
-//     the waterfall surplus is added.  Over 70 years this causes F_t to grow from
-//     F0=340 to ≈1350 Md€ and fundReturn_t to grow from ≈15 to ≈61 Md€/yr.
-//     r_f_portfolio_n is retained in the row schema as a diagnostic field.
-//  6. tauK (§5.10.1): annual levy on K_t stock → transition-debt repayment.
-//
-// v1.3 deltas vs v1.2 (branch feat/employer-tax-cut):
-//  8. Employer tax cut phasing (§5.3): deltaTauxPatronal now activates at
-//     t = taxCutStartT (default: 2, year 2029) instead of t = 0. tau_e_eff
-//     is time-varying in the loop. New diagnostic fields:
-//       employerCutInitial_t = W_t × deltaTauxPatronal (when t ≥ taxCutStartT)
-//       employerCutEventual_t = emplrToCap_t (freed employer legacy obligation)
-//     Eventual cut quantifies employer contributions freed from legacy as the
-//     transition matures — the annual amount that could be returned as tax relief.
-//     Fires after §5.13 (post-payout K_t). Guarded by K_t solvency floor
-//     (K_t may not fall below capiPayoutFloor_t / annuityRate_t). Only active
-//     while D_t > 0; self-limits once debt is repaid.
-//     Ordering note: §5.11 lambda levy fires on INFLOWS (netCapiFlow_t, eq 45),
-//     tauK fires on the STOCK (post-eq 57). Mechanically decoupled — lambda
-//     reduces what enters K_t, tauK reduces what stays in K_t. Running both
-//     simultaneously is additive; reduce lambda if tauK is active.
-//     GE feedback: tauK lowers K_t/GDP_t, which reduces gePenalty_t and raises
-//     r_c_eff_t. This first-order feedback partially offsets the levy impact
-//     when K_t/GDP_t is in the GE-penalty zone (geKneeRatio < K/GDP < geFloorRatio).
+// §4 (v2.0) actuarial demographic data — see DemographicKernel_plan.md.
+// Used by activePopFactor_actuarial / retireeIdx_actuarial / cohIdx_actuarial.
+import {
+  COR_SCENARIOS,
+  COR_YEARS,
+  RETIREE_AGE_WEIGHTS_2027,
+  S_mixed,
+} from './demographic-tables.js';
 
 // ---- §8.1 DREES 2022 pension distribution (€/month bracket bounds) ----
 
@@ -91,6 +59,19 @@ export const DEFAULT_CONFIG = {
   Y0: 2027,
   pi: 0.02,
   w_r: 0.004,
+  // §4 (v2.0) demographic kernel mode.
+  //   'parametric' — existing smoothstep kernel (eqs 7a–e). Backward-compat default.
+  //   'actuarial'  — COR juin 2025 + INSEE T60 table-driven kernel.
+  // 'parametric' is bit-identical to v1.x output; 'actuarial' will become the
+  // default in v2.1 once the placeholder data in src/demographic-tables.js is
+  // replaced with primary-source transcriptions.
+  demoMode: 'parametric',
+  // §4 (v2.0) actuarial-mode scenario (ignored when demoMode === 'parametric').
+  // 'cor_central' | 'cor_high' | 'cor_low'
+  demoScenario: 'cor_central',
+  // §4 (v2.0) female fraction in the 2027 retiree pool (T60 mortality blend).
+  // COR retiree pool ≈ 48% male / 52% female. Affects cohIdx_actuarial only.
+  mortalityFemaleFraction: 0.52,
   // §3.1 v1.0a: r_f split into two distinct rates.
   // r_f_portfolio (eq 36 fundReturn, eq 58 spread) — diversified Legacy Fund
   //   return; OECD 60/40 historical median.
@@ -176,6 +157,51 @@ export const DEFAULT_CONFIG = {
   // T_capi_start. Without this scaling the model expropriates worker savings
   // and masks the transition's fiscal cost (the v1.0 bug).
   capiAssetShareSteadyState: 0.35,
+  // §5.9/§5.13 (v2.0) cash-flow mode — see PR #17.
+  //   'legacy'      — v1.3 waterfall: E0-indexed capi floor + terminal K_t draw.
+  //   'overlapping' — K_t-share annuity floor (annuityFloorRate × capiAssetShare × K_t),
+  //                   state guarantee posts ΔD_t annually rather than draining K_t.
+  // 'legacy' is bit-identical to v1.3 output. 'overlapping' will become the
+  // user-facing default once the fund-return cascade is calibrated; for now
+  // the toggle is wired so v1.3 invariants/tests keep passing.
+  cashFlowMode: 'legacy',
+  // §5.13 (v2.0, balanced/overlapping mode) guaranteed annual payout rate on
+  // K_t × capiAssetShare. Drawn from K_avail before any debt sweep.
+  // 1.5% ≈ r_f_annuity, the actuarial floor below which there's no real return
+  // guarantee. Bonus payments above floor come from capped surplus return.
+  annuityFloorRate: 0.015,
+  // §5.9 (v2.0, overlapping mode only) cap on fund return reinvested into K_t.
+  // 20% is the design starting point pending calibration so K_t stabilises
+  // over 2027–2096; tunable via expert UI once cascade is wired.
+  reinvestCap: 0.20,
+  // §5.14 (v2.0, overlapping mode only) debt-acceleration trigger.
+  // When K_t ≥ K_debt_trigger (Md€), cascade routes surplus real return to
+  // debt repayment (bucket 3) before the capi bonus (bucket 6). When K_t is
+  // below the trigger, debt is deferred and the full surplus goes to capi.
+  // 0 (default) = always accelerate debt, preserving v2.0a behavior.
+  // Typical calibration: 10 000 Md€ → capi-first until the fund is mature,
+  // then aggressive amortisation; Infinity = always defer debt (capi-first).
+  K_debt_trigger: 0,
+  // §5.13 (v2.0, balanced mode only — PR #18) — explicit cascade ordering
+  // with strict separation of concerns: PAYG borrows for its own deficit,
+  // K is preserved as a pension reserve, and only capped surplus return
+  // (above a buffered solvency floor) is available to repay transition debt.
+  // Capi contributions never cross-subsidise legacy PAYG (capiContribXSub=0).
+  //
+  // debtSweepShare      — share of real return available for debt repayment
+  // debtSweepKCap       — max sweep as fraction of K_t (prevents draining)
+  // debtSweepGdpCap     — max sweep as fraction of GDP_t (macro stability)
+  // capiBonusShare      — share of post-debt surplus paid as bonus
+  // KFloorBuffer        — solvency cushion above strict annuity reserve
+  // debtSweepStartRatio — D/GDP at which sweep is fully active (smoothstep)
+  // debtSweepEndRatio   — D/GDP at which sweep is fully inactive
+  debtSweepShare: 0.50,
+  debtSweepKCap: 0.010,
+  debtSweepGdpCap: 0.008,
+  capiBonusShare: 0.20,
+  KFloorBuffer: 1.10,
+  debtSweepStartRatio: 0.50,
+  debtSweepEndRatio: 0.05,
   // §3.7 endogenous rate premium
   rpThreshold1: 150,
   rpSlope1: 0.0002,
@@ -404,10 +430,86 @@ export function cohIdx(t) {
   return 1 - smoothstep(t, 0, 45);
 }
 
+// =================== §5.2 (v2.0) actuarial kernel ===================
+//
+// Three table-driven replacements for eqs 7c′, 7d′, 7e′.  All three return
+// normalised indices (ratio to t=0 value) so downstream equations 9, 10, 11,
+// 23, 24, 25, 25b, 31 are structurally unchanged.
+//
+// See DemographicKernel_plan.md §5.1–5.3 for the full design rationale.
+
+/** Linear interpolation of `value` against a `years` array.
+ *  Both arrays are aligned (same length, monotonically increasing years).
+ *  Years outside the range clamp to the boundary value. */
+function _interpYears(year, years, values) {
+  if (year <= years[0]) return values[0];
+  if (year >= years[years.length - 1]) return values[values.length - 1];
+  // Binary search would be O(log n) but the array is small (73 entries) and
+  // year always lands within ±1 of the integer index — direct lookup is fine.
+  const idx = year - years[0];
+  if (Number.isInteger(year) && idx >= 0 && idx < years.length) {
+    return values[idx];
+  }
+  // Non-integer year: linear interpolation between floor and ceil.
+  const lo = Math.floor(idx);
+  const hi = lo + 1;
+  const frac = idx - lo;
+  return values[lo] + frac * (values[hi] - values[lo]);
+}
+
+/** §5.2 eq (7d′): activePopFactor_actuarial = P_act_t / P_act_0.
+ *  cfg must define `demoScenario` (one of cor_central/cor_high/cor_low). */
+export function activePopFactor_actuarial(t, cfg) {
+  const scen = COR_SCENARIOS[cfg.demoScenario];
+  if (!scen) throw new Error(`Unknown demoScenario: ${cfg.demoScenario}`);
+  const Y0 = cfg.Y0 ?? 2027;
+  const P_act_0 = _interpYears(Y0, COR_YEARS, scen.P_act);
+  const P_act_t = _interpYears(Y0 + t, COR_YEARS, scen.P_act);
+  return P_act_t / P_act_0;
+}
+
+/** §5.2 eq (7c′): retireeIdx_actuarial = P_ret_t / P_ret_0. */
+export function retireeIdx_actuarial(t, cfg) {
+  const scen = COR_SCENARIOS[cfg.demoScenario];
+  if (!scen) throw new Error(`Unknown demoScenario: ${cfg.demoScenario}`);
+  const Y0 = cfg.Y0 ?? 2027;
+  const P_ret_0 = _interpYears(Y0, COR_YEARS, scen.P_ret);
+  const P_ret_t = _interpYears(Y0 + t, COR_YEARS, scen.P_ret);
+  return P_ret_t / P_ret_0;
+}
+
+/** §5.2 eq (7e′): cohIdx_actuarial — age-weighted T60 survival of the 2027
+ *  retiree pool, with male/female blended at the SURVIVAL-CURVE level. */
+export function cohIdx_actuarial(t, cfg) {
+  const f = cfg.mortalityFemaleFraction ?? 0.52;
+  let acc = 0;
+  for (let aOffset = 0; aOffset < 22; aOffset++) {
+    acc += RETIREE_AGE_WEIGHTS_2027[aOffset] * S_mixed(aOffset, t, f);
+  }
+  return clamp(acc, 0, 1); // weights sum to ≈1.0; clamp guards float rounding
+}
+
 // =================== runSimulation ===================
 
 // §5.5 phasing modes (UI exposure of equinoxePhasing is Task 3 scope; engine
 // must implement all five modes per the spec).
+// §5.13 (v2.0, balanced mode — PR #18) capi asset share helper.
+// Uses post-contribution numerator AND denominator to avoid the timing
+// distortion of overlapping mode (which divides by K_open_t, the start-of-period
+// stock, while the numerator already includes this period's contributions).
+// Aligning both sides on K_avail_t (= K_open_t × (1+r_cn) + netCapiFlow_t)
+// gives a consistent end-of-period share before any payout.
+// `sumCapiContrib` is passed post-increment (i.e., already includes the current
+// period's netCapiFlow_t per the engine loop's accumulation order).
+export function computeCapiAssetShareBalanced({
+  K_avail_t,
+  sumCapiContrib,
+}) {
+  const numerator = Math.max(0, sumCapiContrib);
+  const denominator = Math.max(K_avail_t, 1e-9);
+  return clamp(numerator / denominator, 0, 1);
+}
+
 function equinoxePhaseFactor(t, cfg) {
   switch (cfg.equinoxePhasing) {
     case 'immediate':  return 1;
@@ -443,6 +545,11 @@ export function runSimulation(userConfig = {}) {
   //   capiRetirees_prev — last-period capi retiree count for the running blend.
   let legacyShareAvg = 0;
   let capiRetirees_prev = 0;
+  // PR #17 accounting identity: cumulative net capi contributions (C_s_capi + employer − levy).
+  // Used in overlapping mode to derive capiAssetShare_t without a free parameter.
+  let sumCapiContrib = 0;
+  // §5.7 HLM stock tracker: recursive so hlmActive_t taper stops depleting U_state.
+  let U_state = cfg.U0;
 
   // ---- Constants per-config (no t dependence) ----
   const w_n   = fisher(cfg.w_r, cfg.pi);                       // §5.1 eq (1)
@@ -463,10 +570,16 @@ export function runSimulation(userConfig = {}) {
     const I_factor_t = Math.pow(1 + iota, t);                                   // (5)
     const H_factor_t = Math.pow((1 + g_h_eff) * (1 + cfg.pi), t);               // (6)
 
-    // ---------- §5.2 Demographic indices ----------
-    const retireeIdx_t = retireeIdx(t, cfg.demoProfile);                        // (7c)
-    const activePop_t  = activePopFactor(t, cfg.demoProfile);                   // (7d)
-    const cohIdx_t     = cohIdx(t);                                             // (7e)
+    // ---------- §5.2 Demographic indices — dispatched by demoMode ----------
+    const retireeIdx_t = cfg.demoMode === 'actuarial'                           // (7c / 7c′)
+      ? retireeIdx_actuarial(t, cfg)
+      : retireeIdx(t, cfg.demoProfile);
+    const activePop_t  = cfg.demoMode === 'actuarial'                           // (7d / 7d′)
+      ? activePopFactor_actuarial(t, cfg)
+      : activePopFactor(t, cfg.demoProfile);
+    const cohIdx_t     = cfg.demoMode === 'actuarial'                           // (7e / 7e′)
+      ? cohIdx_actuarial(t, cfg)
+      : cohIdx(t);
     const dependencyRatio_t = retireeIdx_t / activePop_t;                       // §5.2 diagnostic
 
     // ---------- §5.3 Wage bill & contributions ----------
@@ -478,10 +591,12 @@ export function runSimulation(userConfig = {}) {
     const C_s_t = W_t * cfg.tau_s;                                              // (10)
     // v1.3: deltaTauxPatronal (step) + deltaTauxPatronalPA × years-since-start (annual glide).
     // Total cut is capped at tau_e (employer rate cannot go negative).
-    const taxCutYears = t >= (cfg.taxCutStartT ?? 2) ? (t - (cfg.taxCutStartT ?? 2) + 1) : 0;
+    // yearsAfterStart = 0 on activation year (step only), 1 on the following year (step + 1×PA), etc.
+    const taxCutStartT = cfg.taxCutStartT ?? 2;
+    const yearsAfterStart = t >= taxCutStartT ? (t - taxCutStartT) : 0;
     const totalCut_t = Math.min(cfg.tau_e, (cfg.deltaTauxPatronal ?? 0)
-      + (cfg.deltaTauxPatronalPA ?? 0) * taxCutYears);
-    const tau_e_eff = taxCutYears > 0
+      + (cfg.deltaTauxPatronalPA ?? 0) * yearsAfterStart);
+    const tau_e_eff = t >= taxCutStartT
       ? Math.max(0, cfg.tau_e - totalCut_t)
       : cfg.tau_e;                                                              // §5.3 (v1.3)
     const C_e_t = W_t * tau_e_eff;                                              // (11)
@@ -573,20 +688,22 @@ export function runSimulation(userConfig = {}) {
     capiRetirees_prev = capiRetirees_t;
 
     // ---------- §5.7 HLM proceeds ----------
-    // v1.0a eq (27): uniform geometric form. ΔU_t = U_t × ρ where U_t = U0×(1-ρ)^t.
-    // Mass conservation: U_{t+1} = U_t − ΔU_t exactly. (v1.0 had a piecewise form
-    // ΔU_t = (t==0)?U0·ρ : U0·(1-ρ)^(t-1)·ρ which forced ΔU_0 = ΔU_1 and violated
-    // mass conservation by an extra year-1 cession.)
-    const U_t       = cfg.U0 * Math.pow(1 - cfg.rho, t);                        // (26)
-    const delta_U_t = U_t * cfg.rho;                                            // (27)
-    const units_sold = delta_U_t * 1e6;
+    // v2.0: recursive stock tracking. ΔU_t = U_t × ρ × hlmActive_t so the taper
+    // reduces actual sales (and U_state stops declining) rather than just zeroing
+    // proceeds while the stock silently empties. hlmActive_t is applied here, not
+    // in H_t_proceeds, so both stock and revenue taper together.
+    // Mass conservation: U_{t+1} = U_t − ΔU_t holds exactly for all t.
+    const U_t          = U_state;                                                // (26) recursive
+    const hlmActive_t  = 1 - smoothstep(t, cfg.T_hlm - 5, cfg.T_hlm);
+    const delta_U_t    = U_t * cfg.rho * hlmActive_t;                           // (27) taper applied
+    const units_sold   = delta_U_t * 1e6;
     const priceDiscount_t = (cfg.hlmDiscount && delta_eff > 0)
       ? Math.min(0.30, delta_eff * units_sold / cfg.baselineTransactions)
       : 0;                                                                      // (28)
     const P_eff_t = cfg.P0 * H_factor_t * (1 - priceDiscount_t);                // (29)
     const gain_t  = Math.max(0, P_eff_t - cfg.Pbook);
-    const hlmActive_t  = 1 - smoothstep(t, cfg.T_hlm - 5, cfg.T_hlm);
-    const H_t_proceeds = delta_U_t * gain_t * 0.95 * hlmActive_t;               // (30)
+    const H_t_proceeds = delta_U_t * gain_t * 0.95;                             // (30)
+    U_state = U_state - delta_U_t;                                               // stock update
 
     // ---------- §5.8 Endogenous borrowing rate ----------
     const GDP_t   = cfg.baseGDP * Omega_t * empFactor * activePop_t;            // (31)
@@ -610,7 +727,12 @@ export function runSimulation(userConfig = {}) {
     // alone. legacyExp_t is preserved as a separate diagnostic; the waterfall
     // consumes totalLegacyOutflow_t.
     const deficit_t = totalLegacyOutflow_t - nonEmplrNet_t;                     // (39')
-    const emplrAvail_t = C_e_t * (1 - cfg.phiF);                                // (40)
+    // phiF (employer floor to capi) is only active in legacy mode.
+    // In overlapping/balanced modes the cascade covers capi payout from K_t directly,
+    // so all employer contributions flow to legacy first (phiF = 0 effective).
+    const phiF_eff = (cfg.cashFlowMode === 'overlapping' || cfg.cashFlowMode === 'balanced')
+      ? 0 : (cfg.phiF ?? 0);
+    const emplrAvail_t = C_e_t * (1 - phiF_eff);                               // (40)
 
     let emplrToLeg_t, emplrToCap_t;
     if (deficit_t <= 0) {
@@ -618,7 +740,7 @@ export function runSimulation(userConfig = {}) {
     } else if (deficit_t <= emplrAvail_t) {
       emplrToLeg_t = deficit_t;    emplrToCap_t = C_e_t - deficit_t;
     } else {
-      emplrToLeg_t = emplrAvail_t; emplrToCap_t = C_e_t * cfg.phiF;
+      emplrToLeg_t = emplrAvail_t; emplrToCap_t = C_e_t * phiF_eff;
     }
     const netFlow_t = nonEmplrNet_t + emplrToLeg_t - totalLegacyOutflow_t;      // (41) v1.1
     // v1.3 diagnostics: employer tax-cut channels.
@@ -637,24 +759,32 @@ export function runSimulation(userConfig = {}) {
       D_t = D_t + borrowed_t;                                                   // (42)
       F_t = F_t * (1 + cfg.pi);       // v1.2: compound at π (was: unchanged eq 26)
     } else {
-      const repaid_t = Math.min(cfg.alpha * netFlow_t, D_t);
+      // alpha (PAYG-surplus-to-debt routing) is only active in legacy mode.
+      // In overlapping/balanced modes the K-side cascade owns debt repayment.
+      const alpha_eff = (cfg.cashFlowMode === 'overlapping' || cfg.cashFlowMode === 'balanced')
+        ? 0 : (cfg.alpha ?? 1);
+      const repaid_t = Math.min(alpha_eff * netFlow_t, D_t);
       D_t = D_t - repaid_t;
       F_t = F_t * (1 + cfg.pi) + (netFlow_t - repaid_t);                       // (43) v1.2
     }
 
     // ---------- §5.11 Transition levy (smoothed) ----------
+    // lambda levy is only active in legacy mode. In overlapping mode, cascade
+    // bucket 4 incorporates its effect. In balanced mode (PR #18) lambda is
+    // disabled — capi contributions never cross-subsidise legacy PAYG.
     // SPEC AMBIGUITY 2: spec writes T_capi_start(t) suggesting time-variation,
-    // but T_capi_start is a constant in v1.0 per eq (14). v1.1 / v1.2 plan to
-    // expose T_capi_start (and cutoffAge) as user parameters that may vary
-    // over the lifetime of the run; for v1.0 it is treated as a constant.
+    // but T_capi_start is a constant in v1.0 per eq (14).
     // SPEC AMBIGUITY 4: D_t in levyPhaseOut is post-§5.10 value.
-    const T_lambda_eff   = Math.max(cfg.Tlambda, T_capi_start);
-    const levyActivation = smoothstep(t, T_lambda_eff - 1, T_lambda_eff + 1);
-    const levyPhaseOut   = GDP_t > 0 ? smoothstep(D_t / GDP_t, 0, 0.05) : 0;
+    const isCascadeMode  = (cfg.cashFlowMode === 'overlapping' || cfg.cashFlowMode === 'balanced');
+    const T_lambda_eff   = Math.max(cfg.Tlambda ?? 15, T_capi_start);
+    const levyActivation = isCascadeMode ? 0
+      : smoothstep(t, T_lambda_eff - 1, T_lambda_eff + 1);
+    const levyPhaseOut   = isCascadeMode ? 0
+      : (GDP_t > 0 ? smoothstep(D_t / GDP_t, 0, 0.05) : 0);
     const levyFactor     = levyActivation * levyPhaseOut;
-    const grossLevy_t = levyFactor * cfg.lambda * (C_s_capi_t + emplrToCap_t);
+    const grossLevy_t    = levyFactor * (cfg.lambda ?? 0) * (C_s_capi_t + emplrToCap_t);
     const levy_t = Math.min(grossLevy_t, D_t);
-    D_t = Math.max(0, D_t - levy_t);                                            // (44)
+    if (levy_t > 0) D_t = Math.max(0, D_t - levy_t);                           // (44)
     const netCapiFlow_t = C_s_capi_t + emplrToCap_t - levy_t;                   // (45)
 
     // ---------- §5.12 Capi accumulation & GE penalty ----------
@@ -666,82 +796,278 @@ export function runSimulation(userConfig = {}) {
     const gePenalty_t = computeGePenalty(capiToGdp_t, cfg.geKneeRatio, cfg.geFloorRatio); // (47)
     const r_c_eff_t   = cfg.r_c * gePenalty_t;                                  // (48)
     const r_cn_eff_t  = fisher(r_c_eff_t, cfg.pi);                              // (49)
-    const K_avail_t   = K_t * (1 + r_cn_eff_t) + netCapiFlow_t;                 // (50)
 
-    // ---------- §5.13 Capi payouts & state guarantee ----------
-    // DELIBERATE ASYMMETRY (not an ambiguity): floor uses E0, not E0_net_t.
-    // Équinoxe is a reform of the legacy PAYG payout structure only — by design
-    // it does not reduce capi pensions. Spec §5.13 eq (51) is correct as written;
-    // do not "harmonise" by substituting E0_net_t.
-    const capiPayoutFloor_t = cfg.E0 * capiRetirees_t * I_factor_t;             // (51)
-    const LE_at_A_R_t = cfg.lifeExpAt65_Y0 + (65 - cfg.retirementAgeBase)
-                      + (t / 10) * cfg.lifeExpAt65_per_decade
-                      - (A_R_t - cfg.retirementAgeBase);                        // (52a)
-    const T_ret_t = Math.max(15, LE_at_A_R_t);                                  // (52b)
-    // v1.0a eq (53): annuity priced at r_f_annuity (inflation-linked sovereign
-    // hedge rate, ~1.5% real), NOT the Legacy Fund's diversified portfolio yield.
-    // The guarantor must price the annuity at the rate at which they can hedge.
-    const annuityRate_t = cfg.r_f_annuity > 0.001
+    // ---- §5.12 / §5.13 dispatch on cashFlowMode ----
+    // Declared here so §5.14 and rows.push can consume them regardless of branch.
+    let K_avail_t, capiPayoutFloor_t, annuityRate_t, T_ret_t, LE_at_A_R_t;
+    let capiAssetShare_t, capiRetireeShare_t, potBasedPayout_t;
+    let capiPayoutDesired_t, shortfall_t, capiPayout_t;
+    let K_floor_t, tauKLevy_t, K_growth_t, surplusAboveBuffer_t, surplusPhaseIn_t, surplusLevy_t;
+    // Overlapping-only diagnostics (zero in legacy mode for row schema consistency)
+    let fundReturnCapi_t = 0, capiLegacyXSub_t = 0, capiContribXSub_t = 0;
+    let capiDebtRepaid_t = 0, capiReinvest_t = 0, capiBonus_t = 0;
+    // Balanced-mode (PR #18) diagnostics (zero in other modes)
+    let surplusAboveFloor_t = 0, debtSweepPhase_t = 0, debtSweepCapacity_t = 0;
+    let guaranteeShortfall_t = 0;
+
+    // Annuity rate (used in both branches)
+    LE_at_A_R_t = cfg.lifeExpAt65_Y0 + (65 - cfg.retirementAgeBase)
+                + (t / 10) * cfg.lifeExpAt65_per_decade
+                - (A_R_t - cfg.retirementAgeBase);                              // (52a)
+    T_ret_t = Math.max(15, LE_at_A_R_t);                                        // (52b)
+    annuityRate_t = cfg.r_f_annuity > 0.001
       ? cfg.r_f_annuity / (1 - Math.pow(1 + cfg.r_f_annuity, -T_ret_t))
-      : 1 / T_ret_t;
-    // v1.0a eq (53a): capi pot is owned by retirees BY ASSET SHARE, not by
-    // headcount share. The v1.0 formula `K_t × annuityRate × headcount_share`
-    // applied a per-individual annuity rate (~7%) to the entire aggregate pot
-    // scaled by the retiree-vs-total head ratio. Retirees actually own only a
-    // fraction of K_t — the rest belongs to still-accumulating workers. The
-    // v1.0 expropriation masked the transition's fiscal cost (cumShortfall=0).
-    // Asset-share ramps from 0 (no capi retirees yet) to capiAssetShareSteadyState
-    // over 30y starting at T_capi_start, proxying the time for the system to reach
-    // actuarial steady-state.
-    const capiAssetShare_t = smoothstep(t, T_capi_start, T_capi_start + 30)
-                           * cfg.capiAssetShareSteadyState;                     // (53a)
-    // capiRetireeShare_t retained as a real demographic quantity (used in
-    // diagnostics) but DOES NOT feed the payout formula in v1.0a.
-    const capiRetireeShare_t = retireeIdx_t > 0 ? capiRetirees_t / retireeIdx_t : 0;
-    const potBasedPayout_t   = K_t * annuityRate_t * capiAssetShare_t;          // (53)
-    const capiPayoutDesired_t = Math.max(capiPayoutFloor_t, potBasedPayout_t);  // (54)
-    const shortfall_t  = Math.max(0, capiPayoutDesired_t - K_avail_t);
-    const capiPayout_t = capiPayoutDesired_t;
-    if (shortfall_t > 0) {
-      D_t = D_t + shortfall_t;                                                  // (55)
-      borrowed_t = borrowed_t + shortfall_t;
+      : 1 / T_ret_t;                                                            // (53)
+
+    // Accumulate net capi contributions for the accounting-identity asset share.
+    // Must happen before §5.12 uses capiAssetShare_t so the running sum reflects
+    // contributions that entered K_t this period (netCapiFlow_t was already added
+    // to K_t implicitly via K_avail_t below).
+    sumCapiContrib += netCapiFlow_t;
+
+    // capiAssetShare_t (53a):
+    //   overlapping — accounting identity: cumulative net capi contributions / K_open_t.
+    //   balanced    — same numerator but K_avail_t denominator (post-contribution),
+    //                 avoiding the start-of-period timing distortion.
+    //   legacy      — parametric smoothstep ramp (backward-compat, bit-identical).
+    if (cfg.cashFlowMode === 'balanced') {
+      // K_avail must be computed early in balanced mode so the share denominator
+      // is internally consistent. Compute it here; the cascade reuses it.
+      K_avail_t = K_t * (1 + r_cn_eff_t) + netCapiFlow_t;                        // (50″)
+      capiAssetShare_t = computeCapiAssetShareBalanced({
+        K_avail_t,
+        sumCapiContrib,
+      });                                                                        // (53a″)
+    } else if (cfg.cashFlowMode === 'overlapping') {
+      capiAssetShare_t = K_t > 0 ? Math.min(1, Math.max(0, sumCapiContrib / K_t)) : 0; // (53a′)
+    } else {
+      capiAssetShare_t = smoothstep(t, T_capi_start, T_capi_start + 30)
+                       * cfg.capiAssetShareSteadyState;                         // (53a)
     }
-    CK_t = CK_t + shortfall_t;                                                  // (56)
-    K_t  = Math.max(0, K_avail_t - capiPayout_t);                               // (57)
+    capiRetireeShare_t = retireeIdx_t > 0 ? capiRetirees_t / retireeIdx_t : 0;
+    potBasedPayout_t   = K_t * annuityRate_t * capiAssetShare_t;               // (53) diagnostic
 
-    // ---------- §5.10.1 (v1.2): tauK — annual levy on K_t stock → debt ----------
-    // Ordering: fires AFTER §5.13 (post-payout K_t settled). §5.11 lambda levy
-    // fires earlier on inflows (eq 45) — the two channels are mechanically
-    // decoupled and independently capped at D_t.
-    //
-    // Solvency floor: levy is capped so K_t cannot fall below
-    //   K_floor_t = capiPayoutFloor_t / annuityRate_t
-    // the pot required to service the guaranteed floor payout at the current
-    // annuity rate. Prevents catastrophic K_t depletion at high tauK values.
-    const K_floor_t     = annuityRate_t > 1e-6 ? capiPayoutFloor_t / annuityRate_t : 0;
-    const tauKRaw_t     = D_t > 0 ? (cfg.tauK ?? 0) * K_t : 0;
-    const tauKLevy_t    = Math.min(tauKRaw_t, Math.max(0, K_t - K_floor_t), D_t);
-    K_t  = Math.max(0, K_t  - tauKLevy_t);
-    D_t  = D_t  - tauKLevy_t;
+    if (cfg.cashFlowMode === 'overlapping') {
+      // ======== §5.13 OVERLAPPING CASCADE (PR #17) ========
+      //
+      // K_t × r_c (real capi-fund return) is the cascade budget, distributed
+      // through 5 active buckets. The floor guaranteed pension is paid directly
+      // from K_avail (full nominal return + contributions) so it is immune to
+      // the GE penalty that can suppress r_c_eff in late years. Only the
+      // EXCESS real return feeds the cascade for debt service and bonus.
+      //
+      // State posts as annual ΔD_t only when K_avail itself cannot cover the
+      // floor (i.e., K_t is genuinely insolvent). Because the floor is only
+      // 1.5% × share × K_t ≈ 0.5% of K_t per year, true insolvency is very
+      // rare. Bucket 4 (legacy cross-subsidy) and bucket 3 (debt reduction)
+      // retroactively reduce §5.10 borrowing. tauK and thetaBuffer are
+      // disabled — cascade owns all debt-reduction mechanics.
 
-    // ---------- §5.10.2 (v1.3): surplus-growth levy ----------
-    // Routes net K_t growth above the prudential buffer rate (thetaBuffer × K_start)
-    // to transition-debt repayment.  A D_t/GDP phase-in gate prevents early depletion:
-    //   • below 10 % D/GDP the levy is zero (capi pot is still in build-up phase)
-    //   • between 10 % and 50 % the levy scales linearly from 0 → 1×
-    //   • above 50 % D/GDP the levy is fully active
-    // This means the levy fires once the debt burden is meaningful, then fades
-    // naturally as D_t is repaid — acting as a self-extinguishing single lever.
-    // thetaBuffer is the annual "keep" rate: K_t always grows by at least
-    // thetaBuffer × K_start after the levy, so principal is never drawn down.
-    const K_growth_t           = K_t - K_start_t;
-    const surplusAboveBuffer_t = Math.max(0, K_growth_t - (cfg.thetaBuffer ?? 0.01) * K_start_t);
-    const surplusPhaseIn_t     = GDP_t > 0 ? smoothstep(D_t / GDP_t, 0.10, 0.50) : 0;
-    const surplusLevy_t        = D_t > 0
-      ? Math.min(surplusPhaseIn_t * surplusAboveBuffer_t, D_t)
-      : 0;
-    K_t = Math.max(0, K_t - surplusLevy_t);
-    D_t = Math.max(0, D_t - surplusLevy_t);
+      // K_avail: full nominal return (real + inflation) + new contributions.
+      // Unlike Stage 1, floor is paid from here so GE-penalty years are safe.
+      K_avail_t = K_t * (1 + r_cn_eff_t) + netCapiFlow_t;                      // (50′)
+
+      // Floor: full pot-based annuity drawn from K_avail (not from cascade budget).
+      // annuityRate_t ≈ 5.59%/yr ensures every capi retiree receives their actuarially
+      // fair share; bucket 4b (capiTarget) is structurally 0 but kept for robustness.
+      capiPayoutFloor_t = K_t * capiAssetShare_t * annuityRate_t;                  // (51′)
+      shortfall_t = Math.max(0, capiPayoutFloor_t - K_avail_t);   // state tops up
+      D_t        += shortfall_t;
+      borrowed_t += shortfall_t;
+      CK_t       += shortfall_t;                                                // (56)
+      // K_t after floor payment (before cascade).  K_avail always covers the
+      // floor because K_t itself is still large; shortfall is structurally ~0.
+      let K_after_floor = K_avail_t - capiPayoutFloor_t;
+
+      // Cascade budget = real return on start-of-period K_t.
+      fundReturnCapi_t = K_t * r_c_eff_t;
+      let budget = fundReturnCapi_t;
+
+      // Bucket 4: Legacy cross-subsidy — funded from returns budget only.
+      // Contributions always flow to K_t; D_t accumulates in early years (when
+      // returns are small) and is repaid by bucket 3 as K_t matures.
+      // capiContribXSub_t is retained in the row schema but is structurally 0
+      // in overlapping mode (no contribution diversion).
+      if (netFlow_t < 0) {
+        const deficit = -netFlow_t;
+        const xsubFromReturns = Math.min(budget, deficit);
+        capiLegacyXSub_t  = xsubFromReturns;
+        capiContribXSub_t = 0;
+        D_t        = Math.max(0, D_t - xsubFromReturns);
+        borrowed_t = Math.max(0, borrowed_t - xsubFromReturns);
+        budget    -= xsubFromReturns;
+      }
+
+      // §5.14 Debt-acceleration trigger: when K_t ≥ K_debt_trigger, route surplus
+      // real return to debt repayment (bucket 3) before the capi bonus (bucket 6).
+      // Below the trigger, debt is deferred and the surplus flows to capi retirees.
+      // K_debt_trigger = 0 (default) → K_t ≥ 0 always → debt-first (v2.0a compat).
+      // Identity: capiLegacyXSub_t + capiDebtRepaid_t + capiReinvest_t + capiBonus_t = fundReturnCapi_t.
+      const accelDebt = K_t >= (cfg.K_debt_trigger ?? 0);
+      if (accelDebt) {
+        // Bucket 3: Debt principal reduction (surplus real returns, debt-first mode).
+        capiDebtRepaid_t = Math.min(budget, D_t);
+        budget          -= capiDebtRepaid_t;
+        D_t             -= capiDebtRepaid_t;
+      }
+
+      // Bucket 5: Reinvestment cap (stays in K_t; ≤ reinvestCap × fundReturn).
+      capiReinvest_t = Math.min(budget, (cfg.reinvestCap ?? 0.20) * fundReturnCapi_t);
+      budget -= capiReinvest_t;
+
+      // Bucket 6: Residual bonus (capiDebtRepaid_t = 0 when below trigger).
+      // Identity: capiLegacyXSub_t + capiDebtRepaid_t + capiReinvest_t + capiBonus_t = fundReturnCapi_t.
+      capiBonus_t = budget;
+
+      capiPayout_t = capiPayoutFloor_t + capiBonus_t;                          // (54′)
+      capiPayoutDesired_t = capiPayout_t;                                       // alias
+
+      // K_t post-cascade: floor came from K_avail, real return was distributed,
+      // only the reinvested portion stays. Net: K_after_floor + reinvest - bonus - cross_sub_and_debt.
+      // K_after_floor already excludes floor. Cascade distributed fundReturnCapi:
+      //   cross_sub + debt_repaid + bonus already left K_t (via cascade budget which
+      //   started as real return that was IN K_avail). Only reinvest stays.
+      K_t = Math.max(0, K_after_floor - (fundReturnCapi_t - capiReinvest_t));  // (57′)
+
+      // §5.10.1 tauK and §5.10.2 thetaBuffer disabled in overlapping mode
+      K_floor_t          = annuityRate_t > 1e-6 ? capiPayoutFloor_t / annuityRate_t : 0;
+      tauKLevy_t         = 0;
+      K_growth_t         = K_t - K_start_t;
+      surplusAboveBuffer_t = 0;
+      surplusPhaseIn_t   = 0;
+      surplusLevy_t      = 0;
+      // ======== END OVERLAPPING CASCADE ========
+
+    } else if (cfg.cashFlowMode === 'balanced') {
+      // ======== §5.13 BALANCED CASCADE (PR #18) ========
+      //
+      // Strict separation of concerns:
+      //   1. PAYG side has already updated F_t/D_t against its own deficit
+      //      (§5.10 above). alpha_eff = 0 in balanced mode, so no capi side
+      //      contribution to PAYG debt repayment via the legacy waterfall.
+      //   2. K accumulates returns and contributions; pays the floor first.
+      //   3. Solvency floor is enforced with a buffer (KFloorBuffer × strict).
+      //   4. Only capped surplus return above the buffered solvency floor is
+      //      available to repay transition debt (debt sweep), with caps on
+      //      share-of-return, share-of-K, and share-of-GDP.
+      //   5. After debt sweep, a fraction (capiBonusShare) of any remaining
+      //      surplus is paid as capi bonus; the rest stays in K (reinvested).
+      //   6. capiLegacyXSub_t = capiContribXSub_t = 0 — capi never subsidises
+      //      PAYG via contribution diversion. Eliminates the "early cohorts
+      //      pay twice" pathology.
+
+      const K_open_t = K_t;
+      const realReturn_t = K_open_t * r_c_eff_t;
+      // K_avail_t was computed above for capiAssetShare; reused here unchanged.
+
+      // 3. Guaranteed capi pension floor (annuityFloorRate × share × K_open).
+      capiPayoutFloor_t = K_open_t * capiAssetShare_t * (cfg.annuityFloorRate ?? 0.015);
+
+      // 4. State guarantee only fires if K_avail itself cannot cover the floor.
+      guaranteeShortfall_t = Math.max(0, capiPayoutFloor_t - K_avail_t);
+      shortfall_t = guaranteeShortfall_t;
+      if (guaranteeShortfall_t > 0) {
+        D_t        += guaranteeShortfall_t;
+        borrowed_t += guaranteeShortfall_t;
+        CK_t       += guaranteeShortfall_t;
+      }
+
+      // 5. Pay floor from K.
+      let K_after_floor = Math.max(0, K_avail_t - capiPayoutFloor_t);
+
+      // 6. Solvency floor with KFloorBuffer cushion. strictKFloor is the
+      //    reserve required to keep paying the floor at the actuarial annuityRate.
+      const strictKFloor_t = annuityRate_t > 1e-9
+        ? capiPayoutFloor_t / annuityRate_t
+        : 0;
+      K_floor_t = strictKFloor_t * (cfg.KFloorBuffer ?? 1.10);
+
+      // 7. Surplus above buffered floor.
+      surplusAboveFloor_t = Math.max(0, K_after_floor - K_floor_t);
+
+      // 8. Debt-sweep phase-out: linearly clamped between end and start ratios.
+      const D_to_GDP_t = GDP_t > 0 ? D_t / GDP_t : 0;
+      const sweepStart = cfg.debtSweepStartRatio ?? 0.50;
+      const sweepEnd   = cfg.debtSweepEndRatio ?? 0.05;
+      debtSweepPhase_t = sweepStart > sweepEnd
+        ? clamp((D_to_GDP_t - sweepEnd) / (sweepStart - sweepEnd), 0, 1)
+        : (D_to_GDP_t >= sweepStart ? 1 : 0);
+
+      // 9. Debt sweep capacity: min of all caps and remaining D.
+      const returnSweepCap_t = (cfg.debtSweepShare  ?? 0.50) * Math.max(0, realReturn_t);
+      const kSweepCap_t      = (cfg.debtSweepKCap   ?? 0.015) * K_open_t;
+      const gdpSweepCap_t    = (cfg.debtSweepGdpCap ?? 0.01)  * GDP_t;
+      debtSweepCapacity_t = Math.min(
+        surplusAboveFloor_t,
+        returnSweepCap_t,
+        kSweepCap_t,
+        gdpSweepCap_t,
+        D_t,
+      );
+      capiDebtRepaid_t = debtSweepPhase_t * debtSweepCapacity_t;
+      D_t -= capiDebtRepaid_t;
+      K_after_floor -= capiDebtRepaid_t;
+
+      // 10. Bonus from remaining surplus, capped by realReturn − debtRepaid so
+      //     bonus never draws principal as "yield".
+      const surplusAfterDebt_t = Math.max(0, K_after_floor - K_floor_t);
+      capiBonus_t = (cfg.capiBonusShare ?? 0.25) * surplusAfterDebt_t;
+      capiBonus_t = Math.min(capiBonus_t, Math.max(0, realReturn_t - capiDebtRepaid_t));
+
+      K_t = Math.max(0, K_after_floor - capiBonus_t);
+
+      capiPayout_t        = capiPayoutFloor_t + capiBonus_t;
+      capiPayoutDesired_t = capiPayout_t;
+
+      // Diagnostics — balanced mode does NOT use the cross-subsidy / reinvest
+      // / tauK / surplusLevy mechanisms; clear them and report capiReinvest as
+      // the implied K growth above contributions.
+      tauKLevy_t           = 0;
+      K_growth_t           = K_t - K_start_t;
+      surplusAboveBuffer_t = 0;
+      surplusPhaseIn_t     = 0;
+      surplusLevy_t        = 0;
+      fundReturnCapi_t     = realReturn_t;
+      capiLegacyXSub_t     = 0;
+      capiContribXSub_t    = 0;
+      capiReinvest_t       = Math.max(0, K_t - K_open_t - netCapiFlow_t);
+      // ======== END BALANCED CASCADE ========
+
+    } else {
+      // ======== §5.12 / §5.13 LEGACY WATERFALL (v1.3) ========
+      K_avail_t = K_t * (1 + r_cn_eff_t) + netCapiFlow_t;                      // (50)
+
+      // Legacy floor: E0-indexed (can deplete K_t in late years)
+      capiPayoutFloor_t = cfg.E0 * capiRetirees_t * I_factor_t;                // (51)
+      capiPayoutDesired_t = Math.max(capiPayoutFloor_t, potBasedPayout_t);      // (54)
+      shortfall_t  = Math.max(0, capiPayoutDesired_t - K_avail_t);
+      capiPayout_t = capiPayoutDesired_t;
+      if (shortfall_t > 0) {
+        D_t = D_t + shortfall_t;                                                // (55)
+        borrowed_t = borrowed_t + shortfall_t;
+      }
+      CK_t = CK_t + shortfall_t;                                                // (56)
+      K_t  = Math.max(0, K_avail_t - capiPayout_t);                            // (57)
+
+      // §5.10.1 tauK (solvency-floor-protected stock levy → debt)
+      K_floor_t  = annuityRate_t > 1e-6 ? capiPayoutFloor_t / annuityRate_t : 0;
+      const tauKRaw_t = D_t > 0 ? (cfg.tauK ?? 0) * K_t : 0;
+      tauKLevy_t = Math.min(tauKRaw_t, Math.max(0, K_t - K_floor_t), D_t);
+      K_t  = Math.max(0, K_t - tauKLevy_t);
+      D_t  = D_t - tauKLevy_t;
+
+      // §5.10.2 thetaBuffer surplus-growth levy
+      K_growth_t           = K_t - K_start_t;
+      surplusAboveBuffer_t = Math.max(0, K_growth_t - (cfg.thetaBuffer ?? 0.01) * K_start_t);
+      surplusPhaseIn_t     = GDP_t > 0 ? smoothstep(D_t / GDP_t, 0.10, 0.50) : 0;
+      const surplusLevyCap = Math.max(0, K_t - K_floor_t);
+      surplusLevy_t        = D_t > 0
+        ? Math.min(surplusPhaseIn_t * surplusAboveBuffer_t, D_t, surplusLevyCap)
+        : 0;
+      K_t = Math.max(0, K_t - surplusLevy_t);
+      D_t = Math.max(0, D_t - surplusLevy_t);
+      // ======== END LEGACY WATERFALL ========
+    }
 
     // ---------- §5.14 Diagnostics ----------
     // v1.0a eq (58): spread measures Legacy-Fund yield vs real sovereign cost.
@@ -787,7 +1113,7 @@ export function runSimulation(userConfig = {}) {
       U_t, delta_U_t, units_sold, priceDiscount_t, P_eff_t, gain_t, hlmActive_t,
       H_t_proceeds,
       // §5.8 borrowing rate
-      GDP_t, D_ext_t, debtRatio_t, r_d_t, debtInterest_t,
+      GDP_t, D_ext_t, debtRatio_t, D_t_to_gdp_pct: GDP_t > 0 ? D_t / GDP_t * 100 : 0, r_d_t, debtInterest_t,
       // §5.9 waterfall
       fundReturn_t, abatement_t, nonEmplrNet_t, deficit_t, emplrAvail_t,
       emplrToLeg_t, emplrToCap_t, netFlow_t,
@@ -802,9 +1128,15 @@ export function runSimulation(userConfig = {}) {
       capiToGdp_t, gePenalty_t, r_c_eff_t, r_cn_eff_t, K_avail_t,
       // §5.13 payouts
       capiPayoutFloor_t, LE_at_A_R_t, T_ret_t, annuityRate_t,
-      capiRetireeShare_t, capiAssetShare_t,
+      capiRetireeShare_t, capiAssetShare_t, sumCapiContrib_t: sumCapiContrib,
       potBasedPayout_t, capiPayoutDesired_t,
       shortfall_t, capiPayout_t,
+      // §5.13 overlapping cascade buckets (zero in legacy mode)
+      fundReturnCapi_t, capiLegacyXSub_t, capiContribXSub_t,
+      capiDebtRepaid_t, capiReinvest_t, capiBonus_t,
+      // §5.13 balanced cascade diagnostics (PR #18; zero in non-balanced modes)
+      surplusAboveFloor_t, debtSweepPhase_t, debtSweepCapacity_t,
+      guaranteeShortfall_t,
       // §5.10.1 (v1.2) tauK debt-reduction channel
       K_floor_t, tauKLevy_t,
       // §5.10.2 (v1.3) surplus-growth levy
@@ -850,6 +1182,8 @@ export function buildCounterfactualParams(reformParams) {
     delta: 0,
     rho: 0,
     lambda: 0,
+    deltaTauxPatronal: 0,
+    deltaTauxPatronalPA: 0,
     employmentRateTarget: reformParams.employmentRate0,
   };
 }
@@ -937,17 +1271,14 @@ export function computeIndividualPerspective(cfg, reformRows, cfRows, birthYear)
   const perCapitaLegacyKE_CF = (cfR.E0_legacy_t * cfR.I_factor_t) / cfg.R0;
   const monthlyPensionCF = perCapitaLegacyKE_CF * KE_TO_EUR / 12;
 
-  // Capi annuity from personal pot. Annuity factor uses real return r_c
-  // over (LIFE_EXPECTANCY − RETIREMENT_AGE) years. Capi-portion taxation
-  // (CSG) is modelled at the macro level (S0_csg_revenue_t) — not
-  // applied per-individual here.
-  const r_c_n = (1 + cfg.r_c) * (1 + cfg.pi) - 1;
-  const retYears = Math.max(1, LIFE_EXPECTANCY - RETIREMENT_AGE);
-  const annuityFactor = r_c_n > 0
-    ? (1 - Math.pow(1 + r_c_n, -retYears)) / r_c_n
-    : retYears;
+  // Capi annuity from personal pot. Use the engine's annuityRate_t at the
+  // retirement year so individual payouts are consistent with the macro cascade.
+  // annuityRate_t ≈ 5.59%/yr (r_f_annuity=1.5%, 21-yr life expectancy at 64).
+  const annuityRate_at_ret = (retT < reformRows.length
+    ? reformRows[retT]
+    : reformRows[reformRows.length - 1]).annuityRate_t ?? 0;
   const monthlyCapiAnnuity = inCapi && capiPotAtRet > 0
-    ? (capiPotAtRet / annuityFactor) * KE_TO_EUR / 12
+    ? capiPotAtRet * annuityRate_at_ret * KE_TO_EUR / 12
     : 0;
 
   const monthlyPensionTotal = monthlyPensionLegacy + monthlyCapiAnnuity;

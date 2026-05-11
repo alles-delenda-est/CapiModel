@@ -3,6 +3,7 @@ import {
   LineChart, Line, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine, ComposedChart,
+  ScatterChart, Scatter, Cell,
 } from 'recharts'
 import { runSimulation, DEFAULT_CONFIG } from './simulation-engine.js'
 import { PRESETS, extractKPIs } from './presets.js'
@@ -48,6 +49,7 @@ const TIPS = {
   T_hlm: "Durée du programme de cession HLM (5 ans de taper en fin).",
   capiAssetShareSteadyState: "Part actuarielle de long terme du pot capi détenue par les retraités (vs travailleurs en accumulation). Eq (53a) v1.0a remplace le partage par tête (qui exproprait les travailleurs).",
   equinoxePhasing: "Profil temporel de mise en œuvre Équinoxe : immediate, phased-5y/-10y, partial-50/-75.",
+  K_debt_trigger: "Seuil K_t (Md€) de déclenchement du remboursement de dette prioritaire dans la cascade v2.0. En dessous du seuil : le surplus de rendement réel va aux retraités capi (bonus). Au-dessus : il rembourse la dette de transition en priorité. Valeur optimale ≈ 8 000 Md€ — protège la génération transitionnelle 2047–2066 (+30 % de versement) tout en assurant une dette à zéro vers 2073. Régler à 0 pour le mode dette-en-priorité constant ; 30 000 Md€ = report total (jamais remboursé).",
 }
 
 function Toggle({ label, checked, onChange, tip }) {
@@ -141,7 +143,9 @@ const CHART_TABS = [
 // --- Main App ---
 export default function App() {
   const { currentPage, navigateTo } = useHashNavigation('simulateur')
-  const [params, setParams] = useState({ ...DEFAULT_CONFIG })
+  // PR #18: user-facing default is the BALANCED cascade. Engine DEFAULT_CONFIG
+  // keeps 'legacy' so v1.3 tests stay bit-identical; App overrides here.
+  const [params, setParams] = useState({ ...DEFAULT_CONFIG, cashFlowMode: 'balanced' })
   const [activePreset, setActivePreset] = useState('v1_default')
   const [showParams, setShowParams] = useState(true)
   const [showTable, setShowTable] = useState(true)
@@ -169,27 +173,78 @@ export default function App() {
   }, [params])
 
   const exportCSV = useCallback(() => {
-    const headers = ['Année','Dép. legacy','Dép. capi','Total pens.','Rend. fonds','HLM','Abatt.','CSG (rec.)',
-      'Sal.→capi','Empl.→leg','Empl.→cap','Int. dette','Flux net','Emprunt','Prélèv.','Dette','Capi nom.','Capi réel','r_d (%)','Spread (%)']
-    const rows = results.map(r => [
-      r.year, r.legacyExp_t.toFixed(1), r.capiPayout_t.toFixed(1),
-      (r.legacyExp_t + r.capiPayout_t).toFixed(1),
-      r.fundReturn_t.toFixed(1), r.H_t_proceeds.toFixed(1), r.abatement_t.toFixed(1),
-      r.S0_csg_revenue_t.toFixed(1),
-      r.C_s_capi_t.toFixed(1), r.emplrToLeg_t.toFixed(1), r.emplrToCap_t.toFixed(1),
-      r.debtInterest_t.toFixed(1), r.netFlow_t.toFixed(1), r.borrowed_t.toFixed(1),
-      r.levy_t.toFixed(1), r.D_t.toFixed(1),
-      r.K_t.toFixed(0), (r.K_t / Math.pow(1.02, r.t)).toFixed(0),
-      (r.r_d_t * 100).toFixed(2), (r.spread_t * 100).toFixed(2),
-    ])
+    const R0 = params.R0 ?? 18;
+    const headers = [
+      'Annee',
+      'Dep_legacy_MdE','Dep_capi_MdE','Total_pensions_MdE',
+      'Rend_fonds_MdE','HLM_MdE','Abattement_MdE','CSG_recettes_MdE',
+      'Sal_capi_MdE','Empl_leg_MdE','Empl_cap_MdE',
+      'Int_dette_MdE','Flux_net_MdE','Emprunt_MdE','Prelev_MdE','Dette_MdE',
+      'Capi_nom_MdE','Capi_reel_MdE',
+      'r_d_pct','Spread_pct',
+      'Workers_active_M',
+      'Retirees_total_M','Retirees_legacy_M','Retirees_transition_M','Retirees_capi_pure_M',
+      'Avg_legacy_kE_pa','Avg_capi_kE_pa',
+    ]
+    const rows = results.map(r => {
+      const workersM = 30 * (r.activePopFactor ?? 1) * (r.empFactor ?? 1);
+      const retTotalM = (r.retireeIdx ?? 0) * R0;
+      const retLegacyM = (r.legacyRetirees ?? 0) * R0;
+      const capiRetM = (r.capiRetirees ?? 0) * R0;
+      const legacyShare = r.legacyShareAvg ?? 0;
+      const retTransitionM = capiRetM * legacyShare;
+      const retCapiPureM = capiRetM * (1 - legacyShare);
+      const avgLegacyKE = retLegacyM > 0.001 ? (r.legacyExp_t / retLegacyM) * 1000 : 0;
+      const avgCapiKE = capiRetM > 0.001 ? (r.capiPayout_t / capiRetM) * 1000 : 0;
+      return [
+        r.year,
+        r.legacyExp_t.toFixed(1), r.capiPayout_t.toFixed(1),
+        (r.legacyExp_t + r.capiPayout_t).toFixed(1),
+        r.fundReturn_t.toFixed(1), r.H_t_proceeds.toFixed(1), r.abatement_t.toFixed(1),
+        r.S0_csg_revenue_t.toFixed(1),
+        r.C_s_capi_t.toFixed(1), r.emplrToLeg_t.toFixed(1), r.emplrToCap_t.toFixed(1),
+        r.debtInterest_t.toFixed(1), r.netFlow_t.toFixed(1), r.borrowed_t.toFixed(1),
+        r.levy_t.toFixed(1), r.D_t.toFixed(1),
+        r.K_t.toFixed(0), (r.K_t / Math.pow(1.02, r.t)).toFixed(0),
+        (r.r_d_t * 100).toFixed(2), (r.spread_t * 100).toFixed(2),
+        workersM.toFixed(2),
+        retTotalM.toFixed(2), retLegacyM.toFixed(2), retTransitionM.toFixed(2), retCapiPureM.toFixed(2),
+        avgLegacyKE.toFixed(1), avgCapiKE.toFixed(1),
+      ]
+    })
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = 'capimodel_v1.0a_simulation.csv'; a.click()
+    const a = document.createElement('a'); a.href = url; a.download = 'capimodel_v1_simulation.csv'; a.click()
     URL.revokeObjectURL(url)
-  }, [results])
+  }, [results, params])
 
   const chartData = useMemo(() => results.map(rowToChart), [results])
+
+  // κ–φ parameter sweep for Pareto chart (peak debt vs capi payout ratio).
+  // κ = debtSweepKCap (actual binding sweep constraint), φ = annuityFloorRate.
+  // These two parameters create genuine spread on both axes.
+  const KAPPA_VALUES = [0.003, 0.006, 0.010, 0.018, 0.030];
+  const PHI_VALUES   = [0.008, 0.010, 0.015, 0.020, 0.030];
+  const KAPPA_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+  const sweepData = useMemo(() => {
+    if (!results.length) return [];
+    return KAPPA_VALUES.flatMap((kappa, ki) =>
+      PHI_VALUES.map(phi => {
+        const p = { ...params, debtSweepKCap: kappa, annuityFloorRate: phi };
+        const rows = runSimulation(p);
+        const peakDebt = Math.max(...rows.map(r => r.D_t));
+        const capiRows = rows.filter(r => r.capiPayoutFloor_t > 0.1 && (r.annuityRate_t ?? 0) > 0.001);
+        const avgRatio = capiRows.length > 0
+          ? capiRows.reduce((sum, r) => {
+              const actuarial = (r.capiPayoutFloor_t / phi) * r.annuityRate_t;
+              return sum + (actuarial > 0.1 ? r.capiPayout_t / actuarial : 1);
+            }, 0) / capiRows.length
+          : 0;
+        return { kappa, phi, peakDebt: peakDebt / 1000, avgRatio: avgRatio * 100, ki };
+      })
+    );
+  }, [params, results.length])
 
   const p = params
 
@@ -337,21 +392,6 @@ export default function App() {
                   ]}
                   tip={TIPS.cutoffAge}
                 />
-                <EnhancedSlider id="alpha" label="Fraction surplus → dette α" value={p.alpha}
-                  onChange={v => setParam('alpha', v)} min={0} max={1} step={0.05} unit="" decimals={2}
-                  defaultValue={DEFAULT_CONFIG.alpha} />
-                <EnhancedSlider id="lambda" label="Prélèvement transition λ" value={p.lambda}
-                  onChange={v => setParam('lambda', v)} min={0} max={0.5} step={0.025} unit="" decimals={3} tip={TIPS.lambda}
-                  defaultValue={DEFAULT_CONFIG.lambda} warningAbove={0.30} />
-                <EnhancedSlider id="Tlambda" label="Activation T_λ" value={p.Tlambda}
-                  onChange={v => setParam('Tlambda', v)} min={5} max={30} step={1} unit="ans" decimals={0} tip={TIPS.Tlambda}
-                  defaultValue={DEFAULT_CONFIG.Tlambda} />
-                <EnhancedSlider id="phiF" label="Plancher employeur φ_f" value={p.phiF}
-                  onChange={v => setParam('phiF', v)} min={0} max={0.5} step={0.025} unit="" decimals={3} tip={TIPS.phiF}
-                  defaultValue={DEFAULT_CONFIG.phiF} />
-                <EnhancedSlider id="thetaBuffer" label="Réserve croissance fonds θ" value={p.thetaBuffer}
-                  onChange={v => setParam('thetaBuffer', v)} min={0} max={0.05} step={0.005} unit="" decimals={3} tip={TIPS.thetaBuffer}
-                  defaultValue={DEFAULT_CONFIG.thetaBuffer} />
               </CollapsibleSection>
 
               <CollapsibleSection title="HLM" level="critical" defaultOpen={true}>
@@ -388,14 +428,62 @@ export default function App() {
               {/* ===== TIER B — expert menu ===== */}
 
               {expertMode && (
-                <CollapsibleSection title="Tier B — Couverture annuité (v1.0a)" level="advanced">
-                  <EnhancedSlider id="r_f_annuity" label="Taux couverture annuité r_f_annuity" value={p.r_f_annuity}
+                <CollapsibleSection title="Tier B — Cascade v2.0 (mode équilibré, PR #18)" level="advanced">
+                  <div className="toggle-row">
+                    <label style={{ minWidth: 140 }}>Mode cascade</label>
+                    <select value={p.cashFlowMode}
+                      onChange={e => setParam('cashFlowMode', e.target.value)}>
+                      <option value="balanced">balanced (PR #18 — défaut)</option>
+                      <option value="overlapping">overlapping (PR #17 — historique)</option>
+                      <option value="legacy">legacy (v1.3 — historique)</option>
+                    </select>
+                  </div>
+                  <div className="input-help">
+                    <strong>balanced</strong> : K préservé, dette repayée uniquement par surplus
+                    plafonné, capi jamais ne subventionne PAYG. <strong>overlapping</strong> : ancien
+                    cascade PR #17. <strong>legacy</strong> : waterfall v1.3.
+                  </div>
+
+                  <EnhancedSlider id="annuityFloorRate" label="Plancher rente capi (annuityFloorRate)"
+                    value={p.annuityFloorRate}
+                    onChange={v => setParam('annuityFloorRate', v)}
+                    min={0.005} max={0.030} step={0.001} unit="" decimals={3}
+                    defaultValue={DEFAULT_CONFIG.annuityFloorRate} />
+                  <EnhancedSlider id="debtSweepShare" label="Part rendement réel pour dette (debtSweepShare)"
+                    value={p.debtSweepShare}
+                    onChange={v => setParam('debtSweepShare', v)}
+                    min={0} max={1} step={0.05} unit="" decimals={2}
+                    defaultValue={DEFAULT_CONFIG.debtSweepShare} />
+                  <EnhancedSlider id="debtSweepKCap" label="Plafond sweep / K_t (debtSweepKCap)"
+                    value={p.debtSweepKCap}
+                    onChange={v => setParam('debtSweepKCap', v)}
+                    min={0} max={0.05} step={0.0025} unit="" decimals={4}
+                    defaultValue={DEFAULT_CONFIG.debtSweepKCap} />
+                  <EnhancedSlider id="debtSweepGdpCap" label="Plafond sweep / PIB (debtSweepGdpCap)"
+                    value={p.debtSweepGdpCap}
+                    onChange={v => setParam('debtSweepGdpCap', v)}
+                    min={0} max={0.05} step={0.0025} unit="" decimals={4}
+                    defaultValue={DEFAULT_CONFIG.debtSweepGdpCap} />
+                  <EnhancedSlider id="capiBonusShare" label="Part surplus → bonus capi (capiBonusShare)"
+                    value={p.capiBonusShare}
+                    onChange={v => setParam('capiBonusShare', v)}
+                    min={0} max={1} step={0.05} unit="" decimals={2}
+                    defaultValue={DEFAULT_CONFIG.capiBonusShare} />
+                  <EnhancedSlider id="KFloorBuffer" label="Coussin de solvabilité K (KFloorBuffer)"
+                    value={p.KFloorBuffer}
+                    onChange={v => setParam('KFloorBuffer', v)}
+                    min={1.0} max={2.0} step={0.05} unit="x" decimals={2}
+                    defaultValue={DEFAULT_CONFIG.KFloorBuffer} />
+
+                  <EnhancedSlider id="r_f_annuity" label="Taux couverture rente r_f_annuity"
+                    value={p.r_f_annuity}
                     onChange={v => setParam('r_f_annuity', v)} min={0.005} max={0.030} step={0.001} unit="" decimals={3} tip={TIPS.r_f_annuity}
                     defaultValue={DEFAULT_CONFIG.r_f_annuity} />
-                  <EnhancedSlider id="capiAssetShareSteadyState" label="Part actuarielle retraités (steady state)"
-                    value={p.capiAssetShareSteadyState} onChange={v => setParam('capiAssetShareSteadyState', v)}
-                    min={0.20} max={0.50} step={0.025} unit="" decimals={3} tip={TIPS.capiAssetShareSteadyState}
-                    defaultValue={DEFAULT_CONFIG.capiAssetShareSteadyState} />
+                  <div className="input-help">
+                    annuityRate_t (≈ 5,6 % avec r_f_annuity = 1,5 %) sert de référence
+                    actuarielle pour la réserve de solvabilité K_floor et la rente
+                    individuelle «&nbsp;Et pour vous&nbsp;?».
+                  </div>
                 </CollapsibleSection>
               )}
 
@@ -504,20 +592,6 @@ export default function App() {
                 </CollapsibleSection>
               )}
 
-              {expertMode && (
-                <CollapsibleSection title="Tier B — Optimisation de la dette τ_K (v1.2)" level="advanced">
-                  <div className="input-help" style={{ color: 'var(--color-warning, #b45309)', marginBottom: 8 }}>
-                    ⚠️ Paramètre v1.2 expérimental. Optimum&nbsp;: ≈&nbsp;3,0&nbsp;% (peak
-                    debt&nbsp;−75&nbsp;%, intérêts&nbsp;−88&nbsp;%, dette terminale ≈&nbsp;12&nbsp;Md€).
-                    Plafond de sécurité&nbsp;: &lt;&nbsp;3,5&nbsp;% — au-delà, K_t tombe à 0 en fin
-                    d'horizon et un pic terminal de dette annule le gain. Réduire λ si τ_K&nbsp;&gt;&nbsp;0
-                    (les deux prélèvements sont additifs sur K_t).
-                  </div>
-                  <EnhancedSlider id="tauK" label="Prélèvement fonds capi τ_K" value={p.tauK}
-                    onChange={v => setParam('tauK', v)} min={0} max={0.05} step={0.0025} unit="" decimals={4}
-                    defaultValue={DEFAULT_CONFIG.tauK} tip={TIPS.tauK} warningAbove={0.035} />
-                </CollapsibleSection>
-              )}
 
               {expertMode && (
                 <CollapsibleSection title="Tier B — Baisse des charges patronales (v1.3)" level="advanced">
@@ -783,6 +857,63 @@ export default function App() {
               </ComposedChart>
             </ResponsiveContainer>
           </div>
+        </div>
+
+        {/* κ–φ Pareto frontier: peak debt vs capi payout ratio */}
+        <div className="chart-container" style={{ marginTop: '1.5rem' }}>
+          <h3>Frontière Pareto κ–φ : dette de transition vs couverture actuarielle</h3>
+          <p className="chart-note">
+            κ = K-cap de balayage (debtSweepKCap, couleur) · φ = taux plancher annuité (annuityFloorRate, position X croissante).
+            Axe X : dette maximale (k Md€) · Axe Y : paiement capi / rente actuarielle (%).
+          </p>
+          <ResponsiveContainer width="100%" height={380}>
+            <ScatterChart margin={{ top: 16, right: 24, bottom: 48, left: 24 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                type="number" dataKey="peakDebt" name="Dette max"
+                label={{ value: 'Dette de transition max (k Md€)', position: 'insideBottom', offset: -28, fontSize: 12 }}
+                tick={{ fontSize: 12 }} tickFormatter={v => fmtN(v)}
+              />
+              <YAxis
+                type="number" dataKey="avgRatio" name="Ratio actuariel"
+                label={{ value: 'Paiement / rente actuarielle (%)', angle: -90, position: 'insideLeft', dx: -8, fontSize: 12 }}
+                tick={{ fontSize: 12 }} tickFormatter={v => `${v.toFixed(0)}%`}
+                domain={['auto', 'auto']}
+              />
+              <Tooltip
+                cursor={{ strokeDasharray: '3 3' }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const d = payload[0].payload;
+                  return (
+                    <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: '#f1f5f9' }}>
+                      <div><b>κ (K-cap balayage)</b> = {d.kappa}</div>
+                      <div><b>φ (plancher annuité)</b> = {d.phi}</div>
+                      <div><b>Dette max</b> = {fmtN(d.peakDebt)} k Md€</div>
+                      <div><b>Ratio actuariel</b> = {d.avgRatio.toFixed(1)}%</div>
+                    </div>
+                  );
+                }}
+              />
+              <Legend
+                payload={KAPPA_VALUES.map((k, i) => ({ value: `κ = ${k}`, type: 'circle', color: KAPPA_COLORS[i] }))}
+                wrapperStyle={{ fontSize: 12, paddingTop: 4 }}
+                verticalAlign="top"
+              />
+              {KAPPA_VALUES.map((kappa, ki) => (
+                <Scatter
+                  key={kappa}
+                  name={`κ=${kappa}`}
+                  data={sweepData.filter(d => d.kappa === kappa)}
+                  fill={KAPPA_COLORS[ki]}
+                >
+                  {sweepData.filter(d => d.kappa === kappa).map((entry, idx) => (
+                    <Cell key={idx} fill={KAPPA_COLORS[ki]} r={7} />
+                  ))}
+                </Scatter>
+              ))}
+            </ScatterChart>
+          </ResponsiveContainer>
         </div>
       </section>
 

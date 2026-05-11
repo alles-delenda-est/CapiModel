@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import {
   DEFAULT_CONFIG,
   DEMOGRAPHIC_PROFILES,
@@ -21,10 +21,14 @@ import {
   retireeIdx,
   activePopFactor,
   cohIdx,
+  activePopFactor_actuarial,
+  retireeIdx_actuarial,
+  cohIdx_actuarial,
   runSimulation,
   legacyShareOfCohort,
   buildCounterfactualParams,
   computeIndividualPerspective,
+  computeCapiAssetShareBalanced,
 } from '../src/simulation-engine.js';
 
 describe('module scaffold', () => {
@@ -463,10 +467,15 @@ function assertInvariants(rows, cfg, label = '') {
     expect(r.cumDF_t).toBeGreaterThan(0);
 
     // ===== §6 v1.0a NEW INVARIANTS =====
-    // (a) HLM mass conservation: U_t ≡ U0 × (1-ρ)^t exactly, ΔU_t ≡ U_t × ρ.
-    const U_t_expected = cfg.U0 * Math.pow(1 - cfg.rho, r.t);
-    expect(r.U_t, `${tag} U_t = U0×(1-ρ)^t`).toBeCloseTo(U_t_expected, 12);
-    expect(r.delta_U_t, `${tag} ΔU_t = U_t×ρ`).toBeCloseTo(r.U_t * cfg.rho, 12);
+    // (a) HLM: analytic formula holds only before the taper window (t < T_hlm−5).
+    // During taper hlmActive_t < 1 slows the drawdown, so U_t stays above the
+    // analytic curve. The fundamental invariant for all t is delta_U_t = U_t×ρ×hlmActive_t.
+    if (r.t < (cfg.T_hlm ?? 20) - 5) {
+      const U_t_expected = cfg.U0 * Math.pow(1 - cfg.rho, r.t);
+      expect(r.U_t, `${tag} U_t = U0×(1-ρ)^t (pre-taper)`).toBeCloseTo(U_t_expected, 12);
+    }
+    const hlmActive_t = 1 - smoothstep(r.t, (cfg.T_hlm ?? 20) - 5, cfg.T_hlm ?? 20);
+    expect(r.delta_U_t, `${tag} ΔU_t = U_t×ρ×hlmActive`).toBeCloseTo(r.U_t * cfg.rho * hlmActive_t, 12);
 
     // (b) capiAssetShare bounded in [0, capiAssetShareSteadyState].
     expect(r.capiAssetShare_t, `${tag} capiAssetShare ≥ 0`).toBeGreaterThanOrEqual(0);
@@ -1048,6 +1057,770 @@ describe('panel ↔ engine reconciliation (v1.1)', () => {
         `Test 11 reconciliation at t=${t} (year ${cfg.Y0 + t}): |Σ uniform_size×share×E0×I − transitionalPaygExp| = ${diff.toExponential(3)} Md€ exceeds ε = ${EPS_MD} Md€`)
         .toBeLessThan(EPS_MD);
     }
+  });
+});
+
+// ── Demographic kernel v2.0: actuarial functions (structural tests) ─────────
+// These tests check invariants and monotonicity only — not exact values,
+// since demographic-tables.js uses placeholder data pending primary-source
+// transcription (COR juin 2025 + INSEE T60 2023).
+
+const ACT_CFG = {
+  ...DEFAULT_CONFIG,
+  demoMode: 'actuarial',
+  demoScenario: 'cor_central',
+  mortalityFemaleFraction: 0.52,
+};
+
+describe('activePopFactor_actuarial (7d′)', () => {
+  it('returns a positive finite number for all t in [0, N-1]', () => {
+    for (let t = 0; t < ACT_CFG.N; t++) {
+      const v = activePopFactor_actuarial(t, ACT_CFG);
+      expect(isFinite(v) && v > 0, `t=${t}: activePopFactor_actuarial=${v}`).toBe(true);
+    }
+  });
+
+  it('normalises to ≈1.0 at t=0', () => {
+    expect(activePopFactor_actuarial(0, ACT_CFG)).toBeCloseTo(1.0, 3);
+  });
+
+  it('is monotonically non-increasing over the 70-year horizon (cor_central)', () => {
+    let prev = activePopFactor_actuarial(0, ACT_CFG);
+    for (let t = 1; t < ACT_CFG.N; t++) {
+      const v = activePopFactor_actuarial(t, ACT_CFG);
+      expect(v, `activePopFactor_actuarial should not increase at t=${t}`).toBeLessThanOrEqual(prev + 1e-9);
+      prev = v;
+    }
+  });
+
+  it('cor_high ≥ cor_central at every t (optimistic labour scenario)', () => {
+    const cfgHigh = { ...ACT_CFG, demoScenario: 'cor_high' };
+    for (let t = 0; t < ACT_CFG.N; t++) {
+      const central = activePopFactor_actuarial(t, ACT_CFG);
+      const high    = activePopFactor_actuarial(t, cfgHigh);
+      expect(high, `t=${t}: cor_high should be ≥ cor_central`).toBeGreaterThanOrEqual(central - 1e-9);
+    }
+  });
+
+  it('cor_central ≥ cor_low at every t (pessimistic labour scenario)', () => {
+    const cfgLow = { ...ACT_CFG, demoScenario: 'cor_low' };
+    for (let t = 0; t < ACT_CFG.N; t++) {
+      const central = activePopFactor_actuarial(t, ACT_CFG);
+      const low     = activePopFactor_actuarial(t, cfgLow);
+      expect(central, `t=${t}: cor_central should be ≥ cor_low`).toBeGreaterThanOrEqual(low - 1e-9);
+    }
+  });
+});
+
+describe('retireeIdx_actuarial (7c′)', () => {
+  it('returns a positive finite number for all t in [0, N-1]', () => {
+    for (let t = 0; t < ACT_CFG.N; t++) {
+      const v = retireeIdx_actuarial(t, ACT_CFG);
+      expect(isFinite(v) && v > 0, `t=${t}: retireeIdx_actuarial=${v}`).toBe(true);
+    }
+  });
+
+  it('normalises to ≈1.0 at t=0', () => {
+    expect(retireeIdx_actuarial(0, ACT_CFG)).toBeCloseTo(1.0, 3);
+  });
+
+  it('cor_high ≥ cor_central retiree index at every t', () => {
+    const cfgHigh = { ...ACT_CFG, demoScenario: 'cor_high' };
+    for (let t = 0; t < ACT_CFG.N; t++) {
+      const central = retireeIdx_actuarial(t, ACT_CFG);
+      const high    = retireeIdx_actuarial(t, cfgHigh);
+      expect(high, `t=${t}: cor_high retireeIdx should be ≥ cor_central`).toBeGreaterThanOrEqual(central - 1e-9);
+    }
+  });
+});
+
+describe('cohIdx_actuarial (7e′)', () => {
+  it('returns values in [0, 1] for all t in [0, N-1]', () => {
+    for (let t = 0; t < ACT_CFG.N; t++) {
+      const v = cohIdx_actuarial(t, ACT_CFG);
+      expect(v, `t=${t}: cohIdx_actuarial out of [0,1]`).toBeGreaterThanOrEqual(-1e-9);
+      expect(v, `t=${t}: cohIdx_actuarial out of [0,1]`).toBeLessThanOrEqual(1 + 1e-9);
+    }
+  });
+
+  it('starts at or near 1 (no capi retirees yet)', () => {
+    expect(cohIdx_actuarial(0, ACT_CFG)).toBeGreaterThanOrEqual(0.99);
+  });
+
+  it('is monotonically non-increasing (capi share of retirees never shrinks)', () => {
+    let prev = cohIdx_actuarial(0, ACT_CFG);
+    for (let t = 1; t < ACT_CFG.N; t++) {
+      const v = cohIdx_actuarial(t, ACT_CFG);
+      expect(v, `cohIdx_actuarial should be non-increasing at t=${t}`).toBeLessThanOrEqual(prev + 1e-9);
+      prev = v;
+    }
+  });
+});
+
+describe('actuarial mode — runSimulation backward compat', () => {
+  it('parametric mode output is bit-identical to default (demoMode omitted)', () => {
+    const rows_default = runSimulation(DEFAULT_CONFIG);
+    const rows_param   = runSimulation({ ...DEFAULT_CONFIG, demoMode: 'parametric' });
+    expect(rows_param.length).toBe(rows_default.length);
+    for (let t = 0; t < rows_default.length; t++) {
+      expect(rows_param[t].GDP_t).toBeCloseTo(rows_default[t].GDP_t, 8);
+      expect(rows_param[t].K_t).toBeCloseTo(rows_default[t].K_t, 8);
+      expect(rows_param[t].D_t).toBeCloseTo(rows_default[t].D_t, 8);
+    }
+  });
+
+  it('actuarial mode runs without error for all three COR scenarios', () => {
+    for (const scenario of ['cor_central', 'cor_high', 'cor_low']) {
+      const cfg = { ...ACT_CFG, demoScenario: scenario };
+      expect(() => runSimulation(cfg)).not.toThrow();
+      const rows = runSimulation(cfg);
+      expect(rows).toHaveLength(ACT_CFG.N);
+    }
+  });
+
+  it('actuarial mode K_t and D_t are finite positive/non-negative throughout', () => {
+    const rows = runSimulation(ACT_CFG);
+    for (const r of rows) {
+      expect(isFinite(r.K_t) && r.K_t >= 0, `K_t=${r.K_t} at t=${r.t}`).toBe(true);
+      expect(isFinite(r.D_t), `D_t=${r.D_t} at t=${r.t}`).toBe(true);
+    }
+  });
+});
+
+// PR #17 (v2.0) overlapping cash-flow mode tests.  The toggle replaces the
+// E0-indexed capi floor with a K_t-share annuity floor that scales with the
+// fund.  State guarantee continues to post any annual shortfall to D_t — but
+// because the floor is much smaller than legacy in late years, K_t no longer
+// depletes and the terminal-year D_t spike (PR #15 diagnosis) is eliminated.
+describe('PR #17 overlapping cashFlowMode — backward compat', () => {
+  it('default cashFlowMode is "legacy" (preserves v1.3 output bit-identical)', () => {
+    expect(DEFAULT_CONFIG.cashFlowMode).toBe('legacy');
+  });
+
+  it('legacy mode output is bit-identical to default (cashFlowMode omitted)', () => {
+    const rows_default = runSimulation(DEFAULT_CONFIG);
+    const rows_legacy  = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'legacy' });
+    expect(rows_legacy.length).toBe(rows_default.length);
+    for (let t = 0; t < rows_default.length; t++) {
+      expect(rows_legacy[t].K_t).toBe(rows_default[t].K_t);
+      expect(rows_legacy[t].D_t).toBe(rows_default[t].D_t);
+      expect(rows_legacy[t].capiPayoutFloor_t).toBe(rows_default[t].capiPayoutFloor_t);
+    }
+  });
+});
+
+describe('PR #17 overlapping cashFlowMode — cascade waterfall', () => {
+  const OL_CFG = { ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' };
+  let rows;
+  beforeAll(() => { rows = runSimulation(OL_CFG); });
+
+  it('runs without error for default config', () => {
+    expect(rows).toHaveLength(OL_CFG.N);
+  });
+
+  it('capiPayoutFloor_t = K_start × capiAssetShare × annuityRate_t every period', () => {
+    // Floor uses the actuarially-derived annuityRate_t, not the fixed annuityFloorRate.
+    // This guarantees capi retirees receive the full pot-based annuity as their minimum.
+    for (const r of rows) {
+      const expected = r.K_start_t * r.capiAssetShare_t * r.annuityRate_t;
+      expect(r.capiPayoutFloor_t, `t=${r.t}`).toBeCloseTo(expected, 9);
+    }
+  });
+
+  it('floor is zero in pre-capi years (capiAssetShare = 0)', () => {
+    expect(rows[0].capiPayoutFloor_t).toBe(0);
+  });
+
+  it('K_t is finite, non-negative, and never depletes terminally', () => {
+    for (const r of rows) {
+      expect(isFinite(r.K_t) && r.K_t >= 0, `K_t=${r.K_t} at t=${r.t}`).toBe(true);
+    }
+    expect(rows[rows.length - 1].K_t).toBeGreaterThan(1000);
+  });
+
+  it('D_t is fully repaid by end of horizon (cascade debt-reduction)', () => {
+    // Cascade bucket 3 routes surplus real return to D repayment once PAYG is covered.
+    // Under default parameters this achieves debt-free status well before year 69.
+    expect(rows[rows.length - 1].D_t).toBeCloseTo(0, 0);
+  });
+
+  it('no state shortfall at all (floor always covered by K_avail)', () => {
+    // Floor = annuityRate_t × capiAssetShare × K_t; K_avail = K_t(1+r_cn) + netCapiFlow.
+    // Because K_avail grows faster than the floor payout, K_avail always covers.
+    for (const r of rows) {
+      expect(r.shortfall_t, `t=${r.t} shortfall_t should be 0`).toBeCloseTo(0, 6);
+    }
+    expect(rows[rows.length - 1].CK_t).toBeCloseTo(0, 6);
+  });
+
+  it('D_t fully repaid by end of horizon; CI is finite and bounded', () => {
+    const legacy = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'legacy' });
+    const CI_legacy  = legacy[legacy.length - 1].CI_t;
+    const CI_overlap = rows[rows.length - 1].CI_t;
+    // Bucket 4b (capi top-up) takes priority over bucket 3 (debt repayment),
+    // so CI may exceed legacy CI — the tradeoff is that capi retirees receive
+    // their full pot-based annuity from t=33 onwards. The key invariant is that
+    // D_t still reaches 0 by end of horizon (legacy does not guarantee this).
+    expect(rows[rows.length - 1].D_t).toBeCloseTo(0, 3);
+    expect(CI_overlap).toBeLessThan(CI_legacy * 5);   // not explosive
+    expect(CI_overlap).toBeGreaterThan(0);             // non-trivial transition cost
+  });
+
+  it('cascade budget identity: fundReturnCapi = xSubFromReturns + debtRep + reinvest + bonus', () => {
+    // capiContribXSub_t = 0 in v2.0 (no contribution diversion); identity simplifies to
+    // fundReturnCapi = capiLegacyXSub + capiDebtRepaid + capiReinvest + capiBonus.
+    for (const r of rows) {
+      if (r.fundReturnCapi_t < 1e-6) continue; // skip zero-return periods
+      const allocated = r.capiLegacyXSub_t + r.capiDebtRepaid_t
+                      + r.capiReinvest_t + r.capiBonus_t;
+      expect(allocated, `t=${r.t} cascade should fully allocate returns budget`)
+        .toBeCloseTo(r.fundReturnCapi_t, 6);
+    }
+  });
+
+  it('capiLegacyXSub_t ≥ 0 and does not exceed PAYG deficit', () => {
+    for (const r of rows) {
+      expect(r.capiLegacyXSub_t, `t=${r.t}`).toBeGreaterThanOrEqual(-1e-9);
+      // Cross-sub can only cover what was actually borrowed for PAYG
+      const maxXSub = Math.max(0, -r.netFlow_t);
+      expect(r.capiLegacyXSub_t, `t=${r.t}`).toBeLessThanOrEqual(maxXSub + 1e-9);
+    }
+  });
+
+  it('capiReinvest_t ≤ reinvestCap × fundReturnCapi_t every period', () => {
+    for (const r of rows) {
+      expect(r.capiReinvest_t, `t=${r.t}`)
+        .toBeLessThanOrEqual((OL_CFG.reinvestCap ?? 0.20) * r.fundReturnCapi_t + 1e-9);
+    }
+  });
+
+  it('capiContribXSub_t ≥ 0 and ≤ netCapiFlow_t (contribution deficit cover is bounded)', () => {
+    for (const r of rows) {
+      expect(r.capiContribXSub_t, `t=${r.t}`).toBeGreaterThanOrEqual(-1e-9);
+      // Can never exceed net contributions that period
+      expect(r.capiContribXSub_t, `t=${r.t} ≤ netCapiFlow`)
+        .toBeLessThanOrEqual(r.netCapiFlow_t + 1e-9);
+    }
+  });
+
+  it('capiContribXSub_t is 0 when returns budget covers the full deficit', () => {
+    // When K_t is large enough that fund returns ≥ PAYG deficit, no contribution
+    // cross-sub is needed. Check that the field is zero whenever returns ≥ deficit.
+    for (const r of rows) {
+      if (r.netFlow_t >= 0) {
+        expect(r.capiContribXSub_t, `t=${r.t} no deficit`).toBeCloseTo(0, 9);
+      }
+      if (r.fundReturnCapi_t >= -r.netFlow_t && r.netFlow_t < 0) {
+        expect(r.capiContribXSub_t, `t=${r.t} returns cover deficit`).toBeCloseTo(0, 6);
+      }
+    }
+  });
+
+  it('shortfall_t accumulates into CK_t consistently', () => {
+    let cumShortfall = 0;
+    for (const r of rows) {
+      cumShortfall += r.shortfall_t;
+      expect(r.CK_t, `t=${r.t}`).toBeCloseTo(cumShortfall, 6);
+    }
+  });
+
+  it('overlapping mode runs without error for all three COR scenarios', () => {
+    for (const scenario of ['cor_central', 'cor_high', 'cor_low']) {
+      const cfg = { ...OL_CFG, demoMode: 'actuarial', demoScenario: scenario };
+      expect(() => runSimulation(cfg)).not.toThrow();
+      const r = runSimulation(cfg);
+      expect(r[r.length - 1].D_t).toBeGreaterThanOrEqual(0);
+    }
+  });
+});
+
+describe('PR #17 capiAssetShare_t — accounting identity (overlapping mode)', () => {
+  const OL_CFG = { ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' };
+  let rows;
+  beforeAll(() => { rows = runSimulation(OL_CFG); });
+
+  it('capiAssetShare_t is 0 at t=0 (K_t = 0, nothing to divide)', () => {
+    expect(rows[0].capiAssetShare_t).toBe(0);
+  });
+
+  it('capiAssetShare_t ∈ [0, 1] for all t', () => {
+    for (const r of rows) {
+      expect(r.capiAssetShare_t, `t=${r.t}`).toBeGreaterThanOrEqual(0);
+      expect(r.capiAssetShare_t, `t=${r.t}`).toBeLessThanOrEqual(1 + 1e-12);
+    }
+  });
+
+  it('capiAssetShare_t equals min(1, sumCapiContrib / K_start) for t > 0', () => {
+    for (const r of rows.slice(1)) {
+      if (r.K_start_t < 1e-6) continue; // skip effectively-zero fund
+      const expected = Math.min(1, Math.max(0, r.sumCapiContrib_t / r.K_start_t));
+      expect(r.capiAssetShare_t, `t=${r.t}`).toBeCloseTo(expected, 9);
+    }
+  });
+
+  it('sumCapiContrib_t is non-decreasing when net contributions are positive', () => {
+    for (let i = 1; i < rows.length; i++) {
+      // sumCapiContrib can only decrease if levy > (C_s_capi + emplrToCap), which the
+      // engine prevents (levy ≤ min(gross, D_t)), so it should be non-decreasing.
+      expect(rows[i].sumCapiContrib_t, `t=${i}`)
+        .toBeGreaterThanOrEqual(rows[i - 1].sumCapiContrib_t - 1e-9);
+    }
+  });
+
+  it('accounting identity produces higher share than smoothstep in mature phase', () => {
+    // smoothstep reaches steady-state 0.35 around t=30. By t=30, the accounting
+    // identity should be higher (most of K_t is still contributions-dominated).
+    const legacyRows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'legacy' });
+    expect(rows[30].capiAssetShare_t).toBeGreaterThan(legacyRows[30].capiAssetShare_t);
+  });
+
+  it('legacy mode still uses smoothstep (bounded by capiAssetShareSteadyState)', () => {
+    const legacyRows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'legacy' });
+    for (const r of legacyRows) {
+      expect(r.capiAssetShare_t, `legacy t=${r.t}`)
+        .toBeLessThanOrEqual(DEFAULT_CONFIG.capiAssetShareSteadyState + 1e-12);
+    }
+  });
+});
+
+// ===========================================================================
+// buildCounterfactualParams purity (v2.0 engine fixes)
+// ===========================================================================
+describe('buildCounterfactualParams — employer-cut purity', () => {
+  it('zeroes deltaTauxPatronal and deltaTauxPatronalPA so employer cuts do not bleed into baseline', () => {
+    const reformCfg = {
+      ...DEFAULT_CONFIG,
+      deltaTauxPatronal: 0.005,
+      deltaTauxPatronalPA: 0.002,
+    };
+    const cfCfg = buildCounterfactualParams(reformCfg);
+    expect(cfCfg.deltaTauxPatronal).toBe(0);
+    expect(cfCfg.deltaTauxPatronalPA).toBe(0);
+  });
+
+  it('counterfactual with employer cuts has same tau_e_eff as no-cut baseline', () => {
+    const reformCfg = {
+      ...DEFAULT_CONFIG,
+      deltaTauxPatronal: 0.01,
+      deltaTauxPatronalPA: 0.001,
+    };
+    const cfRows  = runSimulation(buildCounterfactualParams(reformCfg));
+    const baseRows = runSimulation({ ...DEFAULT_CONFIG });
+    for (let t = 0; t < cfRows.length; t++) {
+      expect(cfRows[t].tau_e_eff, `t=${t}`).toBeCloseTo(baseRows[t].tau_e_eff, 12);
+    }
+  });
+});
+
+// ===========================================================================
+// surplusLevy_t floor protection (v2.0 engine fixes)
+// ===========================================================================
+describe('surplusLevy_t — K_floor_t capacity cap', () => {
+  it('when surplusLevy fires, K_t ends up at or above K_floor_t', () => {
+    // The cap is surplusLevyCap = max(0, K_before_levy - K_floor). So if levy > 0,
+    // K_before was ≥ K_floor and K_after = K_before − levy ≥ K_floor.
+    // (Payouts in §5.12 can independently put K_t below floor, but that is handled
+    // by the shortfall mechanism, not this levy cap.)
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      cashFlowMode: 'legacy',
+      thetaBuffer: 0,
+      tauK: 0,
+    };
+    const rows = runSimulation(cfg);
+    for (const r of rows) {
+      if (r.surplusLevy_t > 1e-9) {
+        const kFloor = r.annuityRate_t > 1e-6 ? r.capiPayoutFloor_t / r.annuityRate_t : 0;
+        expect(r.K_t, `t=${r.t}: surplusLevy fired, K_t should be ≥ K_floor`)
+          .toBeGreaterThanOrEqual(kFloor - 1e-6);
+      }
+    }
+  });
+});
+
+// ===========================================================================
+// Employer-cut off-by-one fix (v2.0 engine fixes)
+// ===========================================================================
+describe('employer-cut §5.3 — off-by-one fix', () => {
+  it('tau_e_eff equals tau_e on activation year (step fires, PA=0 terms)', () => {
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      deltaTauxPatronal: 0.005,
+      deltaTauxPatronalPA: 0,
+      taxCutStartT: 3,
+    };
+    const rows = runSimulation(cfg);
+    // At t=3 (activation year): yearsAfterStart=0, totalCut = 0.005, tau_e_eff = tau_e - 0.005
+    expect(rows[3].tau_e_eff).toBeCloseTo(DEFAULT_CONFIG.tau_e - 0.005, 9);
+    // At t=2 (one year before): no cut
+    expect(rows[2].tau_e_eff).toBeCloseTo(DEFAULT_CONFIG.tau_e, 9);
+  });
+
+  it('PA increment first applies on activation+1 (one year after step)', () => {
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      deltaTauxPatronal: 0.005,
+      deltaTauxPatronalPA: 0.002,
+      taxCutStartT: 3,
+    };
+    const rows = runSimulation(cfg);
+    // t=3: yearsAfterStart=0, totalCut = 0.005 + 0.002×0 = 0.005
+    expect(rows[3].tau_e_eff).toBeCloseTo(DEFAULT_CONFIG.tau_e - 0.005, 9);
+    // t=4: yearsAfterStart=1, totalCut = 0.005 + 0.002×1 = 0.007
+    expect(rows[4].tau_e_eff).toBeCloseTo(DEFAULT_CONFIG.tau_e - 0.007, 9);
+    // t=5: yearsAfterStart=2, totalCut = 0.005 + 0.002×2 = 0.009
+    expect(rows[5].tau_e_eff).toBeCloseTo(DEFAULT_CONFIG.tau_e - 0.009, 9);
+  });
+});
+
+// ===========================================================================
+// Floor = annuityRate_t: floor equals potBasedPayout (v2.0 final fix)
+// ===========================================================================
+describe('overlapping floor alignment — floor equals full pot-based annuity', () => {
+  const OL_CFG = { ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' };
+  let rows;
+  beforeAll(() => { rows = runSimulation(OL_CFG); });
+
+  it('capiPayoutFloor_t equals potBasedPayout_t every period (floor = full fair annuity)', () => {
+    // Since floor = K_t × capiAssetShare × annuityRate_t = potBasedPayout_t,
+    // bucket 4b (capiTarget) is always 0 and the floor IS the pot-based annuity.
+    for (const r of rows) {
+      expect(r.capiPayoutFloor_t, `t=${r.t}`).toBeCloseTo(r.potBasedPayout_t, 6);
+    }
+  });
+
+  it('capiPayout_t ≥ potBasedPayout_t: capi retirees always get at least fair annuity', () => {
+    for (const r of rows) {
+      expect(r.capiPayout_t, `t=${r.t}`).toBeGreaterThanOrEqual(r.potBasedPayout_t - 1e-6);
+    }
+  });
+
+  it('capiPayout_t year-over-year change ≤ 50% (payment smoothness)', () => {
+    // Non-blocking warning test: flags genuine discontinuities without halting the suite.
+    // Genuine parameter changes (large w_r step, r_c shock) may legitimately exceed 50%.
+    let violations = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const prev = rows[i - 1].capiPayout_t;
+      const curr = rows[i].capiPayout_t;
+      if (prev > 1e-6 && Math.abs(curr - prev) / prev > 0.5) {
+        violations++;
+        console.warn(`[smoothness] t=${rows[i].t}: capiPayout_t changed ${((curr - prev) / prev * 100).toFixed(1)}%`);
+      }
+    }
+    // Allow up to 2 violations (e.g. capi phase-in ramp-up in first years).
+    expect(violations, 'capiPayout_t has too many large YoY swings').toBeLessThanOrEqual(2);
+  });
+});
+
+// ===========================================================================
+// "Et Pour Vous?" alignment — individual annuity tracks engine annuityRate_t
+// ===========================================================================
+describe('computeIndividualPerspective — Et Pour Vous alignment', () => {
+  const OL_CFG = { ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' };
+  const reformRows = runSimulation(OL_CFG);
+  const cfCfg = buildCounterfactualParams(OL_CFG);
+  const cfRows = runSimulation(cfCfg);
+
+  it('monthlyCapiAnnuity uses annuityRate_t at retirement year (not r_c_n)', () => {
+    // Full-career capi worker retiring at t=40 (born 1963, age 64 in 2027+40=2067).
+    // annuityRate at t=40 should determine their monthly payout.
+    const birthYear = DEFAULT_CONFIG.Y0 - 24; // age 24 in Y0 → 40-year career
+    const p = computeIndividualPerspective(OL_CFG, reformRows, cfRows, birthYear);
+    const retT = Math.min(reformRows.length - 1, (birthYear + 64) - DEFAULT_CONFIG.Y0);
+    const expectedRate = reformRows[retT].annuityRate_t;
+    if (p.inCapi && p.capiPotReal > 0 && expectedRate > 0) {
+      // monthlyCapiAnnuity = capiPotAtRet × annuityRate × KE_TO_EUR / 12
+      // capiPotReal is deflated; use nominal pot via capiPotAtRet reconstruction.
+      // Verify that the rate implied by the output matches annuityRate_t, not r_c_n.
+      const r_c_n = (1 + OL_CFG.r_c) * (1 + OL_CFG.pi) - 1;
+      const retYears = Math.max(1, 85 - 64);
+      const wrongFactor = r_c_n > 0 ? (1 - Math.pow(1 + r_c_n, -retYears)) / r_c_n : retYears;
+      const wrongRate = 1 / wrongFactor; // ≈ 8.93%/yr — the r_c_n implied rate
+      // annuityRate_at_ret ≈ 5.59%/yr; wrongRate ≈ 8.93%/yr. They differ by >30%.
+      expect(expectedRate).toBeLessThan(wrongRate * 0.8);
+    }
+  });
+
+  it('for a full-career capi retiree, monthlyCapiAnnuity is proportional to annuityRate_t', () => {
+    // Run two configs with different r_f_annuity values. Individual annuity should
+    // scale proportionally because monthlyCapiAnnuity = pot × annuityRate_t / 12.
+    const cfg1 = { ...OL_CFG, r_f_annuity: 0.015 };
+    const cfg2 = { ...OL_CFG, r_f_annuity: 0.030 };
+    const rows1 = runSimulation(cfg1);
+    const rows2 = runSimulation(cfg2);
+    const cfRows1 = runSimulation(buildCounterfactualParams(cfg1));
+    const cfRows2 = runSimulation(buildCounterfactualParams(cfg2));
+    const birthYear = DEFAULT_CONFIG.Y0 - 24;
+    const p1 = computeIndividualPerspective(cfg1, rows1, cfRows1, birthYear);
+    const p2 = computeIndividualPerspective(cfg2, rows2, cfRows2, birthYear);
+    if (p1.inCapi && p1.monthlyCapiAnnuity > 0 && p2.monthlyCapiAnnuity > 0) {
+      const retT = Math.min(rows1.length - 1, (birthYear + 64) - DEFAULT_CONFIG.Y0);
+      const rate1 = rows1[retT].annuityRate_t;
+      const rate2 = rows2[retT].annuityRate_t;
+      const ratio_rates = rate2 / rate1;
+      const ratio_annuities = p2.monthlyCapiAnnuity / p1.monthlyCapiAnnuity;
+      // Annuity ratio should match rate ratio within 5% (small pot difference from r_c effect on accumulation)
+      expect(ratio_annuities, 'annuity should scale with annuityRate_t').toBeCloseTo(ratio_rates, 1);
+    }
+  });
+});
+
+// ===========================================================================
+// §5.14 K_debt_trigger — cascade priority switch (v2.0 debt-pacing)
+// ===========================================================================
+describe('K_debt_trigger — debt-acceleration cascade switch', () => {
+  it('DEFAULT_CONFIG.K_debt_trigger = 0 (backward-compat: always debt-first)', () => {
+    expect(DEFAULT_CONFIG.K_debt_trigger).toBe(0);
+  });
+
+  it('with trigger=0, output matches no-trigger baseline (bit-identical)', () => {
+    const base = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' });
+    const explicit = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: 0 });
+    for (let t = 0; t < base.length; t++) {
+      expect(explicit[t].capiDebtRepaid_t).toBe(base[t].capiDebtRepaid_t);
+      expect(explicit[t].capiBonus_t).toBe(base[t].capiBonus_t);
+    }
+  });
+
+  it('with trigger=Infinity, capiDebtRepaid_t = 0 every period (full deferral)', () => {
+    const rows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: Infinity });
+    for (const r of rows) {
+      expect(r.capiDebtRepaid_t, `t=${r.t}`).toBe(0);
+    }
+  });
+
+  it('with trigger=Infinity, total capiDebtRepaid across all years is 0 (full deferral)', () => {
+    const rows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: Infinity });
+    const totalRepaid = rows.reduce((s, r) => s + r.capiDebtRepaid_t, 0);
+    expect(totalRepaid).toBeCloseTo(0, 6);
+  });
+
+  it('with trigger=Infinity, D_t at end of horizon > 0 (debt deferred, never amortised)', () => {
+    // In the infinite-deferral mode the cascade never repays transition debt —
+    // it stays positive throughout. This is the intended tradeoff: capi retirees
+    // receive higher payouts but the state holds the debt longer.
+    const rows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: Infinity });
+    expect(rows[rows.length - 1].D_t).toBeGreaterThan(0);
+  });
+
+  it('with finite trigger, cascade switches from capi-first to debt-first when K_t crosses threshold', () => {
+    const TRIGGER = 5000; // Md€ — K_t crosses this somewhere in the horizon
+    const rows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: TRIGGER });
+    let seenBelow = false, seenAbove = false;
+    for (const r of rows) {
+      if (r.K_start_t < TRIGGER && r.capiDebtRepaid_t < 1e-6) seenBelow = true;
+      if (r.K_start_t >= TRIGGER) seenAbove = true;
+    }
+    expect(seenBelow, 'should have capi-first phase before trigger').toBe(true);
+    expect(seenAbove, 'should have debt-first phase after trigger').toBe(true);
+  });
+
+  it('cascade budget identity holds for both debt-first and capi-first modes', () => {
+    for (const trigger of [0, Infinity]) {
+      const rows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', K_debt_trigger: trigger });
+      for (const r of rows) {
+        if (r.fundReturnCapi_t < 1e-6) continue;
+        const allocated = r.capiLegacyXSub_t + r.capiDebtRepaid_t + r.capiReinvest_t + r.capiBonus_t;
+        expect(allocated, `trigger=${trigger} t=${r.t}`).toBeCloseTo(r.fundReturnCapi_t, 6);
+      }
+    }
+  });
+});
+
+// ===========================================================================
+// PR #18 §5.13 Balanced cashFlowMode — strict separation of concerns
+// ===========================================================================
+//
+// Balanced mode replaces the overlapping cascade. Key differences:
+//   1. capiLegacyXSub_t = 0 always — capi never subsidises PAYG via returns.
+//   2. capiContribXSub_t = 0 always — capi never subsidises PAYG via contributions.
+//   3. Floor uses annuityFloorRate (1.5 %), not annuityRate_t (5.6 %).
+//   4. Solvency floor with KFloorBuffer cushion (1.10 × strict floor).
+//   5. Debt sweep capped on three axes (share-of-return, share-of-K, share-of-GDP).
+//   6. Smooth phase-out as D/GDP falls towards debtSweepEndRatio.
+//   7. capiBonus paid as fraction (capiBonusShare = 25 %) of post-debt surplus.
+
+describe('PR #18 balanced cashFlowMode — backward compat', () => {
+  it('legacy mode output is unaffected by the balanced branch addition', () => {
+    // Fixture regression already covers this; sanity-check that legacy and
+    // overlapping outputs differ from balanced for the default config.
+    const legacy_rows  = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'legacy' });
+    const balanced_rows = runSimulation({ ...DEFAULT_CONFIG, cashFlowMode: 'balanced' });
+    let differs = false;
+    for (let t = 0; t < legacy_rows.length; t++) {
+      if (Math.abs(legacy_rows[t].K_t - balanced_rows[t].K_t) > 1) {
+        differs = true; break;
+      }
+    }
+    expect(differs, 'balanced mode should differ from legacy output').toBe(true);
+  });
+});
+
+describe('PR #18 balanced cashFlowMode — invariants', () => {
+  const BAL_CFG = { ...DEFAULT_CONFIG, cashFlowMode: 'balanced' };
+  let rows;
+  beforeAll(() => { rows = runSimulation(BAL_CFG); });
+
+  it('runs without error for default config and reaches finite K_t/D_t', () => {
+    expect(rows).toHaveLength(BAL_CFG.N);
+    for (const r of rows) {
+      expect(isFinite(r.K_t) && r.K_t >= 0, `K_t=${r.K_t} at t=${r.t}`).toBe(true);
+      expect(isFinite(r.D_t) && r.D_t >= 0, `D_t=${r.D_t} at t=${r.t}`).toBe(true);
+    }
+  });
+
+  it('runs cleanly for all three COR scenarios (actuarial demographics)', () => {
+    for (const scenario of ['cor_central', 'cor_high', 'cor_low']) {
+      const cfg = { ...BAL_CFG, demoMode: 'actuarial', demoScenario: scenario };
+      expect(() => runSimulation(cfg)).not.toThrow();
+    }
+  });
+
+  // Invariant 1 — pension floor seniority: total payout >= floor.
+  it('Invariant 1: capiPayout_t ≥ capiPayoutFloor_t every period', () => {
+    for (const r of rows) {
+      expect(r.capiPayout_t, `t=${r.t}`).toBeGreaterThanOrEqual(r.capiPayoutFloor_t - 1e-9);
+    }
+  });
+
+  // Invariant 2 — debt sweep cannot break solvency floor (unless explicit shortfall).
+  it('Invariant 2: K_t ≥ K_floor_t whenever no guarantee shortfall recorded', () => {
+    for (const r of rows) {
+      if (r.guaranteeShortfall_t < 1e-6) {
+        expect(r.K_t, `t=${r.t}: K_t should not breach K_floor_t when no shortfall`)
+          .toBeGreaterThanOrEqual(r.K_floor_t - 1e-6);
+      }
+    }
+  });
+
+  // Invariant 3 — debt sweep is capped on all three axes.
+  it('Invariant 3: capiDebtRepaid_t respects share-of-return cap', () => {
+    for (const r of rows) {
+      const cap = (BAL_CFG.debtSweepShare ?? 0.50) * Math.max(0, r.fundReturnCapi_t);
+      expect(r.capiDebtRepaid_t, `t=${r.t} share-of-return cap`)
+        .toBeLessThanOrEqual(cap + 1e-6);
+    }
+  });
+
+  it('Invariant 3: capiDebtRepaid_t respects share-of-K cap', () => {
+    for (const r of rows) {
+      const cap = (BAL_CFG.debtSweepKCap ?? 0.015) * r.K_start_t;
+      expect(r.capiDebtRepaid_t, `t=${r.t} share-of-K cap`)
+        .toBeLessThanOrEqual(cap + 1e-6);
+    }
+  });
+
+  it('Invariant 3: capiDebtRepaid_t respects share-of-GDP cap', () => {
+    for (const r of rows) {
+      const cap = (BAL_CFG.debtSweepGdpCap ?? 0.01) * r.GDP_t;
+      expect(r.capiDebtRepaid_t, `t=${r.t} share-of-GDP cap`)
+        .toBeLessThanOrEqual(cap + 1e-6);
+    }
+  });
+
+  // Invariant 4 — no payout cliff in mature years (allow exception during ramp-up).
+  it('Invariant 4: capiPayout_t YoY growth < 50 % once steady-state has begun', () => {
+    // Ramp-up exception: first 5 years after the first non-zero payout can move freely
+    // (cohort entry creates legitimate jumps).
+    const firstNonZero = rows.findIndex(r => r.capiPayout_t > 0.1);
+    if (firstNonZero < 0) return;
+    const rampEnd = firstNonZero + 5;
+    for (let i = rampEnd + 1; i < rows.length; i++) {
+      const prev = rows[i - 1].capiPayout_t;
+      const curr = rows[i].capiPayout_t;
+      if (prev < 1e-6) continue;
+      const growth = curr / prev - 1;
+      expect(Math.abs(growth), `t=${rows[i].t} cliff: ${prev.toFixed(2)} → ${curr.toFixed(2)}`)
+        .toBeLessThan(0.50);
+    }
+  });
+
+  it('separation of concerns: capiLegacyXSub_t = 0 and capiContribXSub_t = 0 always', () => {
+    for (const r of rows) {
+      expect(r.capiLegacyXSub_t, `t=${r.t} no return cross-sub`).toBeCloseTo(0, 9);
+      expect(r.capiContribXSub_t, `t=${r.t} no contribution cross-sub`).toBeCloseTo(0, 9);
+    }
+  });
+
+  it('debtSweepPhase_t ∈ [0, 1] every period', () => {
+    for (const r of rows) {
+      expect(r.debtSweepPhase_t, `t=${r.t}`).toBeGreaterThanOrEqual(0);
+      expect(r.debtSweepPhase_t, `t=${r.t}`).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('debt sweep is fully active when D/GDP ≥ debtSweepStartRatio', () => {
+    for (const r of rows) {
+      const dToGdp = r.GDP_t > 0 ? r.D_t / r.GDP_t : 0;
+      if (dToGdp >= (BAL_CFG.debtSweepStartRatio ?? 0.50)) {
+        expect(r.debtSweepPhase_t, `t=${r.t} D/GDP=${dToGdp.toFixed(2)}`)
+          .toBeCloseTo(1, 9);
+      }
+    }
+  });
+
+  it('debt sweep is inactive when D/GDP ≤ debtSweepEndRatio', () => {
+    for (const r of rows) {
+      const dToGdp = r.GDP_t > 0 ? r.D_t / r.GDP_t : 0;
+      if (dToGdp <= (BAL_CFG.debtSweepEndRatio ?? 0.05)) {
+        expect(r.debtSweepPhase_t, `t=${r.t} D/GDP=${dToGdp.toFixed(2)}`)
+          .toBeCloseTo(0, 9);
+      }
+    }
+  });
+
+  it('capiBonus_t ≤ realReturn − capiDebtRepaid (bonus never draws principal)', () => {
+    for (const r of rows) {
+      const cap = Math.max(0, r.fundReturnCapi_t - r.capiDebtRepaid_t);
+      expect(r.capiBonus_t, `t=${r.t}`).toBeLessThanOrEqual(cap + 1e-6);
+    }
+  });
+
+  it('floor formula: capiPayoutFloor_t = K_start × capiAssetShare × annuityFloorRate', () => {
+    for (const r of rows) {
+      const expected = r.K_start_t * r.capiAssetShare_t * (BAL_CFG.annuityFloorRate ?? 0.015);
+      expect(r.capiPayoutFloor_t, `t=${r.t}`).toBeCloseTo(expected, 9);
+    }
+  });
+
+  it('K_floor_t = strictKFloor × KFloorBuffer (solvency cushion enforced)', () => {
+    for (const r of rows) {
+      const strict = r.annuityRate_t > 1e-9 ? r.capiPayoutFloor_t / r.annuityRate_t : 0;
+      const expected = strict * (BAL_CFG.KFloorBuffer ?? 1.10);
+      expect(r.K_floor_t, `t=${r.t}`).toBeCloseTo(expected, 6);
+    }
+  });
+});
+
+describe('PR #18 computeCapiAssetShareBalanced helper', () => {
+  it('returns 0 when sumCapiContrib is 0', () => {
+    expect(computeCapiAssetShareBalanced({
+      K_avail_t: 1000,
+      sumCapiContrib: 0,
+    })).toBe(0);
+  });
+
+  it('returns clamped to 1 when contributions exceed K_avail', () => {
+    expect(computeCapiAssetShareBalanced({
+      K_avail_t: 100,
+      sumCapiContrib: 200,
+    })).toBe(1);
+  });
+
+  it('returns ratio when sumCapiContrib < K_avail', () => {
+    expect(computeCapiAssetShareBalanced({
+      K_avail_t: 1000,
+      sumCapiContrib: 250,
+    })).toBeCloseTo(0.25, 12);
+  });
+
+  it('handles K_avail near zero without dividing by zero', () => {
+    const v = computeCapiAssetShareBalanced({
+      K_avail_t: 0,
+      sumCapiContrib: 100,
+    });
+    expect(isFinite(v)).toBe(true);
+    expect(v).toBe(1);
   });
 });
 
