@@ -172,25 +172,51 @@ export default function App() {
   }, [params])
 
   const exportCSV = useCallback(() => {
-    const headers = ['Année','Dép. legacy','Dép. capi','Total pens.','Rend. fonds','HLM','Abatt.','CSG (rec.)',
-      'Sal.→capi','Empl.→leg','Empl.→cap','Int. dette','Flux net','Emprunt','Prélèv.','Dette','Capi nom.','Capi réel','r_d (%)','Spread (%)']
-    const rows = results.map(r => [
-      r.year, r.legacyExp_t.toFixed(1), r.capiPayout_t.toFixed(1),
-      (r.legacyExp_t + r.capiPayout_t).toFixed(1),
-      r.fundReturn_t.toFixed(1), r.H_t_proceeds.toFixed(1), r.abatement_t.toFixed(1),
-      r.S0_csg_revenue_t.toFixed(1),
-      r.C_s_capi_t.toFixed(1), r.emplrToLeg_t.toFixed(1), r.emplrToCap_t.toFixed(1),
-      r.debtInterest_t.toFixed(1), r.netFlow_t.toFixed(1), r.borrowed_t.toFixed(1),
-      r.levy_t.toFixed(1), r.D_t.toFixed(1),
-      r.K_t.toFixed(0), (r.K_t / Math.pow(1.02, r.t)).toFixed(0),
-      (r.r_d_t * 100).toFixed(2), (r.spread_t * 100).toFixed(2),
-    ])
+    const R0 = params.R0 ?? 18;
+    const headers = [
+      'Annee',
+      'Dep_legacy_MdE','Dep_capi_MdE','Total_pensions_MdE',
+      'Rend_fonds_MdE','HLM_MdE','Abattement_MdE','CSG_recettes_MdE',
+      'Sal_capi_MdE','Empl_leg_MdE','Empl_cap_MdE',
+      'Int_dette_MdE','Flux_net_MdE','Emprunt_MdE','Prelev_MdE','Dette_MdE',
+      'Capi_nom_MdE','Capi_reel_MdE',
+      'r_d_pct','Spread_pct',
+      'Workers_active_M',
+      'Retirees_total_M','Retirees_legacy_M','Retirees_transition_M','Retirees_capi_pure_M',
+      'Avg_legacy_kE_pa','Avg_capi_kE_pa',
+    ]
+    const rows = results.map(r => {
+      const workersM = 30 * (r.activePopFactor ?? 1) * (r.empFactor ?? 1);
+      const retTotalM = (r.retireeIdx ?? 0) * R0;
+      const retLegacyM = (r.legacyRetirees ?? 0) * R0;
+      const capiRetM = (r.capiRetirees ?? 0) * R0;
+      const legacyShare = r.legacyShareAvg ?? 0;
+      const retTransitionM = capiRetM * legacyShare;
+      const retCapiPureM = capiRetM * (1 - legacyShare);
+      const avgLegacyKE = retLegacyM > 0.001 ? (r.legacyExp_t / retLegacyM) * 1000 : 0;
+      const avgCapiKE = capiRetM > 0.001 ? (r.capiPayout_t / capiRetM) * 1000 : 0;
+      return [
+        r.year,
+        r.legacyExp_t.toFixed(1), r.capiPayout_t.toFixed(1),
+        (r.legacyExp_t + r.capiPayout_t).toFixed(1),
+        r.fundReturn_t.toFixed(1), r.H_t_proceeds.toFixed(1), r.abatement_t.toFixed(1),
+        r.S0_csg_revenue_t.toFixed(1),
+        r.C_s_capi_t.toFixed(1), r.emplrToLeg_t.toFixed(1), r.emplrToCap_t.toFixed(1),
+        r.debtInterest_t.toFixed(1), r.netFlow_t.toFixed(1), r.borrowed_t.toFixed(1),
+        r.levy_t.toFixed(1), r.D_t.toFixed(1),
+        r.K_t.toFixed(0), (r.K_t / Math.pow(1.02, r.t)).toFixed(0),
+        (r.r_d_t * 100).toFixed(2), (r.spread_t * 100).toFixed(2),
+        workersM.toFixed(2),
+        retTotalM.toFixed(2), retLegacyM.toFixed(2), retTransitionM.toFixed(2), retCapiPureM.toFixed(2),
+        avgLegacyKE.toFixed(1), avgCapiKE.toFixed(1),
+      ]
+    })
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = 'capimodel_v1.0a_simulation.csv'; a.click()
+    const a = document.createElement('a'); a.href = url; a.download = 'capimodel_v1_simulation.csv'; a.click()
     URL.revokeObjectURL(url)
-  }, [results])
+  }, [results, params])
 
   const chartData = useMemo(() => results.map(rowToChart), [results])
 
