@@ -1770,9 +1770,17 @@ describe('PR #18 balanced cashFlowMode — invariants', () => {
     }
   });
 
-  it('capiBonus_t ≤ realReturn − capiDebtRepaid (bonus never draws principal)', () => {
+  it('capiBonus_t ≤ actuarial surplus on retirees\' pot − debt share (total payout ≤ annuity)', () => {
+    // Cap formula: K_ret_pre_bonus × (annuityRate − annuityFloorRate) − debtRepaid × retireeFrac.
+    // Ensures total payout (floor + bonus) ≤ K_ret × annuityRate_t (actuarial drawdown).
+    // K_retirees_bal_t in the row is post-bonus; recover pre-bonus as K_retirees_bal_t + capiBonus_t.
+    const floorRate = BAL_CFG.annuityFloorRate ?? 0.015;
     for (const r of rows) {
-      const cap = Math.max(0, r.fundReturnCapi_t - r.capiDebtRepaid_t);
+      const K_ret_pre = r.K_retirees_bal_t + r.capiBonus_t;
+      const K_capi_total = Math.max(r.K_avail_t * r.capiAssetShare_t, 1e-9);
+      const retireeFrac = Math.min(1, K_ret_pre / K_capi_total);
+      const actuarialSurplus = K_ret_pre * Math.max(0, r.annuityRate_t - floorRate);
+      const cap = Math.max(0, actuarialSurplus - r.capiDebtRepaid_t * retireeFrac);
       expect(r.capiBonus_t, `t=${r.t}`).toBeLessThanOrEqual(cap + 1e-6);
     }
   });

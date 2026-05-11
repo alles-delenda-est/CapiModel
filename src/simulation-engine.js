@@ -969,7 +969,9 @@ export function runSimulation(userConfig = {}) {
       // 3. Track retirees' accumulated pot separately from workers'.
       //    Scale by same proportional return as the whole fund, then transfer
       //    new retirees' per-worker share from the workers' pot into K_retirees_bal.
-      K_retirees_bal *= K_open_t > 1e-9 ? K_avail_t / K_open_t : 1;
+      // Scale retirees' pot by the fund's nominal return only (NOT by K_avail/K_open,
+      // which would include workers' fresh contributions — those belong to workers).
+      K_retirees_bal *= (1 + r_cn_eff_t);
       const deltaCapiRetM_t = Math.max(0, capiRetirees_t - capiRetirees_prev_snap) * cfg.R0;
       if (deltaCapiRetM_t > 1e-6) {
         const K_capi_avail = K_avail_t * capiAssetShare_t;
@@ -1034,14 +1036,19 @@ export function runSimulation(userConfig = {}) {
         K_retirees_bal = Math.max(0, K_retirees_bal * (1 - capiDebtRepaid_t / Math.max(K_postFloor, 1e-9)));
       }
 
-      // 10. Bonus from remaining surplus, capped at retirees' proportional return
-      //     net of their share of the debt sweep (prevents drawing workers' principal).
+      // 10. Bonus from remaining surplus, capped so total payout ≤ actuarial annuity
+      //     on retirees' pot.  The actuarial annuity rate (annuityRate_t ≈ 5.6 %)
+      //     is the correct ceiling: a funded pension SHOULD draw principal, so the
+      //     cap must reflect what the accumulated pot can sustainably pay out over
+      //     the retirees' remaining life expectancy — not just the GE-compressed
+      //     nominal return (which would artificially depress pensions as K/GDP rises).
       const surplusAfterDebt_t = Math.max(0, K_after_floor - K_floor_t);
       capiBonus_t = (cfg.capiBonusShare ?? 0.25) * surplusAfterDebt_t;
       const K_capi_total_t = Math.max(K_avail_t * capiAssetShare_t, 1e-9);
       const retireeFrac_t  = Math.min(1, K_retirees_bal / K_capi_total_t);
-      const maxBonus_t = Math.max(0, realReturn_t * capiAssetShare_t * retireeFrac_t
-                                   - capiDebtRepaid_t * retireeFrac_t);
+      const maxBonus_t = Math.max(0,
+        K_retirees_bal * (annuityRate_t - (cfg.annuityFloorRate ?? 0.015))
+        - capiDebtRepaid_t * retireeFrac_t);
       capiBonus_t = Math.min(capiBonus_t, maxBonus_t);
 
       K_t = Math.max(0, K_after_floor - capiBonus_t);

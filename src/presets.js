@@ -12,7 +12,20 @@ import { DEFAULT_CONFIG } from './simulation-engine.js';
 // separation of concerns — capi never cross-subsidises PAYG, K is preserved
 // as a pension reserve, and only capped surplus return repays transition debt.
 // The legacy and overlapping modes remain available for comparison.
-const UI_CONFIG = { ...DEFAULT_CONFIG, cashFlowMode: 'balanced' };
+//
+// GE recalibration (PR #19 fix): DEFAULT_CONFIG's geKneeRatio=2.0 / geFloorRatio=4.0
+// are too aggressive — a fund at K/GDP=4 earning 0% real return is inconsistent with
+// empirical evidence (Norway's SWF earns ~6 %/yr at 340 % GDP). More realistic:
+//   knee=3.0  → GE effects begin at 3× GDP (domestic investment partially saturated)
+//   floor=8.0 → full penalty only at 8× GDP (implausibly large; provides an upper bound)
+// This keeps r_cn_eff above annuityRate_t throughout the simulation horizon, preventing
+// the retirees' pot from depleting and keeping total capi payout monotonically growing.
+const UI_CONFIG = {
+  ...DEFAULT_CONFIG,
+  cashFlowMode: 'balanced',
+  geKneeRatio: 3.0,
+  geFloorRatio: 8.0,
+};
 
 /**
  * v1_default — all §3 defaults exactly as the spec specifies them.
