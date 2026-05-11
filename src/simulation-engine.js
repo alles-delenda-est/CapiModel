@@ -196,9 +196,9 @@ export const DEFAULT_CONFIG = {
   // debtSweepStartRatio — D/GDP at which sweep is fully active (smoothstep)
   // debtSweepEndRatio   — D/GDP at which sweep is fully inactive
   debtSweepShare: 0.50,
-  debtSweepKCap: 0.015,
-  debtSweepGdpCap: 0.01,
-  capiBonusShare: 0.25,
+  debtSweepKCap: 0.010,
+  debtSweepGdpCap: 0.008,
+  capiBonusShare: 0.20,
   KFloorBuffer: 1.10,
   debtSweepStartRatio: 0.50,
   debtSweepEndRatio: 0.05,

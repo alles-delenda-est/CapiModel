@@ -3,6 +3,7 @@ import {
   LineChart, Line, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine, ComposedChart,
+  ScatterChart, Scatter, Cell,
 } from 'recharts'
 import { runSimulation, DEFAULT_CONFIG } from './simulation-engine.js'
 import { PRESETS, extractKPIs } from './presets.js'
@@ -219,6 +220,30 @@ export default function App() {
   }, [results, params])
 
   const chartData = useMemo(() => results.map(rowToChart), [results])
+
+  // κ–φ parameter sweep for Pareto chart (peak debt vs capi payout ratio).
+  // κ = capiBonusShare, φ = debtSweepShare. Fixed base = current params.
+  const KAPPA_VALUES = [0.05, 0.10, 0.15, 0.20, 0.30];
+  const PHI_VALUES   = [0.20, 0.35, 0.50, 0.65, 0.80];
+  const KAPPA_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+  const sweepData = useMemo(() => {
+    if (!results.length) return [];
+    return KAPPA_VALUES.flatMap((kappa, ki) =>
+      PHI_VALUES.map(phi => {
+        const p = { ...params, capiBonusShare: kappa, debtSweepShare: phi };
+        const rows = runSimulation(p);
+        const peakDebt = Math.max(...rows.map(r => r.D_t));
+        const capiRows = rows.filter(r => (r.capiRetirees ?? 0) > 0.01);
+        const avgRatio = capiRows.length > 0
+          ? capiRows.reduce((sum, r) => {
+              const actuarial = r.K_t * (r.capiAssetShare_t ?? 0) * (r.annuityRate_t ?? 0.05);
+              return sum + (actuarial > 0.1 ? r.capiPayout_t / actuarial : 1);
+            }, 0) / capiRows.length
+          : 0;
+        return { kappa, phi, peakDebt: peakDebt / 1000, avgRatio: avgRatio * 100, ki };
+      })
+    );
+  }, [params, results.length])
 
   const p = params
 
@@ -829,6 +854,64 @@ export default function App() {
                 <Line type="monotone" dataKey="pvCapiPayoutCum" stroke="#059669" strokeWidth={3} name="VAN pensions capi" dot={false} />
                 <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
               </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* κ–φ Pareto frontier: peak debt vs capi payout ratio */}
+        <div className="chart-row" style={{ marginTop: 24 }}>
+          <div className="chart-container" style={{ flex: '1 1 100%' }}>
+            <h3>Frontière Pareto κ–φ : dette de transition vs ratio de couverture capi</h3>
+            <p className="chart-note">
+              Chaque point = une simulation avec κ (capiBonusShare, couleur) et φ (debtSweepShare, position X).
+              Axe X : dette de transition maximale (k Md€). Axe Y : ratio moyen paiement capi / cible actuarielle (%).
+              Survolez un point pour voir κ et φ.
+            </p>
+            <ResponsiveContainer width="100%" height={360}>
+              <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  type="number" dataKey="peakDebt" name="Dette max"
+                  label={{ value: 'Dette de transition max (k Md€)', position: 'insideBottom', offset: -20, fontSize: 13 }}
+                  tick={{ fontSize: 13 }} tickFormatter={v => fmtN(v)}
+                />
+                <YAxis
+                  type="number" dataKey="avgRatio" name="Ratio capi"
+                  label={{ value: 'Ratio paiement / cible actuarielle (%)', angle: -90, position: 'insideLeft', dx: -5, fontSize: 13 }}
+                  tick={{ fontSize: 13 }} tickFormatter={v => `${v.toFixed(0)}%`}
+                />
+                <Tooltip
+                  cursor={{ strokeDasharray: '3 3' }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: '#f1f5f9' }}>
+                        <div><b>κ (bonus share)</b> = {d.kappa}</div>
+                        <div><b>φ (sweep share)</b> = {d.phi}</div>
+                        <div><b>Dette max</b> = {fmtN(d.peakDebt)} k Md€</div>
+                        <div><b>Ratio capi</b> = {d.avgRatio.toFixed(1)}%</div>
+                      </div>
+                    );
+                  }}
+                />
+                <Legend
+                  payload={KAPPA_VALUES.map((k, i) => ({ value: `κ = ${k}`, type: 'circle', color: KAPPA_COLORS[i] }))}
+                  wrapperStyle={{ fontSize: 13, paddingTop: 8 }}
+                />
+                {KAPPA_VALUES.map((kappa, ki) => (
+                  <Scatter
+                    key={kappa}
+                    name={`κ=${kappa}`}
+                    data={sweepData.filter(d => d.kappa === kappa)}
+                    fill={KAPPA_COLORS[ki]}
+                  >
+                    {sweepData.filter(d => d.kappa === kappa).map((entry, idx) => (
+                      <Cell key={idx} fill={KAPPA_COLORS[ki]} opacity={0.4 + 0.15 * idx} r={7} />
+                    ))}
+                  </Scatter>
+                ))}
+              </ScatterChart>
             </ResponsiveContainer>
           </div>
         </div>
