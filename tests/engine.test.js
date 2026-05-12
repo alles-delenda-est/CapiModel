@@ -1990,4 +1990,20 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
       }
     }
   });
+
+  it('cumBondCoupon_t is non-decreasing and equals running sum of bondCouponService_t', () => {
+    const rows = runSimulation(CHILE_CFG);
+    let running = 0;
+    for (const r of rows) {
+      running += r.bondCouponService_t;
+      expect(r.cumBondCoupon_t, `t=${r.t} cumulative`).toBeCloseTo(running, 6);
+    }
+  });
+
+  it('cumBondCoupon_t = 0 every period when chileMode=false', () => {
+    const rows = runSimulation({ ...BASE, chileMode: false });
+    for (const r of rows) {
+      expect(r.cumBondCoupon_t, `t=${r.t}`).toBe(0);
+    }
+  });
 });

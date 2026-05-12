@@ -572,6 +572,7 @@ export function runSimulation(userConfig = {}) {
   // §5.15 Recognition bonds (PR #21b). Cumulative issuance accounting tracker;
   // bonds are credited to K_t at issuance. 0 when chileMode=false.
   let BR_t = 0;
+  let cumBondCoupon = 0; // running total of coupon payments (diagnostic)
   // §5.7 HLM stock tracker: recursive so hlmActive_t taper stops depleting U_state.
   let U_state = cfg.U0;
 
@@ -895,6 +896,7 @@ export function runSimulation(userConfig = {}) {
     if (bondCouponService_t > 0) {
       D_t        += bondCouponService_t;                                           // (§5.15-c)
       borrowed_t += bondCouponService_t;
+      cumBondCoupon += bondCouponService_t;
     }
 
     let bondIssuance_t = 0;
@@ -1261,9 +1263,10 @@ export function runSimulation(userConfig = {}) {
       K_retirees_bal_t: K_retirees_bal,
       // PR #21: fiscal transfer diagnostics
       fiscalTransfer_t, capiCoverage_t, fiscalGap_t,
-      // PR #21b: recognition bond diagnostics (zero when chileMode=false)
-      // BR_t = cumulative bonds issued (diagnostic; equals ΔD_t from issuance).
+      // PR #21b/c: recognition bond diagnostics (zero when chileMode=false)
+      // BR_t = cumulative bonds issued; cumBondCoupon_t = running coupon total.
       BR_t, bondIssuance_t, bondCouponService_t,
+      cumBondCoupon_t: cumBondCoupon,
       transitionalPaygExpGross_t,
       // §5.10.1 (v1.2) tauK debt-reduction channel
       K_floor_t, tauKLevy_t,

@@ -170,6 +170,20 @@ const equinoxeAndLabour = {
   },
 };
 
+/**
+ * chileMode_default — Mode Chilien base case.
+ * Recognition bonds replace transitional PAYG flow; all other parameters at
+ * UI defaults. Pedagogical: compare total bond cost vs PAYG counterfactual.
+ */
+const chileMode_default = {
+  label: 'Mode Chilien — base',
+  description: 'Obligations de reconnaissance (iota-indexed, zéro rachat) remplacent les flux PAYG transitionnels. Tous autres paramètres aux valeurs UI par défaut. Comparer le coût total obligations vs contrefactuel PAYG.',
+  params: {
+    ...UI_CONFIG,
+    chileMode: true,
+  },
+};
+
 export const PRESETS = {
   v1_default,
   v1_optimiste,
@@ -177,6 +191,7 @@ export const PRESETS = {
   equinoxeOnly,
   labourHousingOnly,
   equinoxeAndLabour,
+  chileMode_default,
 };
 
 /**
@@ -211,6 +226,14 @@ export function extractKPIs(rows) {
   const employerCutInitialRow = rows.find(r => (r.employerCutInitial_t ?? 0) > 0);
   const employerTaxCutInitial = employerCutInitialRow?.employerCutInitial_t ?? 0;
   const employerTaxCutEventual = last.employerCutEventual_t ?? 0;
+  // Recognition bond KPIs (zero when chileMode=false).
+  const totalBondsIssued = last.BR_t ?? 0;
+  const totalCouponPaid = last.cumBondCoupon_t ?? 0;
+  // PAYG counterfactual: sum of what transitional PAYG flow would have been.
+  const totalPaygCounterfactual = rows.reduce((s, r) => s + (r.transitionalPaygExpGross_t ?? 0), 0);
+  // Net bond cost vs PAYG: (issuance + coupon) − PAYG counterfactual.
+  // Positive = bonds cost more over the horizon; negative = bonds cheaper.
+  const bondNetCostVsPayg = (totalBondsIssued + totalCouponPaid) - totalPaygCounterfactual;
   return {
     peakDebt, peakDebtYear, debtFreeYear, totalInterest,
     finalCapi, finalCapiReal, netPosition, minSpread, S0,
@@ -218,5 +241,6 @@ export function extractKPIs(rows) {
     pvCapiPayoutTotal: last.pvCapiPayoutCum_t,
     totalCapiShortfall, peakCapiShortfall, firstShortfallYear,
     employerTaxCutInitial, employerTaxCutEventual,
+    totalBondsIssued, totalCouponPaid, totalPaygCounterfactual, bondNetCostVsPayg,
   };
 }
