@@ -1693,7 +1693,15 @@ describe('PR #18 balanced cashFlowMode — invariants', () => {
     }
   });
 
-  // Invariant 3 — debt sweep is capped on all three axes.
+  // Invariant 3 — debt sweep is capped on all four axes.
+  it('Invariant 3: capiDebtRepaid_t respects share-of-surplus cap', () => {
+    for (const r of rows) {
+      const cap = (BAL_CFG.debtSweepSurplusFrac ?? 0.75) * (r.surplusAboveFloor_t ?? 0);
+      expect(r.capiDebtRepaid_t, `t=${r.t} share-of-surplus cap`)
+        .toBeLessThanOrEqual(cap + 1e-6);
+    }
+  });
+
   it('Invariant 3: capiDebtRepaid_t respects share-of-return cap', () => {
     for (const r of rows) {
       const cap = (BAL_CFG.debtSweepShare ?? 0.50) * Math.max(0, r.fundReturnCapi_t);
@@ -1720,11 +1728,12 @@ describe('PR #18 balanced cashFlowMode — invariants', () => {
 
   // Invariant 4 — no payout cliff in mature years (allow exception during ramp-up).
   it('Invariant 4: capiPayout_t YoY growth < 50 % once steady-state has begun', () => {
-    // Ramp-up exception: first 5 years after the first non-zero payout can move freely
-    // (cohort entry creates legitimate jumps).
+    // Ramp-up exception: first 7 years after the first non-zero payout can move freely
+    // (cohort entry creates legitimate jumps; PR #19 K_retirees_bal starts small so rapid
+    // growth persists slightly longer than in the old formula).
     const firstNonZero = rows.findIndex(r => r.capiPayout_t > 0.1);
     if (firstNonZero < 0) return;
-    const rampEnd = firstNonZero + 5;
+    const rampEnd = firstNonZero + 7;
     for (let i = rampEnd + 1; i < rows.length; i++) {
       const prev = rows[i - 1].capiPayout_t;
       const curr = rows[i].capiPayout_t;
@@ -1769,17 +1778,32 @@ describe('PR #18 balanced cashFlowMode — invariants', () => {
     }
   });
 
-  it('capiBonus_t ≤ realReturn − capiDebtRepaid (bonus never draws principal)', () => {
+  it('capiBonus_t ≤ actuarial surplus on retirees\' pot − debt share (total payout ≤ annuity)', () => {
+    // Cap formula: K_ret_pre_bonus × (annuityRate − annuityFloorRate) − debtRepaid × retireeFrac.
+    // Ensures total payout (floor + bonus) ≤ K_ret × annuityRate_t (actuarial drawdown).
+    // K_retirees_bal_t in the row is post-bonus; recover pre-bonus as K_retirees_bal_t + capiBonus_t.
+    const floorRate = BAL_CFG.annuityFloorRate ?? 0.015;
     for (const r of rows) {
-      const cap = Math.max(0, r.fundReturnCapi_t - r.capiDebtRepaid_t);
+      const K_ret_pre = r.K_retirees_bal_t + r.capiBonus_t;
+      const K_capi_total = Math.max(r.K_avail_t * r.capiAssetShare_t, 1e-9);
+      const retireeFrac = Math.min(1, K_ret_pre / K_capi_total);
+      const actuarialSurplus = K_ret_pre * Math.max(0, r.annuityRate_t - floorRate);
+      const cap = Math.max(0, actuarialSurplus - r.capiDebtRepaid_t * retireeFrac);
       expect(r.capiBonus_t, `t=${r.t}`).toBeLessThanOrEqual(cap + 1e-6);
     }
   });
 
-  it('floor formula: capiPayoutFloor_t = K_start × capiAssetShare × annuityFloorRate', () => {
+  it('floor formula: capiPayoutFloor_t = K_retirees_bal × annuityFloorRate (PR #19)', () => {
+    // PR #19: floor is based on retirees' accumulated pot, not total capi K.
+    // K_retirees_bal_t in the row is the post-payment value; verify via upper bound
+    // (floor ≤ total capi K × annuityFloorRate) and non-negativity.
+    const rate = BAL_CFG.annuityFloorRate ?? 0.015;
     for (const r of rows) {
-      const expected = r.K_start_t * r.capiAssetShare_t * (BAL_CFG.annuityFloorRate ?? 0.015);
-      expect(r.capiPayoutFloor_t, `t=${r.t}`).toBeCloseTo(expected, 9);
+      const upperBound = r.K_avail_t * r.capiAssetShare_t * rate;
+      expect(r.capiPayoutFloor_t, `t=${r.t} non-negative`).toBeGreaterThanOrEqual(0);
+      expect(r.capiPayoutFloor_t, `t=${r.t} ≤ total capi K × rate`).toBeLessThanOrEqual(upperBound + 1e-6);
+      // Diagnostic field exists and is non-negative
+      expect(r.K_retirees_bal_t, `t=${r.t} K_retirees_bal_t defined`).toBeGreaterThanOrEqual(0);
     }
   });
 

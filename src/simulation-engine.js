@@ -548,6 +548,9 @@ export function runSimulation(userConfig = {}) {
   // PR #17 accounting identity: cumulative net capi contributions (C_s_capi + employer − levy).
   // Used in overlapping mode to derive capiAssetShare_t without a free parameter.
   let sumCapiContrib = 0;
+  // PR #19: retirees' accumulated pot in balanced mode — tracks only the K belonging to
+  // retired cohorts, preventing early-year floor inflation from including workers' pot.
+  let K_retirees_bal = 0;
   // §5.7 HLM stock tracker: recursive so hlmActive_t taper stops depleting U_state.
   let U_state = cfg.U0;
 
@@ -684,6 +687,9 @@ export function runSimulation(userConfig = {}) {
     );
     // (25c) total PAYG outflow funded by the legacy fund.
     const totalLegacyOutflow_t = legacyExp_t + transitionalPaygExp_t;
+    // Snapshot the pre-update value for the balanced cascade (§5.13 balanced uses
+    // the new-retiree delta, but capiRetirees_prev is updated before that block runs).
+    const capiRetirees_prev_snap = capiRetirees_prev;
     // Persist the running-average state for the next iteration.
     capiRetirees_prev = capiRetirees_t;
 
@@ -960,8 +966,24 @@ export function runSimulation(userConfig = {}) {
       const realReturn_t = K_open_t * r_c_eff_t;
       // K_avail_t was computed above for capiAssetShare; reused here unchanged.
 
-      // 3. Guaranteed capi pension floor (annuityFloorRate × share × K_open).
-      capiPayoutFloor_t = K_open_t * capiAssetShare_t * (cfg.annuityFloorRate ?? 0.015);
+      // 3. Track retirees' accumulated pot separately from workers'.
+      //    Scale by same proportional return as the whole fund, then transfer
+      //    new retirees' per-worker share from the workers' pot into K_retirees_bal.
+      // Scale retirees' pot by the fund's nominal return only (NOT by K_avail/K_open,
+      // which would include workers' fresh contributions — those belong to workers).
+      K_retirees_bal *= (1 + r_cn_eff_t);
+      const deltaCapiRetM_t = Math.max(0, capiRetirees_t - capiRetirees_prev_snap) * cfg.R0;
+      if (deltaCapiRetM_t > 1e-6) {
+        const K_capi_avail = K_avail_t * capiAssetShare_t;
+        const K_capi_workers = Math.max(0, K_capi_avail - K_retirees_bal);
+        const capiWorkersM = Math.max(1e-6, sigma_capi_t * activePop_t * empFactor * cfg.R0);
+        const K_xfer = Math.min(deltaCapiRetM_t * (K_capi_workers / capiWorkersM), K_capi_workers);
+        K_retirees_bal += K_xfer;
+      }
+      K_retirees_bal = Math.min(K_retirees_bal, K_avail_t * capiAssetShare_t);
+
+      // Guaranteed capi pension floor — based on retirees' pot only (not whole capi K).
+      capiPayoutFloor_t = K_retirees_bal * (cfg.annuityFloorRate ?? 0.015);
 
       // 4. State guarantee only fires if K_avail itself cannot cover the floor.
       guaranteeShortfall_t = Math.max(0, capiPayoutFloor_t - K_avail_t);
@@ -972,8 +994,9 @@ export function runSimulation(userConfig = {}) {
         CK_t       += guaranteeShortfall_t;
       }
 
-      // 5. Pay floor from K.
+      // 5. Pay floor from K; deduct from retirees' pot.
       let K_after_floor = Math.max(0, K_avail_t - capiPayoutFloor_t);
+      K_retirees_bal = Math.max(0, K_retirees_bal - capiPayoutFloor_t);
 
       // 6. Solvency floor with KFloorBuffer cushion. strictKFloor is the
       //    reserve required to keep paying the floor at the actuarial annuityRate.
@@ -994,11 +1017,12 @@ export function runSimulation(userConfig = {}) {
         : (D_to_GDP_t >= sweepStart ? 1 : 0);
 
       // 9. Debt sweep capacity: min of all caps and remaining D.
+      const surplusSweepCap_t = (cfg.debtSweepSurplusFrac ?? 0.75) * surplusAboveFloor_t;
       const returnSweepCap_t = (cfg.debtSweepShare  ?? 0.50) * Math.max(0, realReturn_t);
       const kSweepCap_t      = (cfg.debtSweepKCap   ?? 0.015) * K_open_t;
       const gdpSweepCap_t    = (cfg.debtSweepGdpCap ?? 0.01)  * GDP_t;
       debtSweepCapacity_t = Math.min(
-        surplusAboveFloor_t,
+        surplusSweepCap_t,
         returnSweepCap_t,
         kSweepCap_t,
         gdpSweepCap_t,
@@ -1007,14 +1031,29 @@ export function runSimulation(userConfig = {}) {
       capiDebtRepaid_t = debtSweepPhase_t * debtSweepCapacity_t;
       D_t -= capiDebtRepaid_t;
       K_after_floor -= capiDebtRepaid_t;
+      // Reduce retirees' pot proportionally by the debt sweep drawn from K.
+      if (capiDebtRepaid_t > 1e-9) {
+        const K_postFloor = K_avail_t - capiPayoutFloor_t + capiDebtRepaid_t; // K_after_floor before sweep
+        K_retirees_bal = Math.max(0, K_retirees_bal * (1 - capiDebtRepaid_t / Math.max(K_postFloor, 1e-9)));
+      }
 
-      // 10. Bonus from remaining surplus, capped by realReturn − debtRepaid so
-      //     bonus never draws principal as "yield".
+      // 10. Bonus from remaining surplus, capped so total payout ≤ actuarial annuity
+      //     on retirees' pot.  The actuarial annuity rate (annuityRate_t ≈ 5.6 %)
+      //     is the correct ceiling: a funded pension SHOULD draw principal, so the
+      //     cap must reflect what the accumulated pot can sustainably pay out over
+      //     the retirees' remaining life expectancy — not just the GE-compressed
+      //     nominal return (which would artificially depress pensions as K/GDP rises).
       const surplusAfterDebt_t = Math.max(0, K_after_floor - K_floor_t);
       capiBonus_t = (cfg.capiBonusShare ?? 0.25) * surplusAfterDebt_t;
-      capiBonus_t = Math.min(capiBonus_t, Math.max(0, realReturn_t - capiDebtRepaid_t));
+      const K_capi_total_t = Math.max(K_avail_t * capiAssetShare_t, 1e-9);
+      const retireeFrac_t  = Math.min(1, K_retirees_bal / K_capi_total_t);
+      const maxBonus_t = Math.max(0,
+        K_retirees_bal * (annuityRate_t - (cfg.annuityFloorRate ?? 0.015))
+        - capiDebtRepaid_t * retireeFrac_t);
+      capiBonus_t = Math.min(capiBonus_t, maxBonus_t);
 
       K_t = Math.max(0, K_after_floor - capiBonus_t);
+      K_retirees_bal = Math.max(0, K_retirees_bal - capiBonus_t);
 
       capiPayout_t        = capiPayoutFloor_t + capiBonus_t;
       capiPayoutDesired_t = capiPayout_t;
@@ -1137,6 +1176,8 @@ export function runSimulation(userConfig = {}) {
       // §5.13 balanced cascade diagnostics (PR #18; zero in non-balanced modes)
       surplusAboveFloor_t, debtSweepPhase_t, debtSweepCapacity_t,
       guaranteeShortfall_t,
+      // PR #19: retirees' accumulated pot tracker (balanced mode only; 0 in other modes)
+      K_retirees_bal_t: K_retirees_bal,
       // §5.10.1 (v1.2) tauK debt-reduction channel
       K_floor_t, tauKLevy_t,
       // §5.10.2 (v1.3) surplus-growth levy
