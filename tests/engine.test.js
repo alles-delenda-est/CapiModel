@@ -1960,12 +1960,11 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
     expect(rows[0].bondCouponService_t, 't=0 no prior bonds').toBe(0);
   });
 
-  it('chileMode=true: bondCouponService_t = 0 when BR_t (prior) = 0', () => {
+  it('chileMode=true: bondCouponService_t equals transitionalPaygExpGross_t (coupon is the pension)', () => {
     const rows = runSimulation(CHILE_CFG);
-    for (let i = 1; i < rows.length; i++) {
-      if (rows[i - 1].BR_t < 1e-9) {
-        expect(rows[i].bondCouponService_t, `t=${rows[i].t} no coupon before first issuance`).toBeLessThan(1e-9);
-      }
+    for (const r of rows) {
+      expect(r.bondCouponService_t, `t=${r.t} coupon = pension`)
+        .toBeCloseTo(r.transitionalPaygExpGross_t, 6);
     }
   });
 

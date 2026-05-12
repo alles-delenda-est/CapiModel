@@ -877,22 +877,27 @@ export function runSimulation(userConfig = {}) {
       ? cfg.r_f_annuity / (1 - Math.pow(1 + cfg.r_f_annuity, -T_ret_t))
       : 1 / T_ret_t;                                                            // (53)
 
-    // ---------- §5.15 Recognition bonds (PR #21b, PR #21c) ----------
+    // ---------- §5.15 Recognition bonds (PR #21b, PR #21c, PR #23) ----------
     // When chileMode is active, transitionalPaygExp_t was set to 0 above (PAYG
-    // pensions replaced by a funded mechanism). Instead, the state issues recognition
-    // bonds equal to the PV of accrued PAYG obligations, credited DIRECTLY to K_t
-    // at retirement. Pensions are then paid from the augmented funded pot via the
-    // normal balanced cascade (floor + bonus steps).
+    // pensions replaced by bond coupons). The state issues recognition bonds with
+    // face value = NPV of each retiring cohort's accrued pension rights, credited
+    // to K_t. The bond IS the pension annuity: its annual coupon = the post-Équinoxe
+    // pension the worker would have received under PAYG, inflation-adjusted each year.
+    // Bonds extinguish at each bondholder's death — modelled implicitly as
+    // transitionalPaygExpGross_t → 0 as transitional cohorts age out.
     //
-    // Bond structure: indexed to French inflation (iota); zero redemption value.
-    // Each year the outstanding bond stock (BR_t) pays a coupon = BR_t × iota.
-    // Stock-flow at issuance: D_t ↑ (state recognises obligation as explicit debt);
-    //                         K_t ↑ by same (credited to capi pot).
-    // Stock-flow each year:   coupon service D_t ↑ by BR_t × iota (debt-financed).
+    // Bond structure: perpetual, coupon = transitionalPaygExpGross_t (aggregate annual
+    // pension flow for all living transitional workers). Zero redemption value.
+    // Phased issuance at each cohort's retirement: economically equivalent to a
+    // single t=0 issuance because issuance and coupon begin simultaneously.
+    //
+    // Stock-flow at issuance: D_t ↑ by NPV (explicit debt recognition);
+    //                         K_t ↑ by NPV (credited to capi pot).
+    // Stock-flow each year:   coupon service D_t ↑ by transitionalPaygExpGross_t.
     //                         BR_t is monotonically non-decreasing (cumulative tracker).
 
-    // Annual coupon on outstanding bonds (use BR_t BEFORE this year's issuance).
-    const bondCouponService_t = cfg.chileMode ? BR_t * iota : 0;
+    // Annual coupon = pension paid to living transitional retirees (replaces PAYG).
+    const bondCouponService_t = cfg.chileMode ? transitionalPaygExpGross_t : 0;
     if (bondCouponService_t > 0) {
       D_t        += bondCouponService_t;                                           // (§5.15-c)
       borrowed_t += bondCouponService_t;
