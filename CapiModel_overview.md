@@ -131,7 +131,7 @@ The Simulateur UI includes a **Modes canoniques** panel with three toggle groups
 | Mode Chilien | `chileMode` | On / Off |
 | Mode Suédois | `swedenMode` | On / Off |
 
-**Mode Chilien** (engine logic: PR21b) implements Chilean-style recognition bonds (`bonos de reconocimiento`): accrued PAYG rights of capi-cohort workers are converted to state-issued bonds credited directly to K_t at retirement, replacing transitional PAYG pensions with a funded mechanism. Tracks `BR_t` (cumulative bond issuance) and `bondIssuance_t`.
+**Mode Chilien** (engine logic: PR21b/c) implements recognition bonds: accrued PAYG rights of transitional workers are converted to state-issued bonds credited directly to K_t at retirement, replacing the PAYG outflow with a funded mechanism. Bonds are indexed to French inflation (iota) with zero redemption value; each year the outstanding bond stock pays a coupon = BR_t × iota (new expense, debt-financed). Tracks `BR_t` (cumulative issuance), `bondIssuance_t` (annual issuance), and `bondCouponService_t` (annual coupon expense).
 
 **Mode Suédois** (engine logic: planned) implements a Swedish-style notional defined-contribution overlay: contribution credits accrue at a shadow rate linked to GDP growth; payouts are from the notional account balance, not a real funded pot.
 
@@ -168,7 +168,7 @@ A 4.5 % real expected return on a long-horizon public fund is defensible as a di
 - **Canonical mode switches** — Diversification / Mode Chilien / Mode Suédois toggles in the Modes canoniques UI panel.
 - **Simplified view** (`#/simple`) — 3 scenarios, 5 sliders, narrative cards for lay audiences.
 - **Hypotheses page** (`#/hypotheses`) — every §3 parameter with default, kind, and rationale.
-- **229 tests** — unit invariants, fiscal-transfer invariants, Chilean bond invariants, reference-trace regression against `tests/fixtures/v1.1-default-trace.json`, and 1000-config property-based suite (all passing).
+- **232 tests** — unit invariants, fiscal-transfer invariants, recognition bond invariants (coupon service + issuance), reference-trace regression against `tests/fixtures/v1.1-default-trace.json`, and 1000-config property-based suite (all passing).
 
 ---
 
@@ -268,15 +268,15 @@ Each stage builds on the previous against `realistic` demographics. All figures 
 | v1.2 | Archived | τ_K stock levy, GE penalty, endogenous spread | — |
 | v1.3 | Archived | Δτ_e employer cut, surplus-growth buffer θ | — |
 | v2.0 | Archived | Overlapping cascade, accounting-identity capiAssetShare_t, 6 dead levers removed | `v1.1-default-trace.json` (legacy-mode backward compat) |
-| **v2.1** | **Live** | Balanced cascade (K_retirees_bal, actuarial bonus cap, 75 % sweep cap), GE recalibration (geKneeRatio 3×/8×), fiscal transfers (CSG/FSV/État ~40 Md€/yr), canonical mode switches, Chilean recognition bonds (PR21b) | `v1.1-default-trace.json` (legacy-mode backward compat unchanged) |
+| **v2.1** | **Live** | Balanced cascade (K_retirees_bal, actuarial bonus cap, 75 % sweep cap), GE recalibration (geKneeRatio 3×/8×), fiscal transfers (CSG/FSV/État ~40 Md€/yr), canonical mode switches, recognition bonds with inflation-indexed coupon service (PR21b/c) | `v1.1-default-trace.json` (legacy-mode backward compat unchanged) |
 
-The `v1.1-default-trace.json` fixture governs the legacy-mode regression contract. The v2.1 balanced-cascade contract is validated by the 229-test invariant suite.
+The `v1.1-default-trace.json` fixture governs the legacy-mode regression contract. The v2.1 balanced-cascade contract is validated by the 232-test invariant suite.
 
 ---
 
 ## Technical stack
 
-React 19 + Vite 7 + Recharts. Single-page application, no backend. Auto-deployed to Vercel on push to `main`. Tests: Vitest, 229/229 passing (unit invariants, 70-year × 113-field reference-trace regression, 1000-config property-based suite).
+React 19 + Vite 7 + Recharts. Single-page application, no backend. Auto-deployed to Vercel on push to `main`. Tests: Vitest, 232/232 passing (unit invariants, 70-year × 113-field reference-trace regression, 1000-config property-based suite).
 
 ---
 
@@ -288,8 +288,8 @@ React 19 + Vite 7 + Recharts. Single-page application, no backend. Auto-deployed
 - **GE recalibration** — UI_CONFIG uses geKneeRatio = 3.0 / geFloorRatio = 8.0 (empirically calibrated to Norway SWF precedent); DEFAULT_CONFIG unchanged for test-fixture backward-compat.
 - **Fiscal transfers** — `fiscalTransfer_t` tapers from ~40 Md€/yr as `legacyFrac_t → 0`; three modes (full / no-debt / none).
 - **Canonical mode switches** — Diversification / Mode Chilien / Mode Suédois toggles in the Simulateur UI.
-- **Chilean recognition bonds** (`chileMode: true`, PR21b) — accrued PAYG rights of transitional workers converted to state-issued bonds (`bondIssuance_t = transitionalPaygExpGross_t / annuityRate_t`) credited directly to K_t; state borrows D_t↑ at issuance; `BR_t` cumulative tracker; `transitionalPaygExp_t = 0` in chileMode.
-- **229 tests**, all passing.
+- **Recognition bonds** (`chileMode: true`, PR21b/c) — accrued PAYG rights of transitional workers converted to state-issued bonds indexed to French inflation (zero redemption). Bond sizing: `bondIssuance_t = transitionalPaygExpGross_t / annuityRate_t`; credited to K_t; annual coupon service = `BR_t × iota` (debt-financed). UI table, CSV, and debt chart show `bondCouponService_t` when chileMode is active.
+- **232 tests**, all passing.
 
 ### v2.2 — Swedish canonical mode + mode-specific UI (next)
 

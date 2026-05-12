@@ -1,7 +1,7 @@
 # Operating Theory — CapiModel v2.1 Pension-Transition Simulator
 
 **Live version:** v2.1 (balanced cascade waterfall, K_retirees_bal tracking, fiscal transfers, GE recalibration)
-**Reference trace:** `tests/fixtures/v1.1-default-trace.json` (legacy-mode backward-compat contract; balanced-mode contract validated by 229-test invariant suite)
+**Reference trace:** `tests/fixtures/v1.1-default-trace.json` (legacy-mode backward-compat contract; balanced-mode contract validated by 232-test invariant suite)
 **Sections marked "planned"** refer to v2.2 / v3.0 features not in the live engine.
 
 ---
@@ -228,7 +228,7 @@ Backward compatibility: `demoMode: 'parametric'` reproduces bit-identical v1.x o
 ## Engineering philosophy
 
 - **Spec-driven implementation.** All semantics live in `cdc_legacy_fund_model.md`. Every non-trivial engine line carries a `// eq (N)` comment mapping to the spec. Implementers navigate the engine and spec together.
-- **Test invariants enforce §6.** Five conservation/non-negativity/boundary invariants are asserted at every `t` for every canned scenario and over 1000 randomly-sampled configurations. A failed invariant fails the test run. Currently 229 tests, all passing.
+- **Test invariants enforce §6.** Five conservation/non-negativity/boundary invariants are asserted at every `t` for every canned scenario and over 1000 randomly-sampled configurations. A failed invariant fails the test run. Currently 232 tests, all passing.
 - **Reference-trace regression.** The default-preset 70-year × every-field trace is captured to a JSON fixture as a contract. Engine changes that alter default output fail loudly and require explicit per-field fixture-update justification.
 - **Dual-LLM review process.** Each task PR is reviewed by a separate independent LLM in addition to the human reviewer before merge.
 - **One commit per logical unit.** Commit messages of the form `feat: <topic> — §X.Y eq (N–M)` give reviewers a per-equation entry point into the diff.
@@ -258,8 +258,8 @@ Backward compatibility: `demoMode: 'parametric'` reproduces bit-identical v1.x o
 - **GE recalibration.** UI_CONFIG uses geKneeRatio = 3.0 / geFloorRatio = 8.0 (Norway SWF precedent); DEFAULT_CONFIG unchanged (2.0/4.0) for test-fixture backward-compatibility. The v1.x 4× floor created an implausible scenario where a fund at K/GDP = 4 earned 0 % real return.
 - **Fiscal transfers** (`fiscalTransfer_t`). ~40 Md€/yr CSG/FSV/État transfers taper to zero as `legacyFrac_t → 0`. Bug discovered and fixed: toggling transfers on with default GE params (2.0/4.0) caused the GE floor to trigger early, suppressing r_c_eff to near zero and depleting K_retirees_bal. Fix: initial App.jsx state now explicitly overrides to recalibrated GE params (3.0/8.0).
 - **Canonical mode UI.** Three toggle groups (Diversification / Mode Chilien / Mode Suédois) in the Modes canoniques panel.
-- **Chilean recognition bonds** (`chileMode: true`, PR21b). Accrued PAYG rights of transitional workers converted to state-issued bonds credited directly to K_t at retirement. Bond sizing: `bondIssuance_t = transitionalPaygExpGross_t / annuityRate_t`. State borrows D_t↑ at issuance; `transitionalPaygExp_t = 0` in chileMode; `BR_t` is a cumulative non-decreasing tracker. Key pedagogical question: does front-loading bond issuance (D_t↑ at retirement) combined with funded K_t growth produce a lower total long-term obligation than PAYG?
-- **229 tests**, all passing.
+- **Recognition bonds** (`chileMode: true`, PR21b/c). Accrued PAYG rights of transitional workers converted to state-issued bonds indexed to French inflation (iota), zero redemption value. Bond sizing: `bondIssuance_t = transitionalPaygExpGross_t / annuityRate_t`; credited to K_t at retirement (D_t↑, K_t↑ by same); `transitionalPaygExp_t = 0` in chileMode. Annual coupon service: `bondCouponService_t = BR_t × iota` (debt-financed, appears in UI table, CSV, and debt chart). `BR_t` is a cumulative non-decreasing tracker. Key pedagogical question: does front-loading bond issuance combined with funded K_t growth produce a lower total long-term obligation than PAYG?
+- **232 tests**, all passing.
 
 ---
 

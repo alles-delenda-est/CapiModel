@@ -232,8 +232,7 @@ export const DEFAULT_CONFIG = {
 
   // §5.13a Canonical reform modes (PR #21 — engine flags only; UI in this PR,
   // full economic logic in a future PR).
-  chileMode: false,    // recognition bonds for pre-reform PAYG contributions
-  r_chile: 0.04,       // Chilean bond indexation rate (real; CPI+4 % per 1981 DL 3500)
+  chileMode: false,    // recognition bonds for pre-reform PAYG contributions (indexed to French inflation)
   swedenMode: false,   // automatic balance mechanism (NDC-style)
 };
 
@@ -570,7 +569,7 @@ export function runSimulation(userConfig = {}) {
   // retired cohorts, preventing early-year floor inflation from including workers' pot.
   let K_retirees_bal = 0;
   let K_retirees_bal_prev = 0;  // end-of-prior-period retirees' pot (for taper)
-  // §5.15 Chilean recognition bonds (PR #21b). Cumulative issuance accounting tracker;
+  // §5.15 Recognition bonds (PR #21b). Cumulative issuance accounting tracker;
   // bonds are credited to K_t at issuance. 0 when chileMode=false.
   let BR_t = 0;
   // §5.7 HLM stock tracker: recursive so hlmActive_t taper stops depleting U_state.
@@ -877,19 +876,27 @@ export function runSimulation(userConfig = {}) {
       ? cfg.r_f_annuity / (1 - Math.pow(1 + cfg.r_f_annuity, -T_ret_t))
       : 1 / T_ret_t;                                                            // (53)
 
-    // ---------- §5.15 Chilean recognition bonds (PR #21b) ----------
+    // ---------- §5.15 Recognition bonds (PR #21b, PR #21c) ----------
     // When chileMode is active, transitionalPaygExp_t was set to 0 above (PAYG
-    // pensions removed from legacy outflow). Instead, the state issues recognition
-    // bonds (bonos de reconocimiento) equal to the PV of accrued PAYG obligations,
-    // credited DIRECTLY to K_t at the moment of retirement — mirroring Chile's
-    // DL 3500 mechanism where the AFP account was credited with the bond value
-    // at retirement and pensions were then paid from that funded pot.
+    // pensions replaced by a funded mechanism). Instead, the state issues recognition
+    // bonds equal to the PV of accrued PAYG obligations, credited DIRECTLY to K_t
+    // at retirement. Pensions are then paid from the augmented funded pot via the
+    // normal balanced cascade (floor + bonus steps).
     //
-    // Stock-flow: D_t ↑ at issuance (state recognises obligation as explicit debt);
-    //             K_t ↑ by same (bonds credited to capi pot — pensions come from K_t);
-    //             BR_t accumulates as a diagnostic-only total (monotonically non-decreasing).
-    // No separate bond-payout mechanism: the cascade distributes the augmented K_t
-    // to retirees through the balanced floor + bonus steps as usual.
+    // Bond structure: indexed to French inflation (iota); zero redemption value.
+    // Each year the outstanding bond stock (BR_t) pays a coupon = BR_t × iota.
+    // Stock-flow at issuance: D_t ↑ (state recognises obligation as explicit debt);
+    //                         K_t ↑ by same (credited to capi pot).
+    // Stock-flow each year:   coupon service D_t ↑ by BR_t × iota (debt-financed).
+    //                         BR_t is monotonically non-decreasing (cumulative tracker).
+
+    // Annual coupon on outstanding bonds (use BR_t BEFORE this year's issuance).
+    const bondCouponService_t = cfg.chileMode ? BR_t * iota : 0;
+    if (bondCouponService_t > 0) {
+      D_t        += bondCouponService_t;                                           // (§5.15-c)
+      borrowed_t += bondCouponService_t;
+    }
+
     let bondIssuance_t = 0;
     if (cfg.chileMode && transitionalPaygExpGross_t > 0 && annuityRate_t > 1e-6) {
       bondIssuance_t = transitionalPaygExpGross_t / annuityRate_t;
@@ -1254,9 +1261,9 @@ export function runSimulation(userConfig = {}) {
       K_retirees_bal_t: K_retirees_bal,
       // PR #21: fiscal transfer diagnostics
       fiscalTransfer_t, capiCoverage_t, fiscalGap_t,
-      // PR #21b: Chilean recognition bond diagnostics (zero when chileMode=false)
-      // BR_t = cumulative bonds issued (diagnostic; equals ΔD_t from chileMode).
-      BR_t, bondIssuance_t,
+      // PR #21b: recognition bond diagnostics (zero when chileMode=false)
+      // BR_t = cumulative bonds issued (diagnostic; equals ΔD_t from issuance).
+      BR_t, bondIssuance_t, bondCouponService_t,
       transitionalPaygExpGross_t,
       // §5.10.1 (v1.2) tauK debt-reduction channel
       K_floor_t, tauKLevy_t,

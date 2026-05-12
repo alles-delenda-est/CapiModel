@@ -1902,17 +1902,18 @@ describe('PR #21 fiscal transfer — diversification des moyens de financement',
 });
 
 // =====================================================================
-// PR #21b — Chilean recognition bonds (chileMode)
+// PR #21b/c — recognition bonds (chileMode) — engine invariants
 // =====================================================================
-describe('PR #21b Chilean recognition bonds — chileMode invariants', () => {
+describe('PR #21b/c recognition bonds — chileMode invariants', () => {
   const BASE = { ...DEFAULT_CONFIG, cashFlowMode: 'balanced', geKneeRatio: 3.0, geFloorRatio: 8.0 };
   const CHILE_CFG = { ...BASE, chileMode: true };
 
-  it('chileMode=false: BR_t = 0 and bondIssuance_t = 0 every period', () => {
+  it('chileMode=false: BR_t = 0, bondIssuance_t = 0, bondCouponService_t = 0 every period', () => {
     const rows = runSimulation({ ...BASE, chileMode: false });
     for (const r of rows) {
       expect(r.BR_t, `t=${r.t} BR_t`).toBe(0);
       expect(r.bondIssuance_t, `t=${r.t} issuance`).toBe(0);
+      expect(r.bondCouponService_t, `t=${r.t} coupon`).toBe(0);
     }
   });
 
@@ -1943,6 +1944,27 @@ describe('PR #21b Chilean recognition bonds — chileMode invariants', () => {
     for (const r of rows) {
       if (r.transitionalPaygExpGross_t < 1e-9) {
         expect(r.bondIssuance_t, `t=${r.t} no issuance when no gross expense`).toBeLessThan(1e-9);
+      }
+    }
+  });
+
+  it('chileMode=true: bondCouponService_t >= 0 every period', () => {
+    const rows = runSimulation(CHILE_CFG);
+    for (const r of rows) {
+      expect(r.bondCouponService_t, `t=${r.t}`).toBeGreaterThanOrEqual(-1e-9);
+    }
+  });
+
+  it('chileMode=true: bondCouponService_t = 0 at t=0 (no prior bonds)', () => {
+    const rows = runSimulation(CHILE_CFG);
+    expect(rows[0].bondCouponService_t, 't=0 no prior bonds').toBe(0);
+  });
+
+  it('chileMode=true: bondCouponService_t = 0 when BR_t (prior) = 0', () => {
+    const rows = runSimulation(CHILE_CFG);
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i - 1].BR_t < 1e-9) {
+        expect(rows[i].bondCouponService_t, `t=${rows[i].t} no coupon before first issuance`).toBeLessThan(1e-9);
       }
     }
   });
