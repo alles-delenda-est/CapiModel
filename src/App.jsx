@@ -104,6 +104,8 @@ function rowToChart(r) {
     pvLegacyCum: r.pvLegacyCum_t,
     pvCapiPayoutCum: r.pvCapiPayoutCum_t,
     gdp: r.GDP_t,
+    // Recognition bonds
+    bondCouponService: r.bondCouponService_t ?? 0,
   }
 }
 
@@ -131,6 +133,9 @@ const TABLE_COLUMNS = [
   { key: 'borrowed_t',  label: 'Emprunt',  always: false, render: r => r.borrowed_t.toFixed(1) },
   { key: 'levy_t',      label: 'Prélèv.',  always: false, render: r => r.levy_t.toFixed(1) },
   { key: 'K_t',         label: 'Capi nom.', always: false, render: r => fmtN(r.K_t) },
+  { key: 'bondCouponService_t', label: 'Coupon obl.', always: false, render: r => (r.bondCouponService_t ?? 0).toFixed(1) },
+  { key: 'bondIssuance_t', label: 'Émis. obl.', always: false, render: r => (r.bondIssuance_t ?? 0).toFixed(1) },
+  { key: 'BR_t',        label: 'Stock obl.', always: false, render: r => fmtN(r.BR_t ?? 0) },
 ]
 
 const CHART_TABS = [
@@ -187,6 +192,7 @@ export default function App() {
       'Sal_capi_MdE','Empl_leg_MdE','Empl_cap_MdE',
       'Int_dette_MdE','Flux_net_MdE','Emprunt_MdE','Prelev_MdE','Dette_MdE',
       'Capi_nom_MdE','Capi_reel_MdE',
+      'Bond_stock_MdE','Bond_issuance_MdE','Bond_coupon_MdE',
       'r_d_pct','Spread_pct',
       'Workers_active_M',
       'Retirees_total_M','Retirees_legacy_M','Retirees_transition_M','Retirees_capi_pure_M',
@@ -212,6 +218,7 @@ export default function App() {
         r.debtInterest_t.toFixed(1), r.netFlow_t.toFixed(1), r.borrowed_t.toFixed(1),
         r.levy_t.toFixed(1), r.D_t.toFixed(1),
         r.K_t.toFixed(0), (r.K_t / Math.pow(1.02, r.t)).toFixed(0),
+        (r.BR_t ?? 0).toFixed(1), (r.bondIssuance_t ?? 0).toFixed(1), (r.bondCouponService_t ?? 0).toFixed(1),
         (r.r_d_t * 100).toFixed(2), (r.spread_t * 100).toFixed(2),
         workersM.toFixed(2),
         retTotalM.toFixed(2), retLegacyM.toFixed(2), retTransitionM.toFixed(2), retCapiPureM.toFixed(2),
@@ -871,6 +878,7 @@ export default function App() {
                 {kpis.debtFreeYear && <ReferenceLine yAxisId="left" x={kpis.debtFreeYear} stroke="var(--color-success)" strokeDasharray="4 4" />}
                 <Line yAxisId="left" type="monotone" dataKey="debt" stroke="#dc2626" strokeWidth={3} name="Dette (Md€)" dot={false} />
                 <Line yAxisId="right" type="monotone" dataKey="r_d" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" name="r_d effectif (%)" dot={false} />
+                {params.chileMode && <Line yAxisId="left" type="monotone" dataKey="bondCouponService" stroke="#f59e0b" strokeWidth={2} strokeDasharray="4 2" name="Coupon obl. reconn. (Md€)" dot={false} />}
               </ComposedChart>
             </ResponsiveContainer>
           </div>

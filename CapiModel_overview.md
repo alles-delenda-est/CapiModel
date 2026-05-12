@@ -1,4 +1,4 @@
-# CapiModel v2.0 — Pension-Transition Simulator
+# CapiModel v2.1 — Pension-Transition Simulator
 
 **Live demo:** https://capi-model.vercel.app
 
@@ -54,7 +54,7 @@ The model boundary is the **pension-system cash balance**: it covers pension exp
 
 - **Initial reserves** (`F0` = 340 Md€) — Day-1 transfer to the legacy fund (see table above).
 - **Employee contributions** (`τ_s` = 11.3 % of gross wages) flow to individual capitalisation for workers below `cutoffAge` in 2027 (default: 50). Workers above the cutoff keep 100 % PAYG rights; those below retain a proportional legacy share (per-cohort accrual, §5.6.1).
-- **Employer contributions** (`τ_e` = 16.5 %) cover legacy pension deficits first; any surplus flows to the capi pot. In overlapping mode (v2.0 default) phiF = 0 is enforced: all employer contributions flow to legacy first, and the cascade handles capi-side balancing.
+- **Employer contributions** (`τ_e` = 16.5 %) cover legacy pension deficits first; any surplus flows to the capi pot. The balanced cascade (v2.1 UI default) enforces `phiF = 0`: all employer contributions flow to legacy first, and the seven-step waterfall handles capi-side distribution.
 - **HLM cessions** — `ρ` = 5 %/yr applied to the *remaining* stock each year (geometric decay: `ΔU_t = U₀ × (1−ρ)^t × ρ`). This implies cumulative disposals of approximately **64 %** of the original 5.3 M units over 20 years — far above the ~10,900 units sold in 2024. This is a deliberately aggressive political scenario. 95 % of capital gains (net of book value, with optional volume-discount haircut) remit to the legacy fund.
 - **Équinoxe pension reform** — three components (§5.5):
   1. *Brackets reduction* — progressive cut on pensions above 1 800 €/mo, capped at 20 % above 4 000 €/mo. ~17.7 Md€/yr at t = 0. Applied to legacy-cohort retirees only.
@@ -65,27 +65,31 @@ The model boundary is the **pension-system cash balance**: it covers pension exp
 
 ---
 
-## v2.0 cascade waterfall (overlapping mode — current user-facing default)
+## v2.1 balanced cascade (current user-facing default)
 
-The principal innovation of v2.0 is the **overlapping cash-flow cascade**, replacing the legacy v1.3 waterfall. All user-facing presets and the UI default use `cashFlowMode: 'overlapping'`.
+The current UI default is the **§5.13 balanced cascade** (`cashFlowMode: 'balanced'`), which replaced the v2.0 overlapping cascade as the standard user-facing waterfall. Legacy mode and overlapping mode remain available for backward-compatibility and comparison.
 
-### How the cascade works
+### How the balanced cascade works
 
-Each period the real return on K_t (`fundReturnCapi_t = K_t × r_c_eff`) is distributed through five ordered buckets:
+The cascade tracks a separate **retirees' pot** (`K_retirees_bal`) alongside the main fund (`K_t`). Each year the system distributes through seven ordered steps:
 
-| Bucket | Recipient | Cap |
+| Step | Action | Cap / constraint |
 |---|---|---|
-| 0 (floor) | Guaranteed capi annuity floor, paid from full nominal K_avail | `K_t × capiAssetShare_t × annuityFloorRate (1.5 %)` |
-| 4 | Legacy cross-subsidy — returns first, then contributions top-up | Up to full PAYG deficit |
-| 3 | Accumulated transition-debt (`D_t`) principal reduction | Remaining budget |
-| 5 | Reinvestment into K_t | ≤ 20 % of `fundReturnCapi_t` |
-| 6 | Capi bonus (upside to capi retirees) | Residual |
+| 1 | K_retirees_bal grows by nominal floor return | `K_retirees_bal × annuityFloorRate` (preserves pension reserve) |
+| 2 | New retiree transfer: incoming cohort funded from K_t | `K_t × σ_capi × retirementRate × capiAssetShare_t` |
+| 3 | Floor payment: guaranteed annuity floor paid from K_retirees_bal | `K_retirees_bal × annuityFloorRate` |
+| 4 | Solvency buffer: maintain K_retirees_bal ≥ floor × T_solvency | Top-up from K_t if needed |
+| 5 | Debt sweep: excess surplus repays D_t | min(75 % of surplus, returnSweepCap, kSweepCap, gdpSweepCap, D_t) |
+| 6 | Bonus: upside distributed to capi retirees | Bounded by actuarial surplus on K_retirees_bal |
+| 7 | K_close: remaining surplus reinvested into K_t | — |
 
-**Lambda incorporation:** the previous v1.x transition levy (λ = 30 % of contributions routed to D_t) is removed as a free parameter. Instead, cascade bucket 4 first draws on fund returns; if returns are insufficient to cover the PAYG deficit, net capi contributions top up the remainder (`capiContribXSub_t`). This is structurally identical to λ = 100 % in early years when returns are near zero, declining naturally as the fund matures.
+**K_retirees_bal separation:** Only retirees' accumulated pot serves pension payouts; worker savings accumulate separately. This prevents cross-subsidisation and preserves K_t as a long-term pension reserve.
 
-**Floor accounting:** the annuity floor is paid from `K_avail = K_t × (1 + r_cn_eff) + netCapiFlow_t` (full nominal), not from the real-return cascade budget. This makes the floor immune to the GE return penalty that can suppress `r_c_eff` in late years.
+**Actuarial bonus cap:** the capi bonus is bounded by `K_retirees_bal × (annuityRate_t − annuityFloorRate) − capiDebtRepaid_t × retireeFrac_t`. This cap allows principal drawdown as a properly funded pension (paying above floor from capital), while preventing over-distribution that would deplete the retirees' pot.
 
-**capiAssetShare_t:** In overlapping mode, this is an **accounting identity** — `min(1, cumulative net capi contributions / K_t)` — rather than the parametric 35 % smoothstep ramp used in legacy mode. It starts at 0 (Y0, when K_t = 0), rises to ~1.0 in early years (all fund value is recent contributions), then gradually declines to ~0.78 at horizon end as compounded reinvested returns grow faster than new contributions. No free parameter.
+**75 % surplus sweep cap:** the debt repayment step (step 5) is limited to 75 % of surplus above floor (`debtSweepSurplusFrac: 0.75`). This preserves 25 % of surplus for capi bonus even when transition debt is outstanding, preventing the bonus from collapsing to zero.
+
+**capiAssetShare_t:** accounting identity — `min(1, cumulative net capi contributions / K_t)` — not a free parameter. Starts at 0 (Y0), rises toward 1 in early accumulation years, then gradually declines as compounded reinvested returns grow faster than new contributions.
 
 ### Parameters removed from the UI
 
@@ -93,12 +97,43 @@ Six parameters that were redundant with the cascade are no longer exposed as use
 
 | Parameter | Role | Replacement in cascade |
 |---|---|---|
-| `alpha` | PAYG-surplus fraction → debt | Cascade bucket 3 |
-| `lambda` | Transition levy on contributions | Cascade bucket 4 contribution top-up |
+| `alpha` | PAYG-surplus fraction → debt | Cascade step 5 |
+| `lambda` | Transition levy on contributions | Cascade step 5 contribution top-up |
 | `Tlambda` | Lambda activation year | — |
 | `phiF` | Employer floor to capi | Hardcoded 0; cascade floor handles capi payout |
-| `thetaBuffer` | Surplus-growth levy buffer | Cascade bucket 5 (reinvest cap) |
-| `tauK` | Annual stock levy on K_t | Cascade bucket 3 |
+| `thetaBuffer` | Surplus-growth levy buffer | Cascade step 7 (K_close reinvest) |
+| `tauK` | Annual stock levy on K_t | Cascade step 5 |
+
+---
+
+## Fiscal transfers (diversification des moyens de financement)
+
+The current French pension system is partly sustained by earmarked fiscal transfers: CSG contributions, FSV (Fonds de Solidarité Vieillesse) transfers, and État contributions totalling ~40 Md€/yr at reform start. The model treats these as a tapering `fiscalTransfer_t` that supports the transition through the double-payment period and phases out as the capi system becomes self-sustaining.
+
+**Transfer formula:** `fiscalTransfer_t = fiscalTransferBase × legacyFrac_t`, where `legacyFrac_t = min(1, legacyRetirees_t / retireeIdx_t)`. As the legacy transitional cohort dies off, `legacyFrac_t → 0` and transfers taper to zero. `fiscalTransferBase` defaults to 40 Md€/yr (approximate DREES combined CSG/FSV/État pension-system transfers, COR 2024).
+
+**Three transfer modes** (`fiscalTransferMode`):
+- `'full'` *(UI default)*: transfers included; residual deficits still covered by D_t borrowing
+- `'no-debt'`: transfers included, but no new D_t borrowing; residual fiscal gap tracked as `fiscalGap_t` (off-balance-sheet)
+- `'none'` *(engine DEFAULT_CONFIG)*: no transfers (kept for test-fixture backward-compatibility)
+
+All six app-facing presets (`v1_default`, `v1_optimiste`, `v1_stress`, `equinoxeOnly`, `labourHousingOnly`, `equinoxeAndLabour`) use `fiscalTransferMode: 'full'`.
+
+---
+
+## Canonical mode switches
+
+The Simulateur UI includes a **Modes canoniques** panel with three toggle groups:
+
+| Toggle | Parameter | Options |
+|---|---|---|
+| Diversification | `fiscalTransferMode` | Avec dette (full) / Sans dette (no-debt) / Désactivée (none) |
+| Mode Chilien | `chileMode` | On / Off |
+| Mode Suédois | `swedenMode` | On / Off |
+
+**Mode Chilien** (engine logic: PR21b/c) implements recognition bonds: accrued PAYG rights of transitional workers are converted to state-issued bonds credited directly to K_t at retirement, replacing the PAYG outflow with a funded mechanism. Bonds are indexed to French inflation (iota) with zero redemption value; each year the outstanding bond stock pays a coupon = BR_t × iota (new expense, debt-financed). Tracks `BR_t` (cumulative issuance), `bondIssuance_t` (annual issuance), and `bondCouponService_t` (annual coupon expense).
+
+**Mode Suédois** (engine logic: planned) implements a Swedish-style notional defined-contribution overlay: contribution credits accrue at a shadow rate linked to GDP growth; payouts are from the notional account balance, not a real funded pot.
 
 ---
 
@@ -124,19 +159,22 @@ A 4.5 % real expected return on a long-horizon public fund is defensible as a di
 - **Two distinct return/discount rates** — `r_f_portfolio` (risky expected return) vs `r_f_annuity` (liability discount rate). Setting them equal reproduces a carry-trade mispricing from v1.0.
 - **Per-cohort accrued PAYG rights** (v1.1) — workers transitioning to capi retain proportional legacy entitlements via `legacyShareOfCohort(B)` (eq 15a), aggregated as `transitionalPaygExp_t` (eq 25b). The v1.0 binary-cohort split that understated state-funded outflow by 50–150 Md€/yr at peak no longer applies.
 - **Endogenous borrowing rate** — sovereign risk premium rises with combined `D^{ext}_t + D_t` debt/GDP via piecewise-linear thresholds (150 / 200 / 300 %), capped at 20 %. Presented as a reduced-form stress heuristic.
-- **General-equilibrium return penalty** — capi return scales linearly to zero between `geKneeRatio` (2× GDP) and `geFloorRatio` (4× GDP). Only the return channel is modelled; GE effects on wages, employment, housing prices, savings displacement, and tax base are outside v2.0 scope.
+- **General-equilibrium return penalty** — capi return scales linearly to zero between `geKneeRatio` and `geFloorRatio`. UI_CONFIG uses recalibrated values (3× GDP knee, 8× GDP floor) to reflect empirical evidence (Norway's SWF earns ~6 %/yr at 340 % of GDP). DEFAULT_CONFIG keeps the original 2×/4× for test-fixture backward-compatibility. Only the return channel is modelled; GE effects on wages, employment, housing prices, savings displacement, and tax base are outside v2.1 scope.
 - **State guarantee on capi pensions** — when K_avail cannot cover the guaranteed floor, the state borrows the shortfall, tracked in `CK_t`. In overlapping mode, this is structurally near zero because the floor (≈ 1.5 % × share × K_t ≈ 0.5–1.3 % of K_t) is always covered by nominal K_avail.
 - **Active-population factor** — drives both the wage bill and GDP. Without this, the model overstates labour-force capacity in pessimistic demographic scenarios.
 - **6 presets** — 3 baseline + 3 pedagogical partial-package scenarios (see below).
+- **Fiscal transfers** (`fiscalTransfer_t`) — ~40 Md€/yr CSG/FSV/État transfers, tapering to zero as `legacyFrac_t → 0`; three modes: full, no-debt, none.
+- **K_retirees_bal tracking** — separate retirees' accumulated pot inside the balanced cascade; prevents cross-subsidisation between worker savings and pension payouts.
+- **Canonical mode switches** — Diversification / Mode Chilien / Mode Suédois toggles in the Modes canoniques UI panel.
 - **Simplified view** (`#/simple`) — 3 scenarios, 5 sliders, narrative cards for lay audiences.
 - **Hypotheses page** (`#/hypotheses`) — every §3 parameter with default, kind, and rationale.
-- **179 tests** — unit invariants, reference-trace regression against `tests/fixtures/v1.1-default-trace.json`, and 1000-config property-based suite (all passing).
+- **232 tests** — unit invariants, fiscal-transfer invariants, recognition bond invariants (coupon service + issuance), reference-trace regression against `tests/fixtures/v1.1-default-trace.json`, and 1000-config property-based suite (all passing).
 
 ---
 
-## Default scenario results (`v1_default` preset, v2.0 overlapping mode)
+## Default scenario results (`v1_default` preset, v2.1 balanced cascade)
 
-The overlapping cascade eliminates transition debt accumulation under default parameters: bucket-4 contribution cross-subsidy covers the early-years PAYG deficit before D_t can compound, and the cascade debt-repayment bucket clears any residual. All values from the live engine at current HEAD.
+The balanced cascade with fiscal transfers maintains a clean trajectory under default parameters: the 75 % surplus sweep cap keeps debt repayment from crowding out the capi bonus, and the actuarial bonus cap prevents late-horizon payout decline after legacy-cohort phase-out. All values from the live engine at current HEAD.
 
 | KPI | Value | Notes |
 |---|---|---|
@@ -157,7 +195,7 @@ The overlapping cascade eliminates transition debt accumulation under default pa
 
 ---
 
-## Preset summary (v2.0 overlapping mode)
+## Preset summary (v2.1 balanced cascade, fiscalTransferMode: 'full')
 
 | Preset | Peak D_t | Debt-free | CI total | K_t Y69 | Disposition |
 |---|---|---|---|---|---|
@@ -174,7 +212,7 @@ The overlapping cascade eliminates transition debt accumulation under default pa
 
 ## Walkthrough — 5-stage transition narrative (`#/walkthrough`)
 
-Each stage builds on the previous against `realistic` demographics. All figures are from the v2.0 overlapping engine.
+Each stage builds on the previous against `realistic` demographics. All figures are from the v2.1 balanced cascade engine.
 
 | # | Stage | Peak transition D_t | Peak total debt¹ | Transition debt-free | K_t Y69 | Disposition |
 |---|---|---|---|---|---|---|
@@ -229,27 +267,42 @@ Each stage builds on the previous against `realistic` demographics. All figures 
 | v1.1 | Archived | Per-cohort accrued PAYG rights; fixed 50–150 Md€/yr understatement | — |
 | v1.2 | Archived | τ_K stock levy, GE penalty, endogenous spread | — |
 | v1.3 | Archived | Δτ_e employer cut, surplus-growth buffer θ | — |
-| **v2.0** | **Live** | Overlapping cascade, accounting-identity capiAssetShare_t, 6 dead levers removed | `v1.1-default-trace.json` (legacy-mode backward compat) |
+| v2.0 | Archived | Overlapping cascade, accounting-identity capiAssetShare_t, 6 dead levers removed | `v1.1-default-trace.json` (legacy-mode backward compat) |
+| **v2.1** | **Live** | Balanced cascade (K_retirees_bal, actuarial bonus cap, 75 % sweep cap), GE recalibration (geKneeRatio 3×/8×), fiscal transfers (CSG/FSV/État ~40 Md€/yr), canonical mode switches, recognition bonds with inflation-indexed coupon service (PR21b/c) | `v1.1-default-trace.json` (legacy-mode backward compat unchanged) |
 
-The `v1.1-default-trace.json` fixture governs the legacy-mode regression contract. The v2.0 overlapping-mode contract is validated by the cascade waterfall invariant tests (179 tests total).
+The `v1.1-default-trace.json` fixture governs the legacy-mode regression contract. The v2.1 balanced-cascade contract is validated by the 232-test invariant suite.
 
 ---
 
 ## Technical stack
 
-React 19 + Vite 7 + Recharts. Single-page application, no backend. Auto-deployed to Vercel on push to `main`. Tests: Vitest, 179/179 passing (unit invariants, 70-year × 113-field reference-trace regression, 1000-config property-based suite).
+React 19 + Vite 7 + Recharts. Single-page application, no backend. Auto-deployed to Vercel on push to `main`. Tests: Vitest, 232/232 passing (unit invariants, 70-year × 113-field reference-trace regression, 1000-config property-based suite).
 
 ---
 
 ## Roadmap
 
-### v2.1 — Actuarial + stochastic (next)
+### v2.1 (live) — Balanced cascade + fiscal transfers
+
+- **Balanced cascade** (`cashFlowMode: 'balanced'`) with seven ordered steps, K_retirees_bal state variable, actuarial bonus cap, and 75 % surplus sweep cap.
+- **GE recalibration** — UI_CONFIG uses geKneeRatio = 3.0 / geFloorRatio = 8.0 (empirically calibrated to Norway SWF precedent); DEFAULT_CONFIG unchanged for test-fixture backward-compat.
+- **Fiscal transfers** — `fiscalTransfer_t` tapers from ~40 Md€/yr as `legacyFrac_t → 0`; three modes (full / no-debt / none).
+- **Canonical mode switches** — Diversification / Mode Chilien / Mode Suédois toggles in the Simulateur UI.
+- **Recognition bonds** (`chileMode: true`, PR21b/c) — accrued PAYG rights of transitional workers converted to state-issued bonds indexed to French inflation (zero redemption). Bond sizing: `bondIssuance_t = transitionalPaygExpGross_t / annuityRate_t`; credited to K_t; annual coupon service = `BR_t × iota` (debt-financed). UI table, CSV, and debt chart show `bondCouponService_t` when chileMode is active.
+- **232 tests**, all passing.
+
+### v2.2 — Swedish canonical mode + mode-specific UI (next)
+
+- **Swedish NDC variant** (`swedenMode: true`) — notional defined-contribution overlay: contribution credits accrue at a shadow rate linked to GDP growth; payouts from notional account balance.
+- **Mode-specific UI pages** — full chart and KPI restructuring for each canonical mode (Chilean and Swedish).
+
+### v3.0 — Actuarial + stochastic
 
 - **Actuarial demographic kernel** — replace parametric smoothstep with COR June 2025 + INSEE T60 table-driven `retireeIdx`, `activePopFactor`, `cohIdx`. Per-cohort survival mask fixes `legacyShareAvg_t` held-flat bias.
 - **Stochastic return module** — Monte Carlo over correlated `(r_c, r_f_portfolio)` shocks with sequence-risk analysis. Headline KPIs become P50 / P90 / P95 distributions.
 - **Guarantee fair-value KPI** — expected present value of guarantee calls, P95 annual maximum.
 
-### v3.0 — Policy realism
+### v4.0 — Policy realism
 
 - **Asset-liability management** — duration matching, mark-to-market guarantee, contingent-liability balance sheet.
 - **Legal-feasibility toggles** — Agirc-Arrco included/partial/excluded; CDC transfer gross/equity/surplus/none; HLM sale speed.

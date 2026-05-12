@@ -232,7 +232,7 @@ export const DEFAULT_CONFIG = {
 
   // §5.13a Canonical reform modes (PR #21 — engine flags only; UI in this PR,
   // full economic logic in a future PR).
-  chileMode: false,    // recognition bonds for pre-reform PAYG contributions
+  chileMode: false,    // recognition bonds for pre-reform PAYG contributions (indexed to French inflation)
   swedenMode: false,   // automatic balance mechanism (NDC-style)
 };
 
@@ -569,6 +569,9 @@ export function runSimulation(userConfig = {}) {
   // retired cohorts, preventing early-year floor inflation from including workers' pot.
   let K_retirees_bal = 0;
   let K_retirees_bal_prev = 0;  // end-of-prior-period retirees' pot (for taper)
+  // §5.15 Recognition bonds (PR #21b). Cumulative issuance accounting tracker;
+  // bonds are credited to K_t at issuance. 0 when chileMode=false.
+  let BR_t = 0;
   // §5.7 HLM stock tracker: recursive so hlmActive_t taper stops depleting U_state.
   let U_state = cfg.U0;
 
@@ -699,10 +702,13 @@ export function runSimulation(userConfig = {}) {
     // (25b) aggregate transitional PAYG expenditure on capi-cohort retirees'
     // accrued PAYG rights. Uses E0_legacy_t (post-Équinoxe) per §5.6.1
     // per-portion scoping rule.
-    const transitionalPaygExp_t = Math.max(
+    // In chileMode (§5.15) these obligations are converted to recognition bonds;
+    // the gross amount is preserved for bond sizing while the PAYG outflow = 0.
+    const transitionalPaygExpGross_t = Math.max(
       0,
       capiRetirees_t * legacyShareAvg_t * E0_legacy_t * I_factor_t,
     );
+    const transitionalPaygExp_t = cfg.chileMode ? 0 : transitionalPaygExpGross_t;
     // (25c) total PAYG outflow funded by the legacy fund.
     const totalLegacyOutflow_t = legacyExp_t + transitionalPaygExp_t;
     // Snapshot the pre-update value for the balanced cascade (§5.13 balanced uses
@@ -869,6 +875,36 @@ export function runSimulation(userConfig = {}) {
     annuityRate_t = cfg.r_f_annuity > 0.001
       ? cfg.r_f_annuity / (1 - Math.pow(1 + cfg.r_f_annuity, -T_ret_t))
       : 1 / T_ret_t;                                                            // (53)
+
+    // ---------- §5.15 Recognition bonds (PR #21b, PR #21c) ----------
+    // When chileMode is active, transitionalPaygExp_t was set to 0 above (PAYG
+    // pensions replaced by a funded mechanism). Instead, the state issues recognition
+    // bonds equal to the PV of accrued PAYG obligations, credited DIRECTLY to K_t
+    // at retirement. Pensions are then paid from the augmented funded pot via the
+    // normal balanced cascade (floor + bonus steps).
+    //
+    // Bond structure: indexed to French inflation (iota); zero redemption value.
+    // Each year the outstanding bond stock (BR_t) pays a coupon = BR_t × iota.
+    // Stock-flow at issuance: D_t ↑ (state recognises obligation as explicit debt);
+    //                         K_t ↑ by same (credited to capi pot).
+    // Stock-flow each year:   coupon service D_t ↑ by BR_t × iota (debt-financed).
+    //                         BR_t is monotonically non-decreasing (cumulative tracker).
+
+    // Annual coupon on outstanding bonds (use BR_t BEFORE this year's issuance).
+    const bondCouponService_t = cfg.chileMode ? BR_t * iota : 0;
+    if (bondCouponService_t > 0) {
+      D_t        += bondCouponService_t;                                           // (§5.15-c)
+      borrowed_t += bondCouponService_t;
+    }
+
+    let bondIssuance_t = 0;
+    if (cfg.chileMode && transitionalPaygExpGross_t > 0 && annuityRate_t > 1e-6) {
+      bondIssuance_t = transitionalPaygExpGross_t / annuityRate_t;
+      D_t        += bondIssuance_t;                                               // (§5.15-a)
+      borrowed_t += bondIssuance_t;
+      K_t        += bondIssuance_t;                                               // (§5.15-b) credited to funded pot
+      BR_t       += bondIssuance_t;                                               // cumulative accounting
+    }
 
     // Accumulate net capi contributions for the accounting-identity asset share.
     // Must happen before §5.12 uses capiAssetShare_t so the running sum reflects
@@ -1225,6 +1261,10 @@ export function runSimulation(userConfig = {}) {
       K_retirees_bal_t: K_retirees_bal,
       // PR #21: fiscal transfer diagnostics
       fiscalTransfer_t, capiCoverage_t, fiscalGap_t,
+      // PR #21b: recognition bond diagnostics (zero when chileMode=false)
+      // BR_t = cumulative bonds issued (diagnostic; equals ΔD_t from issuance).
+      BR_t, bondIssuance_t, bondCouponService_t,
+      transitionalPaygExpGross_t,
       // §5.10.1 (v1.2) tauK debt-reduction channel
       K_floor_t, tauKLevy_t,
       // §5.10.2 (v1.3) surplus-growth levy
