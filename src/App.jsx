@@ -148,7 +148,9 @@ export default function App() {
   const [params, setParams] = useState({
     ...DEFAULT_CONFIG,
     cashFlowMode: 'balanced',
-    fiscalTransferMode: 'full',   // PR #21: fiscal diversification on by default
+    geKneeRatio: 3.0,          // match UI_CONFIG recalibration (PR #19 fix)
+    geFloorRatio: 8.0,         // match UI_CONFIG recalibration (PR #19 fix)
+    fiscalTransferMode: 'full', // PR #21: fiscal diversification on by default
   })
   const [activePreset, setActivePreset] = useState('v1_default')
   const [showParams, setShowParams] = useState(true)
