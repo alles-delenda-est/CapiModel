@@ -1,8 +1,8 @@
-# Operating Theory — CapiModel v2.0 Pension-Transition Simulator
+# Operating Theory — CapiModel v2.1 Pension-Transition Simulator
 
-**Live version:** v2.0 (overlapping cascade waterfall, accounting-identity asset share)
-**Reference trace:** `tests/fixtures/v1.1-default-trace.json` (legacy-mode backward-compat contract)
-**Sections marked "planned"** refer to v2.1 / v3.0 features not in the live engine.
+**Live version:** v2.1 (balanced cascade waterfall, K_retirees_bal tracking, fiscal transfers, GE recalibration)
+**Reference trace:** `tests/fixtures/v1.1-default-trace.json` (legacy-mode backward-compat contract; balanced-mode contract validated by 229-test invariant suite)
+**Sections marked "planned"** refer to v2.2 / v3.0 features not in the live engine.
 
 ---
 
@@ -85,7 +85,7 @@ The model implements 60 numbered equations over a 70-year horizon (Y0 = 2027), t
 
 2. **Endogenous borrowing rate** — `r_d(t)` is a piecewise-linear premium over `r_d_base` (eq 34) kicking in at 150 % combined debt/GDP and steepening at 200 % and 300 %, capped at 20 %. The function is a **reduced-form stress heuristic for fiscal-risk pricing**, not a sovereign-debt model. Real sovereign crises are nonlinear; the smooth cap is an engineering bound. The premium responds to combined `D^{ext}_t + D_t` (not transition debt alone), a common implementation pitfall.
 
-3. **v2.0 cascade waterfall** — the principal innovation of v2.0 replaces the legacy v1.x waterfall. The real return on K_t is distributed through five ordered buckets: (floor) guaranteed annuity floor paid from full nominal K_avail → (4) legacy cross-subsidy from returns, then contribution top-up → (3) accumulated debt principal reduction → (5) reinvestment cap ≤ 20 % of real return → (6) capi bonus. See `CapiModel_overview.md` for the full bucket table. The transition levy (λ) and stock levy (τ_K) are no longer user-facing parameters — their effects are incorporated structurally into bucket 4 and bucket 3 respectively.
+3. **v2.1 balanced cascade waterfall** — the current UI default (`cashFlowMode: 'balanced'`). Tracks a separate **K_retirees_bal** pot (retirees' accumulated stake) and distributes through seven ordered steps: (1) K_retirees_bal nominal return preservation → (2) new retiree transfer → (3) guaranteed annuity floor from K_retirees_bal → (4) solvency buffer top-up → (5) debt sweep, capped at 75 % of surplus above floor (`debtSweepSurplusFrac: 0.75`) → (6) actuarial bonus, bounded by `K_retirees_bal × (annuityRate_t − annuityFloorRate) − capiDebtRepaid_t × retireeFrac_t` → (7) K_close reinvestment. The transition levy (λ) and stock levy (τ_K) are no longer user-facing parameters; their effects are incorporated structurally into steps 5 and 7 respectively. The v2.0 overlapping cascade remains available as `cashFlowMode: 'overlapping'` for comparison; legacy mode is `cashFlowMode: 'legacy'`. See `CapiModel_overview.md` for the full step table.
 
 4. **Active-population factor** — each demographic profile drives both the retiree headcount index and the active-population trajectory. The wage bill (`W_t`) and GDP (`GDP_t`) both scale by `activePopFactor(t)`. Without this, the model overstates labour-force capacity in pessimistic scenarios.
 
@@ -136,7 +136,7 @@ The model's GE coverage is deliberately asymmetric. This must be stated explicit
 
 | Channel | Coverage |
 |---|---|
-| Capi return compression at macroeconomic scale | **Covered** — GE penalty zeroes `r_c_eff` between `geKneeRatio` (2× GDP) and `geFloorRatio` (4× GDP) |
+| Capi return compression at macroeconomic scale | **Covered** — GE penalty zeroes `r_c_eff` between `geKneeRatio` (3× GDP in UI; 2× in legacy test DEFAULT_CONFIG) and `geFloorRatio` (8× GDP in UI; 4× in legacy test DEFAULT_CONFIG). Recalibrated in v2.1 per Norway SWF precedent (~6 %/yr at 340 % GDP). |
 | Active-population / GDP linkage | **Partially covered** — `activePopFactor(t)` scales W_t and GDP_t |
 | Labour supply response to retirement age | **Not covered** |
 | Wage response to employer contribution cuts | **Not covered** |
@@ -228,7 +228,7 @@ Backward compatibility: `demoMode: 'parametric'` reproduces bit-identical v1.x o
 ## Engineering philosophy
 
 - **Spec-driven implementation.** All semantics live in `cdc_legacy_fund_model.md`. Every non-trivial engine line carries a `// eq (N)` comment mapping to the spec. Implementers navigate the engine and spec together.
-- **Test invariants enforce §6.** Five conservation/non-negativity/boundary invariants are asserted at every `t` for every canned scenario and over 1000 randomly-sampled configurations. A failed invariant fails the test run. Currently 179 tests, all passing.
+- **Test invariants enforce §6.** Five conservation/non-negativity/boundary invariants are asserted at every `t` for every canned scenario and over 1000 randomly-sampled configurations. A failed invariant fails the test run. Currently 229 tests, all passing.
 - **Reference-trace regression.** The default-preset 70-year × every-field trace is captured to a JSON fixture as a contract. Engine changes that alter default output fail loudly and require explicit per-field fixture-update justification.
 - **Dual-LLM review process.** Each task PR is reviewed by a separate independent LLM in addition to the human reviewer before merge.
 - **One commit per logical unit.** Commit messages of the form `feat: <topic> — §X.Y eq (N–M)` give reviewers a per-equation entry point into the diff.
@@ -251,6 +251,16 @@ Backward compatibility: `demoMode: 'parametric'` reproduces bit-identical v1.x o
 - **Accounting-identity capiAssetShare.** Replaced the parametric 35 % smoothstep with `min(1, cumulative net contributions / K_t)` — no free parameter.
 - **Six redundant levers removed from UI** (alpha, lambda, Tlambda, phiF, thetaBuffer, tauK): their effects are now structural in the cascade or hardcoded to their natural values.
 
+### v2.1
+- **Balanced cascade waterfall (§5.13).** The new UI default. Adds K_retirees_bal state variable tracking only retirees' accumulated stake; prevents cross-subsidisation between worker savings and pension payouts. Key invariant: capi payout is monotonically non-decreasing after capi cohort first retires.
+- **Actuarial bonus cap.** Bonus bounded by `K_retirees_bal × (annuityRate_t − annuityFloorRate) − capiDebtRepaid_t × retireeFrac_t`. This was the root cause of the late-horizon capi payout decline observed in v2.0: without a cap tied to the annuity rate, the bonus could over-distribute from the real-return cascade, depleting K_retirees_bal.
+- **75 % surplus sweep cap** (`debtSweepSurplusFrac`). Prevents debt repayment from crowding out the capi bonus when D_t > 0. The remaining 25 % of surplus above floor is preserved for capi retirees regardless of debt level.
+- **GE recalibration.** UI_CONFIG uses geKneeRatio = 3.0 / geFloorRatio = 8.0 (Norway SWF precedent); DEFAULT_CONFIG unchanged (2.0/4.0) for test-fixture backward-compatibility. The v1.x 4× floor created an implausible scenario where a fund at K/GDP = 4 earned 0 % real return.
+- **Fiscal transfers** (`fiscalTransfer_t`). ~40 Md€/yr CSG/FSV/État transfers taper to zero as `legacyFrac_t → 0`. Bug discovered and fixed: toggling transfers on with default GE params (2.0/4.0) caused the GE floor to trigger early, suppressing r_c_eff to near zero and depleting K_retirees_bal. Fix: initial App.jsx state now explicitly overrides to recalibrated GE params (3.0/8.0).
+- **Canonical mode UI.** Three toggle groups (Diversification / Mode Chilien / Mode Suédois) in the Modes canoniques panel.
+- **Chilean recognition bonds** (`chileMode: true`, PR21b). Accrued PAYG rights of transitional workers converted to state-issued bonds credited directly to K_t at retirement. Bond sizing: `bondIssuance_t = transitionalPaygExpGross_t / annuityRate_t`. State borrows D_t↑ at issuance; `transitionalPaygExp_t = 0` in chileMode; `BR_t` is a cumulative non-decreasing tracker. Key pedagogical question: does front-loading bond issuance (D_t↑ at retirement) combined with funded K_t growth produce a lower total long-term obligation than PAYG?
+- **229 tests**, all passing.
+
 ---
 
 ## Demographic dominance — a preset-family result, not a general theorem
@@ -263,14 +273,19 @@ Other calibrations could make different factors the binding constraint: return a
 
 ## Roadmap
 
-### v2.1 — Stochastic and actuarial
+### v2.2 — Swedish canonical mode + mode-specific UI (next)
+
+- **Swedish NDC variant** (`swedenMode: true`): notional DC overlay — contribution credits accrue at shadow rate tied to GDP growth; payouts from notional account balance rather than real funded pot.
+- **Mode-specific UI pages**: full chart and KPI restructuring per canonical mode (Chilean and Swedish, separate PR).
+
+### v3.0 — Stochastic and actuarial
 
 - Actuarial demographic kernel (COR + INSEE T60 tables)
 - Per-cohort survival mask for `legacyShareAvg_t`
 - Monte Carlo stochastic return paths; headline KPIs as P50/P90/P95 distributions
 - Guarantee fair-value KPIs (expected PV, P95 annual maximum)
 
-### v3.0 — Policy realism
+### v4.0 — Policy realism
 
 - Legal-feasibility toggles per lever (Agirc-Arrco included/partial/excluded; CDC net equity / gross / none; HLM pace)
 - Duration-matched asset-liability framework
