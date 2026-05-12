@@ -1848,3 +1848,55 @@ describe('PR #18 computeCapiAssetShareBalanced helper', () => {
   });
 });
 
+
+
+// =====================================================================
+// PR #21 — diversification des moyens de financement
+// =====================================================================
+describe('PR #21 fiscal transfer — diversification des moyens de financement', () => {
+  const BASE = { ...DEFAULT_CONFIG, cashFlowMode: 'balanced', geKneeRatio: 3.0, geFloorRatio: 8.0 };
+
+  it('mode none: fiscalTransfer_t = 0 every period', () => {
+    const rows = runSimulation({ ...BASE, fiscalTransferMode: 'none' });
+    for (const r of rows) {
+      expect(r.fiscalTransfer_t, `t=${r.t}`).toBe(0);
+    }
+  });
+
+  it('mode full: fiscalTransfer_t ≥ 0 and ≤ fiscalTransferBase every period', () => {
+    const cfg = { ...BASE, fiscalTransferMode: 'full', fiscalTransferBase: 40 };
+    const rows = runSimulation(cfg);
+    for (const r of rows) {
+      expect(r.fiscalTransfer_t, `t=${r.t} non-negative`).toBeGreaterThanOrEqual(0);
+      expect(r.fiscalTransfer_t, `t=${r.t} ≤ base`).toBeLessThanOrEqual(cfg.fiscalTransferBase + 1e-9);
+    }
+  });
+
+  it('mode full: transfer converges to 0 by end of simulation', () => {
+    // Once capiCoverage_t reaches 1 (capi floor covers full legacy outflow),
+    // transfer must be zero. Verify the final-period value is negligible.
+    const rows = runSimulation({ ...BASE, fiscalTransferMode: 'full', fiscalTransferBase: 40 });
+    const last = rows[rows.length - 1];
+    expect(last.fiscalTransfer_t, `final t=${last.t}`).toBeLessThan(1e-3);
+  });
+
+  it('mode full: capiCoverage_t ∈ [0, 1] every period', () => {
+    const rows = runSimulation({ ...BASE, fiscalTransferMode: 'full' });
+    for (const r of rows) {
+      expect(r.capiCoverage_t, `t=${r.t} ≥ 0`).toBeGreaterThanOrEqual(0);
+      expect(r.capiCoverage_t, `t=${r.t} ≤ 1`).toBeLessThanOrEqual(1 + 1e-9);
+    }
+  });
+
+  it('mode no-debt: fiscalGap_t ≥ 0 and D_t never increases from PAYG borrowing', () => {
+    const rowsFull   = runSimulation({ ...BASE, fiscalTransferMode: 'full' });
+    const rowsNoDebt = runSimulation({ ...BASE, fiscalTransferMode: 'no-debt' });
+    for (let i = 0; i < rowsNoDebt.length; i++) {
+      const r = rowsNoDebt[i];
+      expect(r.fiscalGap_t, `t=${r.t}`).toBeGreaterThanOrEqual(0);
+      // D_t in no-debt mode must never exceed full mode (no extra borrowing added)
+      expect(r.D_t, `t=${r.t} no-debt D_t ≤ full D_t`)
+        .toBeLessThanOrEqual(rowsFull[i].D_t + 1e-6);
+    }
+  });
+});
