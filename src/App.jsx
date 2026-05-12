@@ -145,7 +145,13 @@ export default function App() {
   const { currentPage, navigateTo } = useHashNavigation('simulateur')
   // PR #18: user-facing default is the BALANCED cascade. Engine DEFAULT_CONFIG
   // keeps 'legacy' so v1.3 tests stay bit-identical; App overrides here.
-  const [params, setParams] = useState({ ...DEFAULT_CONFIG, cashFlowMode: 'balanced' })
+  const [params, setParams] = useState({
+    ...DEFAULT_CONFIG,
+    cashFlowMode: 'balanced',
+    geKneeRatio: 3.0,          // match UI_CONFIG recalibration (PR #19 fix)
+    geFloorRatio: 8.0,         // match UI_CONFIG recalibration (PR #19 fix)
+    fiscalTransferMode: 'full', // PR #21: fiscal diversification on by default
+  })
   const [activePreset, setActivePreset] = useState('v1_default')
   const [showParams, setShowParams] = useState(true)
   const [showTable, setShowTable] = useState(true)
@@ -294,6 +300,84 @@ export default function App() {
               <span className="desc">{preset.description}</span>
             </button>
           ))}
+        </div>
+      </section>
+
+      {/* CANONICAL MODES (PR #21) */}
+      <section className="section canonical-modes-section">
+        <h2>Modes canoniques</h2>
+
+        {/* 1 — Diversification des moyens de financement */}
+        <div className="canonical-mode-group">
+          <div className="canonical-mode-label">
+            Diversification des moyens de financement
+            <span className="canonical-mode-hint">
+              Transferts CSG / FSV / État (~40 Md€/an) qui complètent les cotisations
+              et s'éteignent progressivement au fur et à mesure que le pilier capitalisé
+              devient autonome.
+            </span>
+          </div>
+          <div className="canonical-mode-buttons">
+            {[
+              { value: 'full',    label: 'Oui, comme ajd' },
+              { value: 'no-debt', label: 'Comme ajd, sans dette' },
+              { value: 'none',    label: 'Non' },
+            ].map(({ value, label }) => (
+              <button
+                key={value}
+                className={`canonical-btn ${params.fiscalTransferMode === value ? 'active' : ''}`}
+                onClick={() => setParam('fiscalTransferMode', value)}
+              >{label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* 2 — Mode Chilien (recognition bonds) */}
+        <div className="canonical-mode-group">
+          <div className="canonical-mode-label">
+            Mode Chilien — bonos de reconocimiento
+            <span className="canonical-mode-hint">
+              Crédite les travailleurs pour leurs cotisations PAYG antérieures via
+              des obligations de reconnaissance converties en droits capi à la retraite.
+              <em> Logique économique complète dans un prochain PR.</em>
+            </span>
+          </div>
+          <div className="canonical-mode-buttons">
+            {[
+              { value: false, label: 'Non' },
+              { value: true,  label: 'Oui' },
+            ].map(({ value, label }) => (
+              <button
+                key={String(value)}
+                className={`canonical-btn ${params.chileMode === value ? 'active' : ''}`}
+                onClick={() => setParam('chileMode', value)}
+              >{label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* 3 — Mode Suédois (automatic balance mechanism) */}
+        <div className="canonical-mode-group">
+          <div className="canonical-mode-label">
+            Mode Suédois — mécanisme d'équilibrage automatique
+            <span className="canonical-mode-hint">
+              Ajuste automatiquement les prestations si le ratio actifs/passifs du
+              système dépasse un seuil critique, évitant la spirale de dette.
+              <em> Logique économique complète dans un prochain PR.</em>
+            </span>
+          </div>
+          <div className="canonical-mode-buttons">
+            {[
+              { value: false, label: 'Non' },
+              { value: true,  label: 'Oui' },
+            ].map(({ value, label }) => (
+              <button
+                key={String(value)}
+                className={`canonical-btn ${params.swedenMode === value ? 'active' : ''}`}
+                onClick={() => setParam('swedenMode', value)}
+              >{label}</button>
+            ))}
+          </div>
         </div>
       </section>
 

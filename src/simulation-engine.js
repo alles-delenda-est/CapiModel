@@ -217,6 +217,23 @@ export const DEFAULT_CONFIG = {
   F0: 340,
   A0: 7.0,
   demoProfile: 'cor_central',
+
+  // §5.9a Diversification des moyens de financement (PR #21)
+  // Fiscal transfers from CSG, FSV, État etc. that supplement payroll
+  // contributions — modelled at the 2026 DREES ballpark (~40 Md€/yr).
+  // Mode 'none'    : no transfer (engine default; preserves legacy test fixtures)
+  // Mode 'full'    : transfer present + debt allowed (UI default)
+  // Mode 'no-debt' : transfer present but new borrowing is blocked (insolvency
+  //                  gap tracked separately as fiscalGap_t)
+  // The transfer tapers to zero as K_retirees_bal's 1.5%-floor payout can
+  // cover the full legacy outflow (i.e. the capi system is self-sustaining).
+  fiscalTransferBase: 40,
+  fiscalTransferMode: 'none',
+
+  // §5.13a Canonical reform modes (PR #21 — engine flags only; UI in this PR,
+  // full economic logic in a future PR).
+  chileMode: false,    // recognition bonds for pre-reform PAYG contributions
+  swedenMode: false,   // automatic balance mechanism (NDC-style)
 };
 
 // =================== Pure helpers ===================
@@ -551,6 +568,7 @@ export function runSimulation(userConfig = {}) {
   // PR #19: retirees' accumulated pot in balanced mode — tracks only the K belonging to
   // retired cohorts, preventing early-year floor inflation from including workers' pot.
   let K_retirees_bal = 0;
+  let K_retirees_bal_prev = 0;  // end-of-prior-period retirees' pot (for taper)
   // §5.7 HLM stock tracker: recursive so hlmActive_t taper stops depleting U_state.
   let U_state = cfg.U0;
 
@@ -692,6 +710,9 @@ export function runSimulation(userConfig = {}) {
     const capiRetirees_prev_snap = capiRetirees_prev;
     // Persist the running-average state for the next iteration.
     capiRetirees_prev = capiRetirees_t;
+    // K_retirees_bal_prev is set at end-of-loop (after cascade) so the fiscal
+    // transfer taper in §5.9a can use last period's retirees' pot.
+    // (Initialised above as 0; updated below after the cascade block.)
 
     // ---------- §5.7 HLM proceeds ----------
     // v2.0: recursive stock tracking. ΔU_t = U_t × ρ × hlmActive_t so the taper
@@ -726,8 +747,25 @@ export function runSimulation(userConfig = {}) {
     // v1.0a eq (38): S0_csg_revenue_t added as a tax-side revenue stream that
     // applies to all retiree pension income (legacy + capi). Distinct from the
     // benefit-side reductions (eqs 21a/21b) which only affect legacy.
+    // §5.9a Fiscal transfer (PR #21): CSG/FSV/État supplements that keep the
+    // PAYG system solvent today.  Tapers proportionally to the fraction of
+    // retirees still on legacy pensions — this is cleanly monotone, bounded
+    // [0,1], and converges to zero as the final transitional cohort exits.
+    // `capiCoverage_t` is exported as 1 − legacyFrac for UI display (it
+    // represents the fraction of retirees now fully covered by capi).
+    let fiscalTransfer_t = 0;
+    let capiCoverage_t   = 0;
+    if (cfg.fiscalTransferMode !== 'none') {
+      const legacyFrac_t = retireeIdx_t > 1e-9
+        ? Math.min(1, legacyRetirees_t / retireeIdx_t)
+        : 0;
+      capiCoverage_t   = 1 - legacyFrac_t;
+      fiscalTransfer_t = (cfg.fiscalTransferBase ?? 40) * legacyFrac_t;
+    }
+
     const nonEmplrNet_t = fundReturn_t + H_t_proceeds + abatement_t
-                        + C_s_payg_t + S0_csg_revenue_t - debtInterest_t;       // (38)
+                        + C_s_payg_t + S0_csg_revenue_t - debtInterest_t
+                        + fiscalTransfer_t;                                      // (38′)
     // v1.1 eq (39'): deficit measured against TOTAL PAYG outflow
     // (legacy-cohort + transitional-cohort accrued rights), not legacy-cohort
     // alone. legacyExp_t is preserved as a separate diagnostic; the waterfall
@@ -760,9 +798,16 @@ export function runSimulation(userConfig = {}) {
     // SPEC AMBIGUITY 5: borrowed_t initialised to deficit-branch borrowing,
     // then incremented by capi shortfall in §5.13.
     let borrowed_t = 0;
+    let fiscalGap_t = 0;   // shortfall blocked from becoming debt in 'no-debt' mode
     if (netFlow_t < 0) {
       borrowed_t = -netFlow_t;
-      D_t = D_t + borrowed_t;                                                   // (42)
+      if (cfg.fiscalTransferMode === 'no-debt') {
+        // No new sovereign borrowing: gap is tracked but D_t doesn't grow.
+        fiscalGap_t = borrowed_t;
+        borrowed_t  = 0;
+      } else {
+        D_t = D_t + borrowed_t;                                                 // (42)
+      }
       F_t = F_t * (1 + cfg.pi);       // v1.2: compound at π (was: unchanged eq 26)
     } else {
       // alpha (PAYG-surplus-to-debt routing) is only active in legacy mode.
@@ -1178,6 +1223,8 @@ export function runSimulation(userConfig = {}) {
       guaranteeShortfall_t,
       // PR #19: retirees' accumulated pot tracker (balanced mode only; 0 in other modes)
       K_retirees_bal_t: K_retirees_bal,
+      // PR #21: fiscal transfer diagnostics
+      fiscalTransfer_t, capiCoverage_t, fiscalGap_t,
       // §5.10.1 (v1.2) tauK debt-reduction channel
       K_floor_t, tauKLevy_t,
       // §5.10.2 (v1.3) surplus-growth levy
@@ -1190,6 +1237,9 @@ export function runSimulation(userConfig = {}) {
       pvLegacyCum_t: pvLegacyCum,
       pvCapiPayoutCum_t: pvCapiPayoutCum,
     });
+
+    // Update K_retirees_bal_prev for next iteration's fiscal transfer taper.
+    K_retirees_bal_prev = K_retirees_bal;
   }
   return rows;
 }

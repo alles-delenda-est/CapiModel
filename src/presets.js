@@ -25,6 +25,9 @@ const UI_CONFIG = {
   cashFlowMode: 'balanced',
   geKneeRatio: 3.0,
   geFloorRatio: 8.0,
+  // PR #21: fiscal transfers enabled ('full') for all app-facing presets.
+  // 'none' kept as DEFAULT_CONFIG engine default to preserve test fixtures.
+  fiscalTransferMode: 'full',
 };
 
 /**
