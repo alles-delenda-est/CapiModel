@@ -1017,11 +1017,12 @@ export function runSimulation(userConfig = {}) {
         : (D_to_GDP_t >= sweepStart ? 1 : 0);
 
       // 9. Debt sweep capacity: min of all caps and remaining D.
+      const surplusSweepCap_t = (cfg.debtSweepSurplusFrac ?? 0.75) * surplusAboveFloor_t;
       const returnSweepCap_t = (cfg.debtSweepShare  ?? 0.50) * Math.max(0, realReturn_t);
       const kSweepCap_t      = (cfg.debtSweepKCap   ?? 0.015) * K_open_t;
       const gdpSweepCap_t    = (cfg.debtSweepGdpCap ?? 0.01)  * GDP_t;
       debtSweepCapacity_t = Math.min(
-        surplusAboveFloor_t,
+        surplusSweepCap_t,
         returnSweepCap_t,
         kSweepCap_t,
         gdpSweepCap_t,

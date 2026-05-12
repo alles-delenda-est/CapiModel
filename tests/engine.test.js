@@ -1693,7 +1693,15 @@ describe('PR #18 balanced cashFlowMode — invariants', () => {
     }
   });
 
-  // Invariant 3 — debt sweep is capped on all three axes.
+  // Invariant 3 — debt sweep is capped on all four axes.
+  it('Invariant 3: capiDebtRepaid_t respects share-of-surplus cap', () => {
+    for (const r of rows) {
+      const cap = (BAL_CFG.debtSweepSurplusFrac ?? 0.75) * (r.surplusAboveFloor_t ?? 0);
+      expect(r.capiDebtRepaid_t, `t=${r.t} share-of-surplus cap`)
+        .toBeLessThanOrEqual(cap + 1e-6);
+    }
+  });
+
   it('Invariant 3: capiDebtRepaid_t respects share-of-return cap', () => {
     for (const r of rows) {
       const cap = (BAL_CFG.debtSweepShare ?? 0.50) * Math.max(0, r.fundReturnCapi_t);
