@@ -352,12 +352,12 @@ export default function App() {
           <div className="canonical-mode-label">
             Mode Chilien — obligations de reconnaissance
             <span className="canonical-mode-hint">
-              Remplace les flux PAYG transitionnels par des obligations d'État indexées
-              sur l'inflation française (coupon = BR_t × iota, zéro rachat). Les obligations
-              sont créditées directement au pot capi à la retraite (D_t↑, K_t↑).
-              Paramètres legacy restent actifs pour les retraités PAYG purs ; les paramètres
-              transitionnels (Équinoxe depth, E0, legacyShare) déterminent maintenant le
-              volume des émissions plutôt que les flux PAYG. Voir onglet <strong>Obligations</strong> pour les graphiques dédiés.
+              Émet à t=0 un stock unique d'obligations d'État zéro coupon indexées sur
+              l'inflation (DL 3500 chilien). Valeur totale = NPV des droits accumulés de tous
+              les cotisants transitionnels. BR_t croît à l'inflation et se rembourse lors de la
+              retraite de chaque cohorte (K_t↑). Le fonds de remboursement (CDC + HLM + économies
+              Équinoxe) couvre partiellement le stock ; le solde est l'obligation nette résiduelle.
+              Voir onglet <strong>Obligations</strong> pour les graphiques dédiés.
             </span>
           </div>
           <div className="canonical-mode-buttons">
