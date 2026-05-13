@@ -170,20 +170,6 @@ const equinoxeAndLabour = {
   },
 };
 
-/**
- * chileMode_default — Mode Chilien base case.
- * Recognition bonds replace transitional PAYG flow; all other parameters at
- * UI defaults. Pedagogical: compare total bond cost vs PAYG counterfactual.
- */
-const chileMode_default = {
-  label: 'Mode Chilien — base',
-  description: 'Obligations de reconnaissance (iota-indexed, zéro rachat) remplacent les flux PAYG transitionnels. Tous autres paramètres aux valeurs UI par défaut. Comparer le coût total obligations vs contrefactuel PAYG.',
-  params: {
-    ...UI_CONFIG,
-    chileMode: true,
-  },
-};
-
 export const PRESETS = {
   v1_default,
   v1_optimiste,
@@ -191,7 +177,7 @@ export const PRESETS = {
   equinoxeOnly,
   labourHousingOnly,
   equinoxeAndLabour,
-  chileMode_default,
+  // chileMode is a canonical toggle in the simulator UI, not a preset.
 };
 
 /**

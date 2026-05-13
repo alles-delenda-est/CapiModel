@@ -628,7 +628,8 @@ export function runSimulation(userConfig = {}) {
 
     // ---------- §5.4 Retirement age & cohort routing ----------
     const A_R_t = retirementAge(t, cfg);                                        // (12)
-    const sigma_capi_t = sigmaCapi(t, cfg);                                     // (15)
+    // In chileMode all worker contributions flow to capitalisation from t=0 (§5.15).
+    const sigma_capi_t = cfg.chileMode ? 1 : sigmaCapi(t, cfg);                // (15)
     const C_s_capi_t = C_s_t * sigma_capi_t;                                    // (16)
     const C_s_payg_t = C_s_t * (1 - sigma_capi_t);                              // (17)
 
@@ -786,7 +787,10 @@ export function runSimulation(userConfig = {}) {
     const emplrAvail_t = C_e_t * (1 - phiF_eff);                               // (40)
 
     let emplrToLeg_t, emplrToCap_t;
-    if (deficit_t <= 0) {
+    if (cfg.chileMode) {
+      // All employer contributions to capi — legacy deficit fully debt-financed (§5.15).
+      emplrToLeg_t = 0;            emplrToCap_t = C_e_t;
+    } else if (deficit_t <= 0) {
       emplrToLeg_t = 0;            emplrToCap_t = C_e_t;
     } else if (deficit_t <= emplrAvail_t) {
       emplrToLeg_t = deficit_t;    emplrToCap_t = C_e_t - deficit_t;
@@ -877,24 +881,26 @@ export function runSimulation(userConfig = {}) {
       ? cfg.r_f_annuity / (1 - Math.pow(1 + cfg.r_f_annuity, -T_ret_t))
       : 1 / T_ret_t;                                                            // (53)
 
-    // ---------- §5.15 Recognition bonds (PR #21b, PR #21c, PR #23) ----------
-    // When chileMode is active, transitionalPaygExp_t was set to 0 above (PAYG
-    // pensions replaced by bond coupons). The state issues recognition bonds with
-    // face value = NPV of each retiring cohort's accrued pension rights, credited
-    // to K_t. The bond IS the pension annuity: its annual coupon = the post-Équinoxe
-    // pension the worker would have received under PAYG, inflation-adjusted each year.
-    // Bonds extinguish at each bondholder's death — modelled implicitly as
-    // transitionalPaygExpGross_t → 0 as transitional cohorts age out.
+    // ---------- §5.15 Recognition bonds (PR #21b/c, PR #23) ----------
+    // In chileMode the state issues principal-inflation-linked recognition bonds:
+    //   - Issued to each retiring transitional cohort: face value = NPV of their
+    //     post-Équinoxe accrued pension rights (= transitionalPaygExpGross_t / annuityRate_t).
+    //   - Principal grows at annuityRate_t (≈ iota + real annuity return), mirroring
+    //     the Chilean CPI+4% structure.
+    //   - Annual coupon = transitionalPaygExpGross_t (the actual pension paid).
+    //   - Extinguishes at bondholder death — modelled via the aggregate decline of
+    //     transitionalPaygExpGross_t → 0 as transitional cohorts age out.
     //
-    // Bond structure: perpetual, coupon = transitionalPaygExpGross_t (aggregate annual
-    // pension flow for all living transitional workers). Zero redemption value.
-    // Phased issuance at each cohort's retirement: economically equivalent to a
-    // single t=0 issuance because issuance and coupon begin simultaneously.
+    // From t=0 ALL worker and employer contributions route to capi (§5.4/§5.9 above).
+    // Legacy pensions are therefore fully debt-financed; bonds make this explicit.
     //
-    // Stock-flow at issuance: D_t ↑ by NPV (explicit debt recognition);
-    //                         K_t ↑ by NPV (credited to capi pot).
-    // Stock-flow each year:   coupon service D_t ↑ by transitionalPaygExpGross_t.
-    //                         BR_t is monotonically non-decreasing (cumulative tracker).
+    // Cash-flow accounting:
+    //   Issuance: D_t ↑ by NPV; K_t ↑ by NPV (bond credited to capi pot).
+    //   Coupon:   D_t ↑ by transitionalPaygExpGross_t (replaces suppressed PAYG).
+    // Bond stock (BR_t) uses NPV-annuity dynamics — NOT a monotone cumulative sum:
+    //   BR_t = BR_prev × (1+annuityRate_t) + issuance_t − coupon_t
+    //   This is the outstanding PV of future pension obligations; naturally → 0
+    //   as all transitional workers die.
 
     // Annual coupon = pension paid to living transitional retirees (replaces PAYG).
     const bondCouponService_t = cfg.chileMode ? transitionalPaygExpGross_t : 0;
@@ -910,7 +916,13 @@ export function runSimulation(userConfig = {}) {
       D_t        += bondIssuance_t;                                               // (§5.15-a)
       borrowed_t += bondIssuance_t;
       K_t        += bondIssuance_t;                                               // (§5.15-b) credited to funded pot
-      BR_t       += bondIssuance_t;                                               // cumulative accounting
+    }
+
+    // Bond stock: NPV-annuity dynamics. BR_t is the PV of remaining future pension
+    // obligations — grows at annuityRate (inflation-linked) and depletes via coupons.
+    if (cfg.chileMode) {
+      BR_t = BR_t * (1 + annuityRate_t) + bondIssuance_t - bondCouponService_t;
+      BR_t = Math.max(0, BR_t);                                                   // float guard
     }
 
     // Accumulate net capi contributions for the accounting-identity asset share.

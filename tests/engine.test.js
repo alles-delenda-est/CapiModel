@@ -1924,11 +1924,10 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
     }
   });
 
-  it('chileMode=true: BR_t is non-decreasing (cumulative issuance tracker)', () => {
+  it('chileMode=true: BR_t is non-negative every period (NPV annuity stock)', () => {
     const rows = runSimulation(CHILE_CFG);
-    for (let i = 1; i < rows.length; i++) {
-      expect(rows[i].BR_t, `t=${rows[i].t} >= previous`)
-        .toBeGreaterThanOrEqual(rows[i - 1].BR_t - 1e-9);
+    for (const r of rows) {
+      expect(r.BR_t, `t=${r.t} non-negative`).toBeGreaterThanOrEqual(-1e-9);
     }
   });
 
@@ -1980,13 +1979,37 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
     }
   });
 
-  it('chileMode=true: BR_t grows only while transitionalPaygExpGross_t > 0', () => {
+  it('chileMode=true: bondIssuance_t = 0 after last transitionalPaygExpGross_t > 0', () => {
+    // Bonds are issued only for cohorts with accrued PAYG rights; after the last
+    // such cohort retires, no new bonds are issued.
     const rows = runSimulation(CHILE_CFG);
     const lastGrossPositive = [...rows].reverse().find(r => r.transitionalPaygExpGross_t > 1e-6);
     if (lastGrossPositive) {
       for (const r of rows.filter(r => r.t > lastGrossPositive.t)) {
         expect(r.bondIssuance_t, `t=${r.t} no new bonds`).toBeLessThan(1e-6);
       }
+    }
+  });
+
+  it('chileMode=true: sigma_capi_t = 1 every period (100% contributions to capi)', () => {
+    const rows = runSimulation(CHILE_CFG);
+    for (const r of rows) {
+      expect(r.sigma_capi_t, `t=${r.t} sigma=1`).toBeCloseTo(1, 9);
+    }
+  });
+
+  it('chileMode=true: C_s_payg_t = 0 every period', () => {
+    const rows = runSimulation(CHILE_CFG);
+    for (const r of rows) {
+      expect(r.C_s_payg_t, `t=${r.t} no payg contributions`).toBeCloseTo(0, 6);
+    }
+  });
+
+  it('chileMode=true: emplrToCap_t = C_e_t every period (employer 100% to capi)', () => {
+    const rows = runSimulation(CHILE_CFG);
+    for (const r of rows) {
+      expect(r.emplrToCap_t, `t=${r.t} employer all to capi`)
+        .toBeCloseTo(r.C_e_t, 6);
     }
   });
 
