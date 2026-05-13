@@ -213,13 +213,13 @@ export function extractKPIs(rows) {
   const employerTaxCutInitial = employerCutInitialRow?.employerCutInitial_t ?? 0;
   const employerTaxCutEventual = last.employerCutEventual_t ?? 0;
   // Recognition bond KPIs (zero when chileMode=false).
-  const totalBondsIssued = last.BR_t ?? 0;
-  const totalCouponPaid = last.cumBondCoupon_t ?? 0;
+  // New model: one-off issuance at t=0 (chileB0), zero-coupon, redeems at each cohort retirement.
+  const totalBondsIssued = rows[0]?.bondIssuance_t ?? 0;  // one-off at t=0 = chileB0
+  const totalRepayFund = last.cumRepayFund_t ?? 0;
+  const bondNetObligation = (last.BR_t ?? 0) - totalRepayFund;  // outstanding at end of horizon
+  const totalBondRedemptions = rows.reduce((s, r) => s + (r.bondRedemption_t ?? 0), 0);
   // PAYG counterfactual: sum of what transitional PAYG flow would have been.
   const totalPaygCounterfactual = rows.reduce((s, r) => s + (r.transitionalPaygExpGross_t ?? 0), 0);
-  // Net bond cost vs PAYG: (issuance + coupon) − PAYG counterfactual.
-  // Positive = bonds cost more over the horizon; negative = bonds cheaper.
-  const bondNetCostVsPayg = (totalBondsIssued + totalCouponPaid) - totalPaygCounterfactual;
   return {
     peakDebt, peakDebtYear, debtFreeYear, totalInterest,
     finalCapi, finalCapiReal, netPosition, minSpread, S0,
@@ -227,6 +227,10 @@ export function extractKPIs(rows) {
     pvCapiPayoutTotal: last.pvCapiPayoutCum_t,
     totalCapiShortfall, peakCapiShortfall, firstShortfallYear,
     employerTaxCutInitial, employerTaxCutEventual,
-    totalBondsIssued, totalCouponPaid, totalPaygCounterfactual, bondNetCostVsPayg,
+    totalBondsIssued, totalRepayFund, bondNetObligation, totalBondRedemptions,
+    totalPaygCounterfactual,
+    // Keep for backward compat but these are now 0 in the new model:
+    totalCouponPaid: last.cumBondCoupon_t ?? 0,
+    bondNetCostVsPayg: 0,
   };
 }

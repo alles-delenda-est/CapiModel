@@ -569,10 +569,30 @@ export function runSimulation(userConfig = {}) {
   // retired cohorts, preventing early-year floor inflation from including workers' pot.
   let K_retirees_bal = 0;
   let K_retirees_bal_prev = 0;  // end-of-prior-period retirees' pot (for taper)
-  // §5.15 Recognition bonds (PR #21b). Cumulative issuance accounting tracker;
-  // bonds are credited to K_t at issuance. 0 when chileMode=false.
-  let BR_t = 0;
-  let cumBondCoupon = 0; // running total of coupon payments (diagnostic)
+  // §5.15 Recognition bonds (PR #21b/c, PR #23). Zero-coupon CPI-linked bonds.
+  // In chileMode: BR_t initialised to chileB0 (total NPV at t=0); 0 otherwise.
+  // cumBondCoupon kept for backward-compat diagnostics (always 0 in new model).
+  // cumRepayFund: accumulated CDC returns + HLM proceeds + Équinoxe savings.
+
+  // In chileMode: compute B_0 = total recognition bond NPV at t=0, discounted at iota.
+  // Since transitionalPaygExpGross_t and annuityRate_t are independent of contribution
+  // routing (D_t, K_t), a chileMode=false dry run gives exact values. No recursion
+  // risk — the dry run has chileMode=false so skips this block.
+  let chileB0 = 0;
+  if (cfg.chileMode) {
+    const dryRows = runSimulation({ ...cfg, chileMode: false });
+    // iota = min(fisher(w_r, pi), pi) — same formula used inside the main loop.
+    const iotaDry = Math.min(fisher(cfg.w_r, cfg.pi), cfg.pi);
+    chileB0 = dryRows.reduce((sum, r, i) => {
+      const ai = r.transitionalPaygExpGross_t ?? 0;
+      const ar = r.annuityRate_t ?? 0;
+      return (ar > 1e-6 && ai > 0) ? sum + (ai / ar) / Math.pow(1 + iotaDry, i) : sum;
+    }, 0);
+  }
+
+  let BR_t = chileB0;
+  let cumBondCoupon = 0; // running total of coupon payments (always 0 in new model, kept for compat)
+  let cumRepayFund = 0;  // accumulated repayment fund (CDC returns + HLM + Équinoxe)
   // §5.7 HLM stock tracker: recursive so hlmActive_t taper stops depleting U_state.
   let U_state = cfg.U0;
 
@@ -882,48 +902,51 @@ export function runSimulation(userConfig = {}) {
       : 1 / T_ret_t;                                                            // (53)
 
     // ---------- §5.15 Recognition bonds (PR #21b/c, PR #23) ----------
-    // In chileMode the state issues principal-inflation-linked recognition bonds:
-    //   - Issued to each retiring transitional cohort: face value = NPV of their
-    //     post-Équinoxe accrued pension rights (= transitionalPaygExpGross_t / annuityRate_t).
-    //   - Principal grows at annuityRate_t (≈ iota + real annuity return), mirroring
-    //     the Chilean CPI+4% structure.
-    //   - Annual coupon = transitionalPaygExpGross_t (the actual pension paid).
-    //   - Extinguishes at bondholder death — modelled via the aggregate decline of
-    //     transitionalPaygExpGross_t → 0 as transitional cohorts age out.
+    // Zero-coupon principal-inflation-linked bonds (Chilean DL 3500 structure):
+    //   - One-time issuance at t=0: D_t ↑ by chileB0 (total NPV of all transitional
+    //     workers' accrued pension rights). BR_t initialised to chileB0.
+    //   - Principal grows at iota (CPI-indexed) until each cohort's retirement.
+    //   - At retirement: bond REDEEMS → K_t credited with NPV of that cohort's pension.
+    //     Pension is then paid from K_t via the normal capi cascade (self-funded).
+    //   - No annual coupon during working life; bondCouponService_t = 0.
     //
-    // From t=0 ALL worker and employer contributions route to capi (§5.4/§5.9 above).
-    // Legacy pensions are therefore fully debt-financed; bonds make this explicit.
+    // Repayment fund: accumulates CDC returns + HLM proceeds + Équinoxe savings.
+    //   Outstanding net obligation at t = BR_t − cumRepayFund_t.
     //
-    // Cash-flow accounting:
-    //   Issuance: D_t ↑ by NPV; K_t ↑ by NPV (bond credited to capi pot).
-    //   Coupon:   D_t ↑ by transitionalPaygExpGross_t (replaces suppressed PAYG).
-    // Bond stock (BR_t) uses NPV-annuity dynamics — NOT a monotone cumulative sum:
-    //   BR_t = BR_prev × (1+annuityRate_t) + issuance_t − coupon_t
-    //   This is the outstanding PV of future pension obligations; naturally → 0
-    //   as all transitional workers die.
+    // All contributions route to capi from t=0 (§5.4/§5.9 above); legacy pensions
+    // for PAYG-only workers are debt-financed, repaid over time by the repayment fund.
 
-    // Annual coupon = pension paid to living transitional retirees (replaces PAYG).
-    const bondCouponService_t = cfg.chileMode ? transitionalPaygExpGross_t : 0;
-    if (bondCouponService_t > 0) {
-      D_t        += bondCouponService_t;                                           // (§5.15-c)
-      borrowed_t += bondCouponService_t;
-      cumBondCoupon += bondCouponService_t;
-    }
-
-    let bondIssuance_t = 0;
-    if (cfg.chileMode && transitionalPaygExpGross_t > 0 && annuityRate_t > 1e-6) {
-      bondIssuance_t = transitionalPaygExpGross_t / annuityRate_t;
+    // One-time bond issuance at t=0: creates D_t liability.
+    const bondIssuance_t = (cfg.chileMode && t === 0 && chileB0 > 0) ? chileB0 : 0;
+    if (bondIssuance_t > 0) {
       D_t        += bondIssuance_t;                                               // (§5.15-a)
       borrowed_t += bondIssuance_t;
-      K_t        += bondIssuance_t;                                               // (§5.15-b) credited to funded pot
     }
 
-    // Bond stock: NPV-annuity dynamics. BR_t is the PV of remaining future pension
-    // obligations — grows at annuityRate (inflation-linked) and depletes via coupons.
-    if (cfg.chileMode) {
-      BR_t = BR_t * (1 + annuityRate_t) + bondIssuance_t - bondCouponService_t;
-      BR_t = Math.max(0, BR_t);                                                   // float guard
+    // Zero-coupon: no annual coupon service during working life.
+    const bondCouponService_t = 0;
+
+    // Bond redemption at each cohort's retirement: bond matures into K_t.
+    let bondRedemption_t = 0;
+    if (cfg.chileMode && transitionalPaygExpGross_t > 0 && annuityRate_t > 1e-6) {
+      bondRedemption_t = transitionalPaygExpGross_t / annuityRate_t;
+      K_t += bondRedemption_t;                                                   // (§5.15-b)
+      sumCapiContrib += bondRedemption_t;  // counts as funded contribution for asset-share
     }
+
+    // Bond stock: starts at chileB0, grows at iota (CPI), shrinks at each redemption.
+    if (cfg.chileMode) {
+      BR_t = Math.max(0, BR_t * (1 + iota) - bondRedemption_t);
+    }
+
+    // Repayment fund: CDC returns + HLM proceeds + Équinoxe savings.
+    const equinoxeSavings_t = cfg.chileMode
+      ? S0_legacy_t * Math.max(legacyRetirees_t, 0) + S0_csg_revenue_t
+      : 0;
+    const repayFund_t = cfg.chileMode
+      ? Math.max(0, fundReturn_t + H_t_proceeds + equinoxeSavings_t)
+      : 0;
+    if (cfg.chileMode) cumRepayFund += repayFund_t;
 
     // Accumulate net capi contributions for the accounting-identity asset share.
     // Must happen before §5.12 uses capiAssetShare_t so the running sum reflects
@@ -1280,10 +1303,11 @@ export function runSimulation(userConfig = {}) {
       K_retirees_bal_t: K_retirees_bal,
       // PR #21: fiscal transfer diagnostics
       fiscalTransfer_t, capiCoverage_t, fiscalGap_t,
-      // PR #21b/c: recognition bond diagnostics (zero when chileMode=false)
-      // BR_t = cumulative bonds issued; cumBondCoupon_t = running coupon total.
-      BR_t, bondIssuance_t, bondCouponService_t,
+      // PR #21b/c/PR#23: recognition bond diagnostics (zero when chileMode=false)
+      // BR_t = bond stock (starts at chileB0, grows at iota, redeems at each cohort retirement).
+      BR_t, bondIssuance_t, bondRedemption_t, bondCouponService_t,
       cumBondCoupon_t: cumBondCoupon,
+      repayFund_t, cumRepayFund_t: cumRepayFund,
       transitionalPaygExpGross_t,
       // §5.10.1 (v1.2) tauK debt-reduction channel
       K_floor_t, tauKLevy_t,

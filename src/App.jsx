@@ -108,8 +108,8 @@ function rowToChart(r) {
     bondCouponService: r.bondCouponService_t ?? 0,
     bondIssuanceChart: r.bondIssuance_t ?? 0,
     bondStock: r.BR_t ?? 0,
-    bondPaygCounterfactual: r.transitionalPaygExpGross_t ?? 0,
-    cumBondCoupon: r.cumBondCoupon_t ?? 0,
+    bondRedemption: r.bondRedemption_t ?? 0,
+    cumRepayFund: r.cumRepayFund_t ?? 0,
   }
 }
 
@@ -778,30 +778,30 @@ export default function App() {
             </h3>
             <div className="kpi-grid">
               <div className="kpi-card">
-                <h3>Total obligations émises</h3>
+                <h3>Obligations initiales B₀</h3>
                 <div className="kpi-value">{fmtMd(kpis.totalBondsIssued)} €</div>
-                <div className="kpi-sub">Stock cumulatif BR_t (t=69)</div>
+                <div className="kpi-sub">Émission unique à t=0 (NPV total droits acquis)</div>
               </div>
               <div className="kpi-card">
-                <h3>Coupons cumulés payés</h3>
-                <div className="kpi-value">{fmtMd(kpis.totalCouponPaid)} €</div>
-                <div className="kpi-sub">Σ BR_t × iota sur horizon</div>
+                <h3>Fonds de remboursement total</h3>
+                <div className="kpi-value">{fmtMd(kpis.totalRepayFund)} €</div>
+                <div className="kpi-sub">CDC + HLM + économies Équinoxe (cumulé)</div>
               </div>
               <div className="kpi-card">
-                <h3>Coût total obligations</h3>
-                <div className="kpi-value">{fmtMd(kpis.totalBondsIssued + kpis.totalCouponPaid)} €</div>
-                <div className="kpi-sub">Émissions + coupons</div>
+                <h3>Obligation nette résiduelle</h3>
+                <div className={`kpi-value ${kpis.bondNetObligation > 0 ? 'kpi-warn' : 'kpi-ok'}`}>
+                  {fmtMd(kpis.bondNetObligation)} €</div>
+                <div className="kpi-sub">BR_t final − fonds de remboursement cumulé</div>
               </div>
               <div className="kpi-card">
-                <h3>Contrefactuel PAYG</h3>
+                <h3>Transferts K_t (rachats)</h3>
+                <div className="kpi-value">{fmtMd(kpis.totalBondRedemptions)} €</div>
+                <div className="kpi-sub">Σ rachats obligation crédités au fonds capi</div>
+              </div>
+              <div className="kpi-card">
+                <h3>Contrefactuel PAYG total</h3>
                 <div className="kpi-value">{fmtMd(kpis.totalPaygCounterfactual)} €</div>
                 <div className="kpi-sub">Flux transitional PAYG si pas de chileMode</div>
-              </div>
-              <div className="kpi-card">
-                <h3>Surcoût net obligations vs PAYG</h3>
-                <div className={`kpi-value ${kpis.bondNetCostVsPayg > 0 ? 'kpi-bad' : 'kpi-ok'}`}>
-                  {fmtMd(kpis.bondNetCostVsPayg)} €</div>
-                <div className="kpi-sub">{kpis.bondNetCostVsPayg > 0 ? 'Obligations plus chères' : 'Obligations moins chères'} sur l'horizon</div>
               </div>
             </div>
           </>
@@ -926,7 +926,6 @@ export default function App() {
                 {kpis.debtFreeYear && <ReferenceLine yAxisId="left" x={kpis.debtFreeYear} stroke="var(--color-success)" strokeDasharray="4 4" />}
                 <Line yAxisId="left" type="monotone" dataKey="debt" stroke="#dc2626" strokeWidth={3} name="Dette (Md€)" dot={false} />
                 <Line yAxisId="right" type="monotone" dataKey="r_d" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" name="r_d effectif (%)" dot={false} />
-                {params.chileMode && <Line yAxisId="left" type="monotone" dataKey="bondCouponService" stroke="#f59e0b" strokeWidth={2} strokeDasharray="4 2" name="Coupon obl. reconn. (Md€)" dot={false} />}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -1002,49 +1001,49 @@ export default function App() {
         {/* Tab: Obligations — visible only when chileMode active */}
         <div style={{ visibility: activeChartTab === 'obligations' ? 'visible' : 'hidden', height: activeChartTab === 'obligations' ? 'auto' : 0, overflow: 'hidden' }}>
           {params.chileMode ? (
-            <>
+            <div>
               <div className="chart-container">
-                <h3>Flux annuels obligations (Md€/an)</h3>
+                <h3>Stock obligations vs fonds de remboursement (Md€)</h3>
                 <p className="chart-note">
-                  Émissions annuelles = PV de la pension transitionnelle à la retraite (BR issuance). Coupon annuel = stock × iota.
-                  Contrefactuel PAYG = flux que le régime par répartition aurait payé sans chileMode.
+                  Stock BR_t = obligations en circulation (émet à t=0, croît à l&apos;inflation, racheté à la retraite de chaque cohorte).
+                  Fonds de remboursement cumulé = CDC (rendements) + HLM + économies Équinoxe.
+                  L&apos;écart représente l&apos;obligation nette résiduelle de l&apos;État.
                 </p>
-                <ResponsiveContainer width="100%" height={320}>
-                  <ComposedChart data={chartData} margin={{ bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8 }} />
-                    <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8 }} tick={{ fontSize: 14 }} />
-                    <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} />
-                    <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
-                    <Bar dataKey="bondIssuanceChart" fill="#f59e0b" name="Émission obligation (Md€)" />
-                    <Line type="monotone" dataKey="bondCouponService" stroke="#dc2626" strokeWidth={2} name="Coupon annuel (Md€)" dot={false} />
-                    <Line type="monotone" dataKey="bondPaygCounterfactual" stroke="#6366f1" strokeWidth={2} strokeDasharray="6 3" name="Contrefactuel PAYG (Md€)" dot={false} />
+                <ResponsiveContainer width="100%" height={300}>
+                  <ComposedChart data={chartData} margin={{ top: 8, right: 24, bottom: 8, left: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }} />
+                    <Tooltip formatter={(v) => `${v?.toFixed(1)} Md€`} />
+                    <Legend />
+                    <Area yAxisId="left" type="monotone" dataKey="bondStock" fill="#fef3c7" stroke="#f59e0b" strokeWidth={2} name="Stock obligations BR_t (Md€)" dot={false} />
+                    <Line yAxisId="left" type="monotone" dataKey="cumRepayFund" stroke="#10b981" strokeWidth={2} name="Fonds de remboursement cumulé (Md€)" dot={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
-              <div className="chart-container">
-                <h3>Stock obligations & coupon cumulé (Md€)</h3>
+
+              <div className="chart-container" style={{ marginTop: '1.5rem' }}>
+                <h3>Rachats annuels d&apos;obligations à la retraite (Md€/an)</h3>
                 <p className="chart-note">
-                  BR_t = stock cumulatif obligations en circulation. Coupon cumulé = Σ BR × iota à date.
-                  La somme BR_t + coupon cumulé représente le coût total brut des obligations sur l'horizon.
+                  Montant annuel des obligations arrivant à échéance (= NPV pension de la cohorte partant en retraite cette année),
+                  crédité au fonds de capitalisation K_t. Stable les 15 premières années (aucune cohorte transitionnelle à la retraite),
+                  puis décroissant au fil des départs.
                 </p>
-                <ResponsiveContainer width="100%" height={320}>
-                  <ComposedChart data={chartData} margin={{ bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="year" tick={{ fontSize: 14 }} label={{ value: 'Année', position: 'insideBottom', offset: -8 }} />
-                    <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8 }} tick={{ fontSize: 14 }} />
-                    <Tooltip formatter={(v) => `${typeof v === 'number' ? fmtN(v) : v} Md€`} />
-                    <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
-                    <Area type="monotone" dataKey="bondStock" fill="#fef3c7" stroke="#f59e0b" strokeWidth={2} name="Stock obligations BR_t (Md€)" />
-                    <Line type="monotone" dataKey="cumBondCoupon" stroke="#dc2626" strokeWidth={2} name="Coupons cumulés (Md€)" dot={false} />
+                <ResponsiveContainer width="100%" height={260}>
+                  <ComposedChart data={chartData} margin={{ top: 8, right: 24, bottom: 8, left: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }} />
+                    <Tooltip formatter={(v) => `${v?.toFixed(1)} Md€`} />
+                    <Legend />
+                    <Bar yAxisId="left" dataKey="bondRedemption" fill="#f59e0b" name="Rachat obligation (Md€/an)" />
+                    <Bar yAxisId="left" dataKey="bondIssuanceChart" fill="#6366f1" name="Émission initiale t=0 (Md€)" />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
-            </>
-          ) : (
-            <div className="chart-container" style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-              <p>Activez le <strong>Mode Chilien</strong> dans les paramètres pour voir les graphiques d'obligations de reconnaissance.</p>
             </div>
+          ) : (
+            <p>Activez le <strong>Mode Chilien</strong> dans les paramètres pour voir les graphiques d&apos;obligations de reconnaissance.</p>
           )}
         </div>
 

@@ -1914,6 +1914,7 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
       expect(r.BR_t, `t=${r.t} BR_t`).toBe(0);
       expect(r.bondIssuance_t, `t=${r.t} issuance`).toBe(0);
       expect(r.bondCouponService_t, `t=${r.t} coupon`).toBe(0);
+      expect(r.bondRedemption_t, `t=${r.t} redemption`).toBe(0);
     }
   });
 
@@ -1938,12 +1939,46 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
     }
   });
 
-  it('chileMode=true: bondIssuance_t = 0 when transitionalPaygExpGross_t = 0', () => {
+  it('chileMode=true: bondIssuance_t = chileB0 at t=0 only (one-off issuance)', () => {
+    const rows = runSimulation(CHILE_CFG);
+    // t=0: big one-off issuance (chileB0 > 0)
+    expect(rows[0].bondIssuance_t, 't=0 one-off issuance').toBeGreaterThan(0);
+    // t>0: no more issuances
+    for (const r of rows.slice(1)) {
+      expect(r.bondIssuance_t, `t=${r.t} no issuance after t=0`).toBe(0);
+    }
+  });
+
+  it('chileMode=true: bondRedemption_t >= 0 every period', () => {
+    const rows = runSimulation(CHILE_CFG);
+    for (const r of rows) {
+      expect(r.bondRedemption_t, `t=${r.t}`).toBeGreaterThanOrEqual(-1e-9);
+    }
+  });
+
+  it('chileMode=true: bondRedemption_t = 0 when transitionalPaygExpGross_t = 0', () => {
     const rows = runSimulation(CHILE_CFG);
     for (const r of rows) {
       if (r.transitionalPaygExpGross_t < 1e-9) {
-        expect(r.bondIssuance_t, `t=${r.t} no issuance when no gross expense`).toBeLessThan(1e-9);
+        expect(r.bondRedemption_t, `t=${r.t}`).toBeLessThan(1e-9);
       }
+    }
+  });
+
+  it('chileMode=true: cumRepayFund_t is non-decreasing', () => {
+    const rows = runSimulation(CHILE_CFG);
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i].cumRepayFund_t, `t=${rows[i].t}`)
+        .toBeGreaterThanOrEqual(rows[i - 1].cumRepayFund_t - 1e-9);
+    }
+  });
+
+  it('chileMode=false: bondRedemption_t = 0, repayFund_t = 0, cumRepayFund_t = 0 every period', () => {
+    const rows = runSimulation({ ...BASE, chileMode: false });
+    for (const r of rows) {
+      expect(r.bondRedemption_t, `t=${r.t}`).toBe(0);
+      expect(r.repayFund_t, `t=${r.t}`).toBe(0);
+      expect(r.cumRepayFund_t, `t=${r.t}`).toBe(0);
     }
   });
 
@@ -1959,11 +1994,10 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
     expect(rows[0].bondCouponService_t, 't=0 no prior bonds').toBe(0);
   });
 
-  it('chileMode=true: bondCouponService_t equals transitionalPaygExpGross_t (coupon is the pension)', () => {
+  it('chileMode=true: bondCouponService_t = 0 every period (zero-coupon bond)', () => {
     const rows = runSimulation(CHILE_CFG);
     for (const r of rows) {
-      expect(r.bondCouponService_t, `t=${r.t} coupon = pension`)
-        .toBeCloseTo(r.transitionalPaygExpGross_t, 6);
+      expect(r.bondCouponService_t, `t=${r.t}`).toBe(0);
     }
   });
 
@@ -1975,18 +2009,6 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
       for (let i = firstBondYear.t; i < rowsYes.length; i++) {
         expect(rowsYes[i].K_t, `t=${rowsYes[i].t}`)
           .toBeGreaterThanOrEqual(rowsNo[i].K_t - 1e-6);
-      }
-    }
-  });
-
-  it('chileMode=true: bondIssuance_t = 0 after last transitionalPaygExpGross_t > 0', () => {
-    // Bonds are issued only for cohorts with accrued PAYG rights; after the last
-    // such cohort retires, no new bonds are issued.
-    const rows = runSimulation(CHILE_CFG);
-    const lastGrossPositive = [...rows].reverse().find(r => r.transitionalPaygExpGross_t > 1e-6);
-    if (lastGrossPositive) {
-      for (const r of rows.filter(r => r.t > lastGrossPositive.t)) {
-        expect(r.bondIssuance_t, `t=${r.t} no new bonds`).toBeLessThan(1e-6);
       }
     }
   });
