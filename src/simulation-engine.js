@@ -583,10 +583,12 @@ export function runSimulation(userConfig = {}) {
     const dryRows = runSimulation({ ...cfg, chileMode: false });
     // iota = min(fisher(w_r, pi), pi) — same formula used inside the main loop.
     const iotaDry = Math.min(fisher(cfg.w_r, cfg.pi), cfg.pi);
+    // B₀ = PV of all future transitional pension cash flows discounted at iota.
+    // This is the implicit pension debt made explicit — not capital required to fund
+    // a perpetuity (which would inflate by ~1/annuityRate ≈ 20×).
     chileB0 = dryRows.reduce((sum, r, i) => {
       const ai = r.transitionalPaygExpGross_t ?? 0;
-      const ar = r.annuityRate_t ?? 0;
-      return (ar > 1e-6 && ai > 0) ? sum + (ai / ar) / Math.pow(1 + iotaDry, i) : sum;
+      return ai > 0 ? sum + ai / Math.pow(1 + iotaDry, i) : sum;
     }, 0);
   }
 
@@ -916,22 +918,22 @@ export function runSimulation(userConfig = {}) {
     // All contributions route to capi from t=0 (§5.4/§5.9 above); legacy pensions
     // for PAYG-only workers are debt-financed, repaid over time by the repayment fund.
 
-    // One-time bond issuance at t=0: creates D_t liability.
+    // Bond issuance at t=0: recorded in BR_t (off-balance-sheet obligation), NOT D_t.
+    // The bonds are a contingent liability (implicit pension debt made explicit) —
+    // not cash borrowed upfront. D_t only reflects actual PAYG financing gaps.
     const bondIssuance_t = (cfg.chileMode && t === 0 && chileB0 > 0) ? chileB0 : 0;
-    if (bondIssuance_t > 0) {
-      D_t        += bondIssuance_t;                                               // (§5.15-a)
-      borrowed_t += bondIssuance_t;
-    }
 
     // Zero-coupon: no annual coupon service during working life.
     const bondCouponService_t = 0;
 
-    // Bond redemption at each cohort's retirement: bond matures into K_t.
+    // Bond redemption: cohort's bond matures at retirement. The face value equals the
+    // annual pension cash flow for that cohort (consistent with B₀ = Σ ai/(1+iota)^t).
+    // Credited to K_t so the capi pot covers the transitional pension from here on.
     let bondRedemption_t = 0;
-    if (cfg.chileMode && transitionalPaygExpGross_t > 0 && annuityRate_t > 1e-6) {
-      bondRedemption_t = transitionalPaygExpGross_t / annuityRate_t;
+    if (cfg.chileMode && transitionalPaygExpGross_t > 0) {
+      bondRedemption_t = transitionalPaygExpGross_t;
       K_t += bondRedemption_t;                                                   // (§5.15-b)
-      sumCapiContrib += bondRedemption_t;  // counts as funded contribution for asset-share
+      sumCapiContrib += bondRedemption_t;
     }
 
     // Bond stock: starts at chileB0, grows at iota (CPI), shrinks at each redemption.
