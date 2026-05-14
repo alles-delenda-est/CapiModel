@@ -33,6 +33,9 @@ const TIPS = {
   useEquinoxe: "Active la réforme Équinoxe (réduction progressive des pensions élevées + restauration CSG/CRDS taux plein).",
   enableCapi: "Active le régime de capitalisation (sinon : 100% PAYG).",
   demoProfile: "Scénario démographique : COR central, réaliste (TFR ≤1,65), ou réformé (TFR 1,9 + migration).",
+  demoMode: "Mode actuariel : projections COR juin 2025 + tables de mortalité INSEE T60 (masque de population par cohorte). Mode paramétrique : courbe lissée (smoothstep) calée manuellement sur le scénario central COR.",
+  demoScenario: "Scénario COR juin 2025 : haute / centrale / basse (fécondité, migration, mortalité).",
+  mortalityFemaleFraction: "Fraction féminine du pool de retraités 2027 pour le mélange de mortalité T60 (mélange au niveau des courbes de survie, pas des qx). COR ≈ 0,52.",
   employmentRateTarget: "Cible long-terme du taux d'emploi 15–64 (OCDE médiane ≈ 0,76).",
   employmentTransitionYears: "Durée de la rampe smoothstep vers la cible d'emploi.",
   constructionMultiplier: "Levier de libéralisation du foncier : >1 = libéralisation (impacte g_h et la décote HLM).",
@@ -435,14 +438,39 @@ export default function App() {
               </CollapsibleSection>
 
               <CollapsibleSection title="Démographie & travail" level="critical" defaultOpen={true}>
-                <div className="toggle-row" title={TIPS.demoProfile}>
-                  <label style={{ minWidth: 120 }}>Scénario démographique</label>
-                  <select value={p.demoProfile} onChange={e => setParam('demoProfile', e.target.value)}>
-                    <option value="cor_central">COR central</option>
-                    <option value="realistic">Réaliste</option>
-                    <option value="reformed">Réformé</option>
-                  </select>
+                <div className="toggle-row" title={TIPS.demoMode}>
+                  <label style={{ minWidth: 120 }}>Noyau démographique</label>
+                  <label><input type="radio" name="demoMode"
+                    checked={p.demoMode === 'parametric'}
+                    onChange={() => setParam('demoMode', 'parametric')} /> paramétrique</label>
+                  <label style={{ marginLeft: 12 }}><input type="radio" name="demoMode"
+                    checked={p.demoMode === 'actuarial'}
+                    onChange={() => setParam('demoMode', 'actuarial')} /> actuariel (COR/INSEE)</label>
                 </div>
+                {p.demoMode === 'actuarial' ? (
+                  <div className="toggle-row" title={TIPS.demoScenario}>
+                    <label style={{ minWidth: 120 }}>Scénario COR juin 2025</label>
+                    <select value={p.demoScenario} onChange={e => setParam('demoScenario', e.target.value)}>
+                      <option value="cor_high">Haute</option>
+                      <option value="cor_central">Centrale</option>
+                      <option value="cor_low">Basse</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="toggle-row" title={TIPS.demoProfile}>
+                    <label style={{ minWidth: 120 }}>Scénario démographique</label>
+                    <select value={p.demoProfile} onChange={e => setParam('demoProfile', e.target.value)}>
+                      <option value="cor_central">COR central</option>
+                      <option value="realistic">Réaliste</option>
+                      <option value="reformed">Réformé</option>
+                    </select>
+                  </div>
+                )}
+                {expertMode && p.demoMode === 'actuarial' && (
+                  <EnhancedSlider id="mortalityFemaleFraction" label="Mix mortalité féminine" value={p.mortalityFemaleFraction}
+                    onChange={v => setParam('mortalityFemaleFraction', v)} min={0.40} max={0.60} step={0.01} unit="" decimals={2}
+                    tip={TIPS.mortalityFemaleFraction} defaultValue={DEFAULT_CONFIG.mortalityFemaleFraction} />
+                )}
                 <EnhancedSlider id="employmentRateTarget" label="Cible taux d'emploi" value={p.employmentRateTarget}
                   onChange={v => setParam('employmentRateTarget', v)} min={0.55} max={0.85} step={0.005} unit="" decimals={3} tip={TIPS.employmentRateTarget}
                   defaultValue={DEFAULT_CONFIG.employmentRateTarget} />

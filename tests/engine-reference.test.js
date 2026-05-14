@@ -183,3 +183,67 @@ describe('§11.3 full regression baseline against fixture', () => {
       .toEqual([]);
   });
 });
+
+// ============= v2.0 actuarial-mode regression baseline =============
+//
+// Locks the actuarial kernel (COR/INSEE table dispatch + §6.5 per-cohort
+// population mask) against a stored trace. NOTE: the demographic data in
+// src/demographic-tables.js is currently a synthetic PLACEHOLDER — this
+// fixture protects the *engine logic*, not the demographic values. It MUST
+// be regenerated when the placeholder tables are replaced with primary-source
+// COR juin 2025 / INSEE T60 transcriptions (a data-only change).
+
+const ACT_FIXTURE_PATH = resolve(__dirname, 'fixtures/v2.0-actuarial-cor-central-trace.json');
+const ACT_FIXTURE = JSON.parse(readFileSync(ACT_FIXTURE_PATH, 'utf8'));
+const actRows = runSimulation({
+  demoMode: 'actuarial',
+  demoScenario: 'cor_central',
+  mortalityFemaleFraction: 0.52,
+});
+
+describe('v2.0 actuarial-mode regression baseline against fixture', () => {
+  it('row count matches fixture (70 years)', () => {
+    expect(actRows.length).toBe(ACT_FIXTURE.length);
+    expect(actRows.length).toBe(70);
+  });
+
+  it('every numeric field of every row matches the actuarial fixture to 1e-9', () => {
+    const failures = [];
+    for (let i = 0; i < actRows.length; i++) {
+      for (const key of Object.keys(ACT_FIXTURE[i])) {
+        const expected = ACT_FIXTURE[i][key];
+        const actual = actRows[i][key];
+        if (typeof expected === 'number' && Number.isFinite(expected)) {
+          const tol = Math.max(1e-9, Math.abs(expected) * 1e-9);
+          if (Math.abs(actual - expected) > tol) {
+            failures.push(`t=${i} ${key}: expected ${expected}, got ${actual}, diff ${actual - expected}`);
+          }
+        } else if (typeof expected !== 'number') {
+          if (actual !== expected) {
+            failures.push(`t=${i} ${key}: expected ${expected}, got ${actual}`);
+          }
+        }
+      }
+    }
+    if (failures.length > 0) {
+      throw new Error(
+        `${failures.length} field mismatch(es) vs actuarial fixture. ` +
+        `If the engine or demographic-tables.js changed intentionally, regenerate ` +
+        `tests/fixtures/v2.0-actuarial-cor-central-trace.json and present the diff.\n` +
+        failures.slice(0, 20).join('\n') +
+        (failures.length > 20 ? `\n... and ${failures.length - 20} more` : ''),
+      );
+    }
+  });
+
+  it('actuarial fixture field set matches engine output', () => {
+    const engineKeys = new Set(Object.keys(actRows[0]));
+    const fixtureKeys = new Set(Object.keys(ACT_FIXTURE[0]));
+    const missingInFixture = [...engineKeys].filter(k => !fixtureKeys.has(k));
+    const missingInEngine = [...fixtureKeys].filter(k => !engineKeys.has(k));
+    expect(missingInFixture, `engine has fields not in fixture: ${missingInFixture.join(', ')}`)
+      .toEqual([]);
+    expect(missingInEngine, `fixture has fields not in engine: ${missingInEngine.join(', ')}`)
+      .toEqual([]);
+  });
+});

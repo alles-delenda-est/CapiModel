@@ -236,16 +236,16 @@ Each stage builds on the previous against `realistic` demographics. All figures 
 - The model is a **pension-system cash-balance model**, not a general-government model. Tax-base feedback, consumption effects, and housing-price impacts from HLM sales are not modelled.
 - CSG/CRDS restoration is treated as pension-system revenue. In national-accounts terms it is general-government revenue — the distinction matters for how the COR frames sustainability.
 
-**Demographic kernel (v2.0 parametric):**
-- Current default uses a parametric smoothstep envelope (eqs 7a–e, `T_extinct = 45`). Three profiles (`realistic`, `cor_central`, `reformed`) capture COR June 2025 scenario families.
-- The actuarial kernel (v2.1, table-driven from COR + INSEE T60 data) is implemented but requires primary-source table transcription before it becomes the default.
+**Demographic kernel (v2.0):**
+- Default uses a parametric smoothstep envelope (eqs 7a–e, `T_extinct = 45`). Three profiles (`realistic`, `cor_central`, `reformed`) capture COR June 2025 scenario families.
+- An opt-in actuarial kernel (`demoMode: 'actuarial'`) replaces eqs 7c/7d/7e with table-driven equivalents from COR June 2025 + INSEE T60, adds the §6.5 per-cohort population mask, and is exposed in the Démographie panel (mode radio + COR scenario dropdown + female-mortality-mix slider). The demographic tables are currently synthetic placeholders pending primary-source transcription — a data-only change — before actuarial mode becomes the default.
 
 **Return assumptions:**
 - 4.5 % real expected return on a public 60/40 fund is a central projection, not a guaranteed outcome. Stochastic return analysis — sequence risk, early equity crash, Japan-style 30-year low-return scenario, stagflation — is a v2.1 priority.
 - The GE return penalty models equity-premium compression at macroeconomic scale (one channel only). Wage, employment, savings-displacement, and housing-price GE effects are absent.
 
 **Accrued rights:**
-- Per-cohort PAYG accrual is implemented (v1.1, eq 15a). `legacyShareAvg_t` is held flat once the capi-retiree pool plateaus — this introduces a small conservative bias (~1.7 % of peak debt under default preset) because older high-legacy-share cohorts die first. The actuarial survival mask that corrects this is a v2.1 item.
+- Per-cohort PAYG accrual is implemented (v1.1, eq 15a). In parametric mode `legacyShareAvg_t` is held flat once the capi-retiree pool plateaus — a small conservative bias (~1.7 % of peak debt under default preset) because older high-legacy-share cohorts die first. In actuarial mode the §6.5 per-cohort population mask corrects this: sub-cohorts age with differential T60 mortality and `legacyShareAvg_t` is a true mortality-weighted mean.
 
 **Asset-liability matching:**
 - The model does not perform duration matching or mark-to-market guarantee valuation. The state guarantee creates a contingent liability (visible as `CK_t`); its fair value — expected present value of guarantee calls — is not computed. This is a priority for v3.0.

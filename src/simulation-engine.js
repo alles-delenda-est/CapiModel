@@ -562,6 +562,13 @@ export function runSimulation(userConfig = {}) {
   //   capiRetirees_prev — last-period capi retiree count for the running blend.
   let legacyShareAvg = 0;
   let capiRetirees_prev = 0;
+  // §6.5 (v2.0) per-cohort population mask — actuarial mode only. Each entry:
+  //   { entryYear, count, legacyShare, ageOffset }  (ageOffset = ageAtEntry − 64,
+  //   clamped to [0,21] to index the T60 survival matrices).
+  // Replaces the v1.1 held-flat blend with a true mortality-weighted mean:
+  // older sub-cohorts (higher legacyShare) die faster, so legacyShareAvg_t
+  // declines at the correct actuarial pace. Empty in parametric mode.
+  const capiCohortHistory = [];
   // PR #17 accounting identity: cumulative net capi contributions (C_s_capi + employer − levy).
   // Used in overlapping mode to derive capiAssetShare_t without a free parameter.
   let sumCapiContrib = 0;
@@ -673,32 +680,74 @@ export function runSimulation(userConfig = {}) {
     // ---------- §5.6 (continued): legacyExp_t now uses E0_legacy_t ----------
     const legacyExp_t = Math.max(0, E0_legacy_t * legacyRetirees_t * I_factor_t); // (25)
 
-    // ---------- §5.6.1 v1.1: per-cohort PAYG accrual ----------
-    // Update `legacyShareAvg_t` per spec eq (15b) as an explicit conditional
-    // on whether the transitional retiree population grew or shrank in year
-    // `t`. The else-branch holds the running average flat (NOT applies the
-    // if-branch with ΔR=0, which would inflate the average). See §5.6.1
-    // "Mortality-bias caveat" for the rationale.
+    // ---------- §5.6.1 / §6.5: per-cohort PAYG accrual ----------
+    // `legacyShareAvg_t` is the population-weighted mean legacy-accrual share
+    // across capi-cohort retirees alive at year `t` (eq 15b). Two kernels:
+    //   • actuarial — §6.5 per-cohort population mask: each sub-cohort ages
+    //     with differential T60 mortality, so high-legacyShare older cohorts
+    //     thin out faster and the mean declines at the true actuarial pace.
+    //   • parametric — v1.1 held-flat blend (backward compat; bit-identical
+    //     to v1.x for the parametric-mode regression fixture).
     const newCohortBirthYear_t = cfg.Y0 + t - cfg.retirementAgeBase;             // §10.3: anchor on retirementAgeBase
-    if (capiRetirees_t > capiRetirees_prev + 1e-15) {
-      // (15b) if-branch: population-weighted blend of incumbent retirees with
-      // new entrants. Both `capiRetirees_t > 0` and `> capiRetirees_prev`,
-      // so the division is safe.
-      const deltaCapiRet_t = capiRetirees_t - capiRetirees_prev;
-      const newShare_t = legacyShareOfCohort(newCohortBirthYear_t, cfg);
-      legacyShareAvg = (legacyShareAvg * capiRetirees_prev
-                        + newShare_t * deltaCapiRet_t)
-                       / capiRetirees_t;
-    } else if (capiRetirees_t > 1e-12) {
-      // (15b) else-branch: held flat (no division — explicitly preserves
-      // the previous average rather than recomputing on a smaller R^capi).
-      // legacyShareAvg = legacyShareAvg;  // intentional no-op
+    let legacyShareAvg_t;
+    if (cfg.demoMode === 'actuarial') {
+      // §6.5 step 1 — apply one year of differential mortality to existing
+      // sub-cohorts (entries are added at the end of their own entry year, so
+      // every cohort seen here has tenure ≥ 1: no mortality in the entry year).
+      const fMort = cfg.mortalityFemaleFraction ?? 0.52;
+      for (const C of capiCohortHistory) {
+        const tenure = t - C.entryYear;
+        const sPrev = S_mixed(C.ageOffset, tenure - 1, fMort);
+        const sNow  = S_mixed(C.ageOffset, tenure, fMort);
+        C.count *= sPrev > 1e-12 ? sNow / sPrev : 0;
+      }
+      // §6.5 step 2 — add new entrants (the model's authoritative capiRetirees_t
+      // headcount net of the surviving sub-cohort total).
+      const survivingTotal = capiCohortHistory.reduce((s, C) => s + C.count, 0);
+      const newEntrants = capiRetirees_t - survivingTotal;
+      if (newEntrants > 1e-15) {
+        capiCohortHistory.push({
+          entryYear: t,
+          count: newEntrants,
+          legacyShare: legacyShareOfCohort(newCohortBirthYear_t, cfg),
+          // T60 matrices cover entry ages 64–85; clamp guards indexed A_R(t).
+          ageOffset: clamp(Math.round(A_R_t) - 64, 0, 21),
+        });
+      }
+      // §6.5 — prune negligible sub-cohorts (< 1000 people) to bound iteration.
+      for (let i = capiCohortHistory.length - 1; i >= 0; i--) {
+        if (capiCohortHistory[i].count < 1e-9) capiCohortHistory.splice(i, 1);
+      }
+      // §6.5 step 3 — population-weighted mean legacy share.
+      const totalCount = capiCohortHistory.reduce((s, C) => s + C.count, 0);
+      legacyShareAvg_t = totalCount > 1e-12
+        ? capiCohortHistory.reduce((s, C) => s + C.count * C.legacyShare, 0) / totalCount
+        : 0;
     } else {
-      // R^capi_t ≈ 0: no transitional retirees → average undefined; spec
-      // convention is 0 (no division).
-      legacyShareAvg = 0;
+      // v1.1 parametric blend: explicit conditional on whether the transitional
+      // retiree population grew or shrank in year `t`. The else-branch holds the
+      // running average flat (NOT the if-branch with ΔR=0, which would inflate
+      // the average). See §5.6.1 "Mortality-bias caveat".
+      if (capiRetirees_t > capiRetirees_prev + 1e-15) {
+        // (15b) if-branch: population-weighted blend of incumbent retirees with
+        // new entrants. Both `capiRetirees_t > 0` and `> capiRetirees_prev`,
+        // so the division is safe.
+        const deltaCapiRet_t = capiRetirees_t - capiRetirees_prev;
+        const newShare_t = legacyShareOfCohort(newCohortBirthYear_t, cfg);
+        legacyShareAvg = (legacyShareAvg * capiRetirees_prev
+                          + newShare_t * deltaCapiRet_t)
+                         / capiRetirees_t;
+      } else if (capiRetirees_t > 1e-12) {
+        // (15b) else-branch: held flat (no division — explicitly preserves
+        // the previous average rather than recomputing on a smaller R^capi).
+        // legacyShareAvg = legacyShareAvg;  // intentional no-op
+      } else {
+        // R^capi_t ≈ 0: no transitional retirees → average undefined; spec
+        // convention is 0 (no division).
+        legacyShareAvg = 0;
+      }
+      legacyShareAvg_t = legacyShareAvg;
     }
-    const legacyShareAvg_t = legacyShareAvg;
     // (25b) aggregate transitional PAYG expenditure on capi-cohort retirees'
     // accrued PAYG rights. Uses E0_legacy_t (post-Équinoxe) per §5.6.1
     // per-portion scoping rule.
