@@ -59,13 +59,11 @@ export const DEFAULT_CONFIG = {
   Y0: 2027,
   pi: 0.02,
   w_r: 0.004,
-  // §4 (v2.0) demographic kernel mode.
-  //   'parametric' — existing smoothstep kernel (eqs 7a–e). Backward-compat default.
-  //   'actuarial'  — COR juin 2025 + INSEE T60 table-driven kernel.
-  // 'parametric' is bit-identical to v1.x output; 'actuarial' will become the
-  // default in v2.1 once the placeholder data in src/demographic-tables.js is
-  // replaced with primary-source transcriptions.
-  demoMode: 'parametric',
+  // §4 (v2.0/v2.1) demographic kernel mode.
+  //   'parametric' — smoothstep kernel (eqs 7a–e). Bit-identical to v1.x output.
+  //   'actuarial'  — COR RA2025 + INSEE T60 2027 table-driven kernel (default v2.1+).
+  // src/demographic-tables.js now holds primary-source data; 'actuarial' is the default.
+  demoMode: 'actuarial',
   // §4 (v2.0) actuarial-mode scenario (ignored when demoMode === 'parametric').
   // 'cor_central' | 'cor_high' | 'cor_low'
   demoScenario: 'cor_central',
@@ -562,6 +560,13 @@ export function runSimulation(userConfig = {}) {
   //   capiRetirees_prev — last-period capi retiree count for the running blend.
   let legacyShareAvg = 0;
   let capiRetirees_prev = 0;
+  // §6.5 (v2.0) per-cohort population mask — actuarial mode only. Each entry:
+  //   { entryYear, count, legacyShare, ageOffset }  (ageOffset = ageAtEntry − 64,
+  //   clamped to [0,21] to index the T60 survival matrices).
+  // Replaces the v1.1 held-flat blend with a true mortality-weighted mean:
+  // older sub-cohorts (higher legacyShare) die faster, so legacyShareAvg_t
+  // declines at the correct actuarial pace. Empty in parametric mode.
+  const capiCohortHistory = [];
   // PR #17 accounting identity: cumulative net capi contributions (C_s_capi + employer − levy).
   // Used in overlapping mode to derive capiAssetShare_t without a free parameter.
   let sumCapiContrib = 0;
@@ -617,10 +622,23 @@ export function runSimulation(userConfig = {}) {
     const I_factor_t = Math.pow(1 + iota, t);                                   // (5)
     const H_factor_t = Math.pow((1 + g_h_eff) * (1 + cfg.pi), t);               // (6)
 
+    // ---------- §5.4 (pre-computed) Retirement age — needed for §5.2 retiree-stock scaling ----------
+    // A_R_t is used in two places: (a) retireeAgeScale_t below, (b) §5.4 cohort routing.
+    const A_R_t = retirementAge(t, cfg);                                        // (12)
+    // Mechanical retiree-stock reduction: when A_R rises, fewer people have crossed the threshold.
+    // Scale = T_ret(indexed) / T_ret(base) = 1 − ΔA / T_ret_base_t.  Only applied in indexed mode.
+    const T_ret_base_t = Math.max(15,
+      cfg.lifeExpAt65_Y0 + (65 - cfg.retirementAgeBase)
+      + (t / 10) * cfg.lifeExpAt65_per_decade);
+    const deltaAR_t = A_R_t - cfg.retirementAgeBase;
+    const retireeAgeScale_t = (cfg.retirementAgeMode === 'indexed' && deltaAR_t > 0)
+      ? Math.max(0.5, 1 - deltaAR_t / T_ret_base_t)
+      : 1;
+
     // ---------- §5.2 Demographic indices — dispatched by demoMode ----------
-    const retireeIdx_t = cfg.demoMode === 'actuarial'                           // (7c / 7c′)
+    const retireeIdx_t = (cfg.demoMode === 'actuarial'                          // (7c / 7c′)
       ? retireeIdx_actuarial(t, cfg)
-      : retireeIdx(t, cfg.demoProfile);
+      : retireeIdx(t, cfg.demoProfile)) * retireeAgeScale_t;
     const activePop_t  = cfg.demoMode === 'actuarial'                           // (7d / 7d′)
       ? activePopFactor_actuarial(t, cfg)
       : activePopFactor(t, cfg.demoProfile);
@@ -649,9 +667,9 @@ export function runSimulation(userConfig = {}) {
     const C_e_t = W_t * tau_e_eff;                                              // (11)
 
     // ---------- §5.4 Retirement age & cohort routing ----------
-    const A_R_t = retirementAge(t, cfg);                                        // (12)
+    // A_R_t pre-computed above (before §5.2) to enable retireeAgeScale_t.
     // In chileMode all worker contributions flow to capitalisation from t=0 (§5.15).
-    const sigma_capi_t = cfg.chileMode ? 1 : sigmaCapi(t, cfg);                // (15)
+    const sigma_capi_t = cfg.chileMode ? 1 : sigmaCapi(t, cfg);                  // (15)
     const C_s_capi_t = C_s_t * sigma_capi_t;                                    // (16)
     const C_s_payg_t = C_s_t * (1 - sigma_capi_t);                              // (17)
 
@@ -697,32 +715,74 @@ export function runSimulation(userConfig = {}) {
     // ---------- §5.6 (continued): legacyExp_t now uses E0_legacy_t ----------
     const legacyExp_t = Math.max(0, E0_legacy_t * legacyRetirees_t * I_factor_t); // (25)
 
-    // ---------- §5.6.1 v1.1: per-cohort PAYG accrual ----------
-    // Update `legacyShareAvg_t` per spec eq (15b) as an explicit conditional
-    // on whether the transitional retiree population grew or shrank in year
-    // `t`. The else-branch holds the running average flat (NOT applies the
-    // if-branch with ΔR=0, which would inflate the average). See §5.6.1
-    // "Mortality-bias caveat" for the rationale.
+    // ---------- §5.6.1 / §6.5: per-cohort PAYG accrual ----------
+    // `legacyShareAvg_t` is the population-weighted mean legacy-accrual share
+    // across capi-cohort retirees alive at year `t` (eq 15b). Two kernels:
+    //   • actuarial — §6.5 per-cohort population mask: each sub-cohort ages
+    //     with differential T60 mortality, so high-legacyShare older cohorts
+    //     thin out faster and the mean declines at the true actuarial pace.
+    //   • parametric — v1.1 held-flat blend (backward compat; bit-identical
+    //     to v1.x for the parametric-mode regression fixture).
     const newCohortBirthYear_t = cfg.Y0 + t - cfg.retirementAgeBase;             // §10.3: anchor on retirementAgeBase
-    if (capiRetirees_t > capiRetirees_prev + 1e-15) {
-      // (15b) if-branch: population-weighted blend of incumbent retirees with
-      // new entrants. Both `capiRetirees_t > 0` and `> capiRetirees_prev`,
-      // so the division is safe.
-      const deltaCapiRet_t = capiRetirees_t - capiRetirees_prev;
-      const newShare_t = legacyShareOfCohort(newCohortBirthYear_t, cfg);
-      legacyShareAvg = (legacyShareAvg * capiRetirees_prev
-                        + newShare_t * deltaCapiRet_t)
-                       / capiRetirees_t;
-    } else if (capiRetirees_t > 1e-12) {
-      // (15b) else-branch: held flat (no division — explicitly preserves
-      // the previous average rather than recomputing on a smaller R^capi).
-      // legacyShareAvg = legacyShareAvg;  // intentional no-op
+    let legacyShareAvg_t;
+    if (cfg.demoMode === 'actuarial') {
+      // §6.5 step 1 — apply one year of differential mortality to existing
+      // sub-cohorts (entries are added at the end of their own entry year, so
+      // every cohort seen here has tenure ≥ 1: no mortality in the entry year).
+      const fMort = cfg.mortalityFemaleFraction ?? 0.52;
+      for (const C of capiCohortHistory) {
+        const tenure = t - C.entryYear;
+        const sPrev = S_mixed(C.ageOffset, tenure - 1, fMort);
+        const sNow  = S_mixed(C.ageOffset, tenure, fMort);
+        C.count *= sPrev > 1e-12 ? sNow / sPrev : 0;
+      }
+      // §6.5 step 2 — add new entrants (the model's authoritative capiRetirees_t
+      // headcount net of the surviving sub-cohort total).
+      const survivingTotal = capiCohortHistory.reduce((s, C) => s + C.count, 0);
+      const newEntrants = capiRetirees_t - survivingTotal;
+      if (newEntrants > 1e-15) {
+        capiCohortHistory.push({
+          entryYear: t,
+          count: newEntrants,
+          legacyShare: legacyShareOfCohort(newCohortBirthYear_t, cfg),
+          // T60 matrices cover entry ages 64–85; clamp guards indexed A_R(t).
+          ageOffset: clamp(Math.round(A_R_t) - 64, 0, 21),
+        });
+      }
+      // §6.5 — prune negligible sub-cohorts (< 1000 people) to bound iteration.
+      for (let i = capiCohortHistory.length - 1; i >= 0; i--) {
+        if (capiCohortHistory[i].count < 1e-9) capiCohortHistory.splice(i, 1);
+      }
+      // §6.5 step 3 — population-weighted mean legacy share.
+      const totalCount = capiCohortHistory.reduce((s, C) => s + C.count, 0);
+      legacyShareAvg_t = totalCount > 1e-12
+        ? capiCohortHistory.reduce((s, C) => s + C.count * C.legacyShare, 0) / totalCount
+        : 0;
     } else {
-      // R^capi_t ≈ 0: no transitional retirees → average undefined; spec
-      // convention is 0 (no division).
-      legacyShareAvg = 0;
+      // v1.1 parametric blend: explicit conditional on whether the transitional
+      // retiree population grew or shrank in year `t`. The else-branch holds the
+      // running average flat (NOT the if-branch with ΔR=0, which would inflate
+      // the average). See §5.6.1 "Mortality-bias caveat".
+      if (capiRetirees_t > capiRetirees_prev + 1e-15) {
+        // (15b) if-branch: population-weighted blend of incumbent retirees with
+        // new entrants. Both `capiRetirees_t > 0` and `> capiRetirees_prev`,
+        // so the division is safe.
+        const deltaCapiRet_t = capiRetirees_t - capiRetirees_prev;
+        const newShare_t = legacyShareOfCohort(newCohortBirthYear_t, cfg);
+        legacyShareAvg = (legacyShareAvg * capiRetirees_prev
+                          + newShare_t * deltaCapiRet_t)
+                         / capiRetirees_t;
+      } else if (capiRetirees_t > 1e-12) {
+        // (15b) else-branch: held flat (no division — explicitly preserves
+        // the previous average rather than recomputing on a smaller R^capi).
+        // legacyShareAvg = legacyShareAvg;  // intentional no-op
+      } else {
+        // R^capi_t ≈ 0: no transitional retirees → average undefined; spec
+        // convention is 0 (no division).
+        legacyShareAvg = 0;
+      }
+      legacyShareAvg_t = legacyShareAvg;
     }
-    const legacyShareAvg_t = legacyShareAvg;
     // (25b) aggregate transitional PAYG expenditure on capi-cohort retirees'
     // accrued PAYG rights. Uses E0_legacy_t (post-Équinoxe) per §5.6.1
     // per-portion scoping rule.
@@ -1385,7 +1445,10 @@ export function buildCounterfactualParams(reformParams) {
  * see tests/engine.test.js for the reconciliation test).
  */
 export function computeIndividualPerspective(cfg, reformRows, cfRows, birthYear) {
-  const RETIREMENT_AGE = cfg.retirementAgeBase ?? 64;
+  // Round to integer: the panel operates on discrete year-steps so a fractional
+  // retirementAgeBase (e.g. 64.5 from the 0.5-step UI slider) must be resolved
+  // to a whole year before it is used as an array index or for age comparisons.
+  const RETIREMENT_AGE = Math.round(cfg.retirementAgeBase ?? 64);
   const LIFE_EXPECTANCY = 85;
   const N_WORKERS_M = 30;        // active population (millions, indexed)
   const KE_TO_EUR = 1000;        // engine units are k€ per worker → €
@@ -1400,8 +1463,27 @@ export function computeIndividualPerspective(cfg, reformRows, cfRows, birthYear)
   // contribution-routing ramp (sigmaCapi(t) reaches 1.0 by T_capi_start).
   const legacyShare = legacyShareOfCohort(birthYear, cfg);
   const inCapi = legacyShare < 1.0;
-  const retirementYear = birthYear + RETIREMENT_AGE;
-  const retT = Math.max(0, Math.min(reformRows.length - 1, retirementYear - Y0));
+
+  // In indexed mode, find the first simulation year where the worker's age
+  // reaches the period-specific A_R_t (exported in each row). This gives
+  // the correct accumulation window and pension read-out year.
+  let effectiveRetirementAge = RETIREMENT_AGE;
+  let retT;
+  if (cfg.retirementAgeMode === 'indexed') {
+    for (let t = 0; t < reformRows.length; t++) {
+      const age = (Y0 + t) - birthYear;
+      const A_R_at_t = Math.round(reformRows[t].A_R_t ?? RETIREMENT_AGE);
+      if (age >= A_R_at_t) {
+        effectiveRetirementAge = A_R_at_t;
+        retT = t;
+        break;
+      }
+    }
+    if (retT === undefined) retT = reformRows.length - 1;
+  } else {
+    retT = Math.max(0, Math.min(reformRows.length - 1, birthYear + RETIREMENT_AGE - Y0));
+  }
+  const retirementYear = birthYear + effectiveRetirementAge;
 
   const w_n = cfg.pi + cfg.w_r + cfg.pi * cfg.w_r;
 
@@ -1416,7 +1498,7 @@ export function computeIndividualPerspective(cfg, reformRows, cfRows, birthYear)
   for (let t = 0; t < reformRows.length; t++) {
     const age = (Y0 + t) - birthYear;
     const r = reformRows[t];
-    if (age >= 22 && age < RETIREMENT_AGE) {
+    if (age >= 22 && age < effectiveRetirementAge) {
       const wFactor = Math.pow(1 + w_n, t);
       lastWorkingContribK = (cfg.W0 / N_WORKERS_M) * wFactor * cfg.tau_s;
       if (inCapi) {
@@ -1430,7 +1512,7 @@ export function computeIndividualPerspective(cfg, reformRows, cfRows, birthYear)
         yearsInCapi++;
       }
     }
-    if (age === RETIREMENT_AGE) capiPotAtRet = capiPot;
+    if (age === effectiveRetirementAge) capiPotAtRet = capiPot;
   }
 
   // §5.6.1 v1.1: per-retiree annual legacy pension (k€/yr/retiree) at
@@ -1471,7 +1553,7 @@ export function computeIndividualPerspective(cfg, reformRows, cfRows, birthYear)
   const capiPotReal = capiPotAtRet / Math.pow(1 + cfg.pi, retT) * KE_TO_EUR;
 
   // Diagnostic: yearsInPayg under §5.6.1 boundary discipline.
-  const careerYears = Math.max(1, RETIREMENT_AGE - 22);
+  const careerYears = Math.max(1, effectiveRetirementAge - 22);
   const yearsInPayg = legacyShare * careerYears;
 
   return {

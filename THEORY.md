@@ -97,7 +97,7 @@ Accrued PAYG rights are not a v1.1 implementation detail — they are **the hear
 
 v1.1 introduces `legacyShareOfCohort(B)` as a closed-form per-cohort accrual share (eq 15a) and a population-weighted running average `legacyShareAvg_t` (eq 15b). The aggregate `transitionalPaygExp_t = R^capi_t × legacyShareAvg_t × E0_legacy_t × I_t` (eq 25b) feeds the waterfall via revised eq 39'. `legacyExp_t` is preserved separately.
 
-The remaining approximation is a **held-flat mortality assumption** for `legacyShareAvg_t` once the capi-retiree pool plateaus. A linear-in-age mortality proxy gives a ~1.7 % peak-debt bias under the default preset — conservative in direction (overstates late-horizon outflow). The actuarial survival mask that corrects this is a v2.1 item.
+In **parametric mode** `legacyShareAvg_t` carries a **held-flat mortality assumption** once the capi-retiree pool plateaus — a linear-in-age proxy giving a ~1.7 % peak-debt bias under the default preset (conservative in direction). In **actuarial mode** this is corrected by the **§6.5 per-cohort population mask**: each capi-cohort sub-population is aged with differential INSEE T60 mortality, so `legacyShareAvg_t` becomes a true mortality-weighted mean — older high-legacy-share cohorts thin out faster and the mean declines at the correct actuarial pace instead of freezing at the peak.
 
 ### The spread — a diagnostic, not a solvency theorem
 
@@ -215,20 +215,22 @@ The retiree-headcount kernel (eqs 7a–7c) is **parametric**, not actuarial. `T_
 | `realistic` | Pessimistic — lower TFR, lower migration, higher longevity pressure |
 | `reformed` | Optimistic — demographic reform package assumed (immigration, TFR) |
 
-### Planned — actuarial table-driven kernel (v2.1)
+### Implemented — actuarial table-driven kernel (v2.0, opt-in)
 
-Three kernel functions will be replaced by table-driven equivalents sourced from COR June 2025 and INSEE T60 2023. All three replacements produce normalised indices (ratio to t=0) so downstream equations are structurally unchanged. Full specification: `DemographicKernel_plan.md`.
+`demoMode: 'actuarial'` replaces the three parametric kernel functions with table-driven equivalents (`activePopFactor_actuarial` 7d′, `retireeIdx_actuarial` 7c′, `cohIdx_actuarial` 7e′) sourced from COR June 2025 and INSEE T60 2023, plus the §6.5 per-cohort population mask for `legacyShareAvg_t`. All replacements produce normalised indices (ratio to t=0) so downstream equations are structurally unchanged. Selected via the **Démographie & travail** panel (mode radio + COR scenario dropdown + Tier-B female-mortality-mix slider). Full specification: `DemographicKernel_plan.md`.
 
-The most important improvement is `cohIdx_actuarial`: the parametric `1 − smoothstep(t, 0, 45)` is symmetric around t=22, overstating late-horizon `transitionalPaygExp_t` by accumulating ~45 % bias relative to peak debt by t=69 (conservative direction). Real T60 mortality is concave — most 2027 retirees survive to 80 but few reach 90+. The T60-based replacement corrects this without any downstream equation change.
+The most important improvement is `cohIdx_actuarial`: the parametric `1 − smoothstep(t, 0, 45)` is symmetric around t=22, overstating late-horizon `transitionalPaygExp_t` by accumulating ~45 % bias relative to peak debt by t=69 (conservative direction). Real T60 mortality is concave — most 2027 retirees survive to 80 but few reach 90+. The T60-based replacement corrects this without any downstream equation change. Male and female `qx` are blended at the **survival-curve level** (not at `qx`), so the increasingly-female surviving cohort is represented correctly.
 
-Backward compatibility: `demoMode: 'parametric'` reproduces bit-identical v1.x output. The existing fixture remains the parametric regression contract.
+**Data status:** the arrays in `src/demographic-tables.js` are currently synthetic placeholders (Makeham mortality, Gaussian age pyramid) calibrated to the right qualitative shape. They must be replaced with primary-source COR juin 2025 / INSEE T60 transcriptions — a data-only change with no engine impact — before actuarial mode becomes the default.
+
+Backward compatibility: `demoMode: 'parametric'` reproduces bit-identical v1.x output. The existing `v1.1-default-trace.json` fixture remains the parametric regression contract; `v2.0-actuarial-cor-central-trace.json` locks the actuarial engine path. Monte Carlo scenario alignment (§9.5 of the spec) is not applicable to the active root build, which has no Monte Carlo module.
 
 ---
 
 ## Engineering philosophy
 
 - **Spec-driven implementation.** All semantics live in `cdc_legacy_fund_model.md`. Every non-trivial engine line carries a `// eq (N)` comment mapping to the spec. Implementers navigate the engine and spec together.
-- **Test invariants enforce §6.** Five conservation/non-negativity/boundary invariants are asserted at every `t` for every canned scenario and over 1000 randomly-sampled configurations. A failed invariant fails the test run. Currently 232 tests, all passing.
+- **Test invariants enforce §6.** Five conservation/non-negativity/boundary invariants are asserted at every `t` for every canned scenario and over 1000 randomly-sampled configurations. A failed invariant fails the test run. Currently 239 tests, all passing.
 - **Reference-trace regression.** The default-preset 70-year × every-field trace is captured to a JSON fixture as a contract. Engine changes that alter default output fail loudly and require explicit per-field fixture-update justification.
 - **Dual-LLM review process.** Each task PR is reviewed by a separate independent LLM in addition to the human reviewer before merge.
 - **One commit per logical unit.** Commit messages of the form `feat: <topic> — §X.Y eq (N–M)` give reviewers a per-equation entry point into the diff.

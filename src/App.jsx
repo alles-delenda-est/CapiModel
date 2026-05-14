@@ -33,6 +33,9 @@ const TIPS = {
   useEquinoxe: "Active la réforme Équinoxe (réduction progressive des pensions élevées + restauration CSG/CRDS taux plein).",
   enableCapi: "Active le régime de capitalisation (sinon : 100% PAYG).",
   demoProfile: "Scénario démographique : COR central, réaliste (TFR ≤1,65), ou réformé (TFR 1,9 + migration).",
+  demoMode: "Mode actuariel : projections COR juin 2025 + tables de mortalité INSEE T60 (masque de population par cohorte). Mode paramétrique : courbe lissée (smoothstep) calée manuellement sur le scénario central COR.",
+  demoScenario: "Scénario COR juin 2025 : haute / centrale / basse (fécondité, migration, mortalité).",
+  mortalityFemaleFraction: "Fraction féminine du pool de retraités 2027 pour le mélange de mortalité T60 (mélange au niveau des courbes de survie, pas des qx). COR ≈ 0,52.",
   employmentRateTarget: "Cible long-terme du taux d'emploi 15–64 (OCDE médiane ≈ 0,76).",
   employmentTransitionYears: "Durée de la rampe smoothstep vers la cible d'emploi.",
   constructionMultiplier: "Levier de libéralisation du foncier : >1 = libéralisation (impacte g_h et la décote HLM).",
@@ -84,6 +87,8 @@ function rowToChart(r) {
     abatement: r.abatement_t,
     emplrToLeg: r.emplrToLeg_t,
     csgRevenue: r.S0_csg_revenue_t,    // v1.0a NEW chart row
+    cotisSalPayg: r.C_s_payg_t,        // employee contributions routed to PAYG
+    fiscalTransfer: r.fiscalTransfer_t, // §5.9a diversification (CSG/FSV/État)
     // Expenditure
     legacyExp: r.legacyExp_t,
     capiPayout: r.capiPayout_t,
@@ -129,6 +134,8 @@ const TABLE_COLUMNS = [
   { key: 'H_t_proceeds', label: 'HLM',     always: false, render: r => r.H_t_proceeds.toFixed(1) },
   { key: 'abatement_t', label: 'Abatt.',   always: false, render: r => r.abatement_t.toFixed(1) },
   { key: 'S0_csg_revenue_t', label: 'CSG (rec.)', always: false, render: r => r.S0_csg_revenue_t.toFixed(1) },
+  { key: 'fiscalTransfer_t', label: 'Transferts', always: false, render: r => (r.fiscalTransfer_t ?? 0).toFixed(1) },
+  { key: 'C_s_payg_t',  label: 'Sal.→payg', always: false, render: r => r.C_s_payg_t.toFixed(1) },
   { key: 'C_s_capi_t',  label: 'Sal.→capi', always: false, render: r => r.C_s_capi_t.toFixed(1) },
   { key: 'emplrToLeg_t', label: 'Empl.→leg', always: false, render: r => r.emplrToLeg_t.toFixed(1) },
   { key: 'emplrToCap_t', label: 'Empl.→cap', always: false, render: r => r.emplrToCap_t.toFixed(1) },
@@ -195,8 +202,8 @@ export default function App() {
     const headers = [
       'Annee',
       'Dep_legacy_MdE','Dep_capi_MdE','Total_pensions_MdE',
-      'Rend_fonds_MdE','HLM_MdE','Abattement_MdE','CSG_recettes_MdE',
-      'Sal_capi_MdE','Empl_leg_MdE','Empl_cap_MdE',
+      'Rend_fonds_MdE','HLM_MdE','Abattement_MdE','CSG_recettes_MdE','Transferts_MdE',
+      'Sal_payg_MdE','Sal_capi_MdE','Empl_leg_MdE','Empl_cap_MdE',
       'Int_dette_MdE','Flux_net_MdE','Emprunt_MdE','Prelev_MdE','Dette_MdE',
       'Capi_nom_MdE','Capi_reel_MdE',
       'Bond_stock_MdE','Bond_issuance_MdE','Bond_coupon_MdE','Bond_coupon_cum_MdE','Bond_payg_counterfactual_MdE',
@@ -220,8 +227,8 @@ export default function App() {
         r.legacyExp_t.toFixed(1), r.capiPayout_t.toFixed(1),
         (r.legacyExp_t + r.capiPayout_t).toFixed(1),
         r.fundReturn_t.toFixed(1), r.H_t_proceeds.toFixed(1), r.abatement_t.toFixed(1),
-        r.S0_csg_revenue_t.toFixed(1),
-        r.C_s_capi_t.toFixed(1), r.emplrToLeg_t.toFixed(1), r.emplrToCap_t.toFixed(1),
+        r.S0_csg_revenue_t.toFixed(1), (r.fiscalTransfer_t ?? 0).toFixed(1),
+        r.C_s_payg_t.toFixed(1), r.C_s_capi_t.toFixed(1), r.emplrToLeg_t.toFixed(1), r.emplrToCap_t.toFixed(1),
         r.debtInterest_t.toFixed(1), r.netFlow_t.toFixed(1), r.borrowed_t.toFixed(1),
         r.levy_t.toFixed(1), r.D_t.toFixed(1),
         r.K_t.toFixed(0), (r.K_t / Math.pow(1.02, r.t)).toFixed(0),
@@ -442,14 +449,39 @@ export default function App() {
               </CollapsibleSection>
 
               <CollapsibleSection title="Démographie & travail" level="critical" defaultOpen={true}>
-                <div className="toggle-row" title={TIPS.demoProfile}>
-                  <label style={{ minWidth: 120 }}>Scénario démographique</label>
-                  <select value={p.demoProfile} onChange={e => setParam('demoProfile', e.target.value)}>
-                    <option value="cor_central">COR central</option>
-                    <option value="realistic">Réaliste</option>
-                    <option value="reformed">Réformé</option>
-                  </select>
+                <div className="toggle-row" title={TIPS.demoMode}>
+                  <label style={{ minWidth: 120 }}>Noyau démographique</label>
+                  <label><input type="radio" name="demoMode"
+                    checked={p.demoMode === 'parametric'}
+                    onChange={() => setParam('demoMode', 'parametric')} /> paramétrique</label>
+                  <label style={{ marginLeft: 12 }}><input type="radio" name="demoMode"
+                    checked={p.demoMode === 'actuarial'}
+                    onChange={() => setParam('demoMode', 'actuarial')} /> actuariel (COR/INSEE)</label>
                 </div>
+                {p.demoMode === 'actuarial' ? (
+                  <div className="toggle-row" title={TIPS.demoScenario}>
+                    <label style={{ minWidth: 120 }}>Scénario COR juin 2025</label>
+                    <select value={p.demoScenario} onChange={e => setParam('demoScenario', e.target.value)}>
+                      <option value="cor_high">Haute</option>
+                      <option value="cor_central">Centrale</option>
+                      <option value="cor_low">Basse</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="toggle-row" title={TIPS.demoProfile}>
+                    <label style={{ minWidth: 120 }}>Scénario démographique</label>
+                    <select value={p.demoProfile} onChange={e => setParam('demoProfile', e.target.value)}>
+                      <option value="cor_central">COR central</option>
+                      <option value="realistic">Réaliste</option>
+                      <option value="reformed">Réformé</option>
+                    </select>
+                  </div>
+                )}
+                {expertMode && p.demoMode === 'actuarial' && (
+                  <EnhancedSlider id="mortalityFemaleFraction" label="Mix mortalité féminine" value={p.mortalityFemaleFraction}
+                    onChange={v => setParam('mortalityFemaleFraction', v)} min={0.40} max={0.60} step={0.01} unit="" decimals={2}
+                    tip={TIPS.mortalityFemaleFraction} defaultValue={DEFAULT_CONFIG.mortalityFemaleFraction} />
+                )}
                 <EnhancedSlider id="employmentRateTarget" label="Cible taux d'emploi" value={p.employmentRateTarget}
                   onChange={v => setParam('employmentRateTarget', v)} min={0.55} max={0.85} step={0.005} unit="" decimals={3} tip={TIPS.employmentRateTarget}
                   defaultValue={DEFAULT_CONFIG.employmentRateTarget} />
@@ -889,6 +921,8 @@ export default function App() {
                     distinguishable from emplrToLeg's saturated #8b5cf6. */}
                 <Area type="monotone" dataKey="csgRevenue" stackId="income" fill="#c4b5fd" stroke="#7c3aed" name="Recette Équinoxe CSG/CRDS" />
                 <Area type="monotone" dataKey="emplrToLeg" stackId="income" fill="#a78bfa" stroke="#8b5cf6" name="Cotis. employeur → legacy" />
+                <Area type="monotone" dataKey="cotisSalPayg" stackId="income" fill="#fca5a5" stroke="#ef4444" name="Cotis. salarié → PAYG" />
+                <Area type="monotone" dataKey="fiscalTransfer" stackId="income" fill="#5eead4" stroke="#0d9488" name="Transferts (diversification)" />
                 <Line type="monotone" dataKey="legacyExp" stroke="#ef4444" strokeWidth={3} name="Dépenses legacy" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>

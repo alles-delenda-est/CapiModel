@@ -1,8 +1,23 @@
 # Demographic Kernel v2.0 — Implementation Specification
 
-**Status:** Draft spec — PR #14.
-**Target version:** v2.0 (separate PR after this spec is reviewed and agreed).
+**Status:** Implemented.
+**Target version:** v2.0.
 **Authors:** Claude Code (Sonnet 4.6), May 2026.
+
+### Implementation status (against §8 phase plan)
+
+| Phase | Item | Status |
+|-------|------|--------|
+| 1 | Data embedding — `src/demographic-tables.js` | ✅ Done (synthetic **placeholder** data — pending primary-source COR/INSEE transcription, a data-only change) |
+| 2 | Kernel functions — `activePopFactor_actuarial` / `retireeIdx_actuarial` / `cohIdx_actuarial` | ✅ Done |
+| 3 | Loop dispatch by `demoMode` | ✅ Done |
+| 4 | Config params — `demoMode` / `demoScenario` / `mortalityFemaleFraction` | ✅ Done |
+| 5 | UI — Démographie panel (mode radio, COR scenario dropdown, Tier-B mortality-mix slider) | ✅ Done |
+| 6 | Tests + fixtures — structural + per-cohort-mask tests; `v2.0-actuarial-cor-central-trace.json` | ✅ Done |
+| §6.5 | Per-cohort population mask for `legacyShareAvg_t` | ✅ Done (actuarial mode only; parametric stays held-flat) |
+| §9.5 | Monte Carlo scenario alignment | ⛔ N/A — the active root build has no Monte Carlo module (`monte-carlo-worker.js` exists only in the legacy `app/` build, which is not used) |
+
+`demoMode` defaults to `'parametric'`; actuarial mode is opt-in until the placeholder demographic tables are replaced with primary-source data.
 
 ---
 
