@@ -1417,8 +1417,27 @@ export function computeIndividualPerspective(cfg, reformRows, cfRows, birthYear)
   // contribution-routing ramp (sigmaCapi(t) reaches 1.0 by T_capi_start).
   const legacyShare = legacyShareOfCohort(birthYear, cfg);
   const inCapi = legacyShare < 1.0;
-  const retirementYear = birthYear + RETIREMENT_AGE;
-  const retT = Math.max(0, Math.min(reformRows.length - 1, retirementYear - Y0));
+
+  // In indexed mode, find the first simulation year where the worker's age
+  // reaches the period-specific A_R_t (exported in each row). This gives
+  // the correct accumulation window and pension read-out year.
+  let effectiveRetirementAge = RETIREMENT_AGE;
+  let retT;
+  if (cfg.retirementAgeMode === 'indexed') {
+    for (let t = 0; t < reformRows.length; t++) {
+      const age = (Y0 + t) - birthYear;
+      const A_R_at_t = Math.round(reformRows[t].A_R_t ?? RETIREMENT_AGE);
+      if (age >= A_R_at_t) {
+        effectiveRetirementAge = A_R_at_t;
+        retT = t;
+        break;
+      }
+    }
+    if (retT === undefined) retT = reformRows.length - 1;
+  } else {
+    retT = Math.max(0, Math.min(reformRows.length - 1, birthYear + RETIREMENT_AGE - Y0));
+  }
+  const retirementYear = birthYear + effectiveRetirementAge;
 
   const w_n = cfg.pi + cfg.w_r + cfg.pi * cfg.w_r;
 
@@ -1433,7 +1452,7 @@ export function computeIndividualPerspective(cfg, reformRows, cfRows, birthYear)
   for (let t = 0; t < reformRows.length; t++) {
     const age = (Y0 + t) - birthYear;
     const r = reformRows[t];
-    if (age >= 22 && age < RETIREMENT_AGE) {
+    if (age >= 22 && age < effectiveRetirementAge) {
       const wFactor = Math.pow(1 + w_n, t);
       lastWorkingContribK = (cfg.W0 / N_WORKERS_M) * wFactor * cfg.tau_s;
       if (inCapi) {
@@ -1447,7 +1466,7 @@ export function computeIndividualPerspective(cfg, reformRows, cfRows, birthYear)
         yearsInCapi++;
       }
     }
-    if (age === RETIREMENT_AGE) capiPotAtRet = capiPot;
+    if (age === effectiveRetirementAge) capiPotAtRet = capiPot;
   }
 
   // §5.6.1 v1.1: per-retiree annual legacy pension (k€/yr/retiree) at
@@ -1488,7 +1507,7 @@ export function computeIndividualPerspective(cfg, reformRows, cfRows, birthYear)
   const capiPotReal = capiPotAtRet / Math.pow(1 + cfg.pi, retT) * KE_TO_EUR;
 
   // Diagnostic: yearsInPayg under §5.6.1 boundary discipline.
-  const careerYears = Math.max(1, RETIREMENT_AGE - 22);
+  const careerYears = Math.max(1, effectiveRetirementAge - 22);
   const yearsInPayg = legacyShare * careerYears;
 
   return {
