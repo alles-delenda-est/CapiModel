@@ -1084,12 +1084,13 @@ describe('activePopFactor_actuarial (7d′)', () => {
     expect(activePopFactor_actuarial(0, ACT_CFG)).toBeCloseTo(1.0, 3);
   });
 
-  it('is monotonically non-increasing over the 70-year horizon (cor_central)', () => {
-    let prev = activePopFactor_actuarial(0, ACT_CFG);
-    for (let t = 1; t < ACT_CFG.N; t++) {
+  it('stays within a bounded range [0.8, 1.3] over the 70-year horizon (cor_central)', () => {
+    // Real COR data: workforce grows slightly ~2027–2037 then declines — not
+    // monotone, but bounded. Former placeholder was always declining.
+    for (let t = 0; t < ACT_CFG.N; t++) {
       const v = activePopFactor_actuarial(t, ACT_CFG);
-      expect(v, `activePopFactor_actuarial should not increase at t=${t}`).toBeLessThanOrEqual(prev + 1e-9);
-      prev = v;
+      expect(v, `t=${t}: activePopFactor_actuarial=${v} out of [0.8, 1.3]`).toBeGreaterThan(0.8);
+      expect(v, `t=${t}: activePopFactor_actuarial=${v} out of [0.8, 1.3]`).toBeLessThan(1.3);
     }
   });
 
