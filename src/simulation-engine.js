@@ -832,7 +832,12 @@ export function runSimulation(userConfig = {}) {
     // v1.2 fix: use REAL rate so the inflation component πF_t stays in the fund.
     // r_f_portfolio_n retained in row output as a diagnostic field only.
     const fundReturn_t = F_t * cfg.r_f_portfolio;                               // (36) v1.2
-    const abatement_t  = cfg.A0 * Omega_t * empFactor * activePop_t;            // (37)
+    // The abatement revenue ("suppression de l'abattement fiscal") is a
+    // tax-side measure within the Équinoxe package — gated on useEquinoxe and
+    // phased like the §5.5 components (S0_brackets / S0_irDeduction / S0_csg).
+    const abatement_t  = cfg.useEquinoxe
+      ? cfg.A0 * Omega_t * empFactor * activePop_t * phaseFactor_t
+      : 0;                                                                     // (37)
     // v1.0a eq (38): S0_csg_revenue_t added as a tax-side revenue stream that
     // applies to all retiree pension income (legacy + capi). Distinct from the
     // benefit-side reductions (eqs 21a/21b) which only affect legacy.
