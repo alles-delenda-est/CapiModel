@@ -17,15 +17,26 @@
  *                      demographic scenarios would additionally vary fertility and
  *                      immigration — this is a close practical approximation.
  *
- *   ⚠️  COR_*.P_ret  — PLACEHOLDER. Pending primary-source retraités headcount
- *                      file (likely hypo_retraites_2025.xlsx from COR download
- *                      package). The synthetic curve (17.0M → ~21.5M → flat)
- *                      matches the qualitative COR shape but lacks scenario
- *                      differentiation and exact annual values.
+ *   ⚠️  COR_*.P_ret  — PLACEHOLDER. Synthetic curve (17.0M → ~21.5M → flat)
+ *                      calibrated to DREES historical anchor (2023 observed:
+ *                      17.198M, DREES EACR/EIR/ANCETRE, tous régimes droits
+ *                      directs). Future path qualitatively COR-shaped but lacks
+ *                      exact annual values and scenario differentiation.
+ *                      To replace: extract from COR RA2025 download package,
+ *                      file likely named hypo_retraites_2025.xlsx or equivalent
+ *                      table of projected retraités headcounts by scenario.
  *
- *   ⚠️  INSEE_T60_QX_MALE / FEMALE — PLACEHOLDER. Pending INSEE Tableaux de
- *                      mortalité T60 (2023 edition), qx by single age 60–105.
- *                      https://www.insee.fr/fr/statistiques/2533382
+ *   ⚠️  INSEE_T60_QX_MALE / FEMALE — PLACEHOLDER. Makeham mortality calibrated
+ *                      to reasonable milestone qx values (see array comments).
+ *                      To replace: INSEE Tables de mortalité prospectives 2023
+ *                      (série "TM"), qx by single age 60–105, male & female.
+ *                      Direct download: https://www.insee.fr/fr/statistiques/2533382
+ *                      (look for the Excel file containing qx columns by âge,
+ *                      hommes and femmes, for the 2023 edition / TD 2023).
+ *                      Note: the two files uploaded as "insee ones" were
+ *                      ECRT2023E2.xlsx (population active projections) and
+ *                      reveproteccotisantretraite.xlsx (DREES historical
+ *                      cotisants/retraités 2004–2023) — neither contains qx.
  *
  *   ⚠️  RETIREE_AGE_WEIGHTS_2027 — PLACEHOLDER. Pending DREES Édition 2025
  *                      (Les retraités et les retraites), 2027 retiree age
