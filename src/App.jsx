@@ -84,6 +84,8 @@ function rowToChart(r) {
     abatement: r.abatement_t,
     emplrToLeg: r.emplrToLeg_t,
     csgRevenue: r.S0_csg_revenue_t,    // v1.0a NEW chart row
+    cotisSalPayg: r.C_s_payg_t,        // employee contributions routed to PAYG
+    fiscalTransfer: r.fiscalTransfer_t, // §5.9a diversification (CSG/FSV/État)
     // Expenditure
     legacyExp: r.legacyExp_t,
     capiPayout: r.capiPayout_t,
@@ -125,6 +127,8 @@ const TABLE_COLUMNS = [
   { key: 'H_t_proceeds', label: 'HLM',     always: false, render: r => r.H_t_proceeds.toFixed(1) },
   { key: 'abatement_t', label: 'Abatt.',   always: false, render: r => r.abatement_t.toFixed(1) },
   { key: 'S0_csg_revenue_t', label: 'CSG (rec.)', always: false, render: r => r.S0_csg_revenue_t.toFixed(1) },
+  { key: 'fiscalTransfer_t', label: 'Transferts', always: false, render: r => (r.fiscalTransfer_t ?? 0).toFixed(1) },
+  { key: 'C_s_payg_t',  label: 'Sal.→payg', always: false, render: r => r.C_s_payg_t.toFixed(1) },
   { key: 'C_s_capi_t',  label: 'Sal.→capi', always: false, render: r => r.C_s_capi_t.toFixed(1) },
   { key: 'emplrToLeg_t', label: 'Empl.→leg', always: false, render: r => r.emplrToLeg_t.toFixed(1) },
   { key: 'emplrToCap_t', label: 'Empl.→cap', always: false, render: r => r.emplrToCap_t.toFixed(1) },
@@ -188,8 +192,8 @@ export default function App() {
     const headers = [
       'Annee',
       'Dep_legacy_MdE','Dep_capi_MdE','Total_pensions_MdE',
-      'Rend_fonds_MdE','HLM_MdE','Abattement_MdE','CSG_recettes_MdE',
-      'Sal_capi_MdE','Empl_leg_MdE','Empl_cap_MdE',
+      'Rend_fonds_MdE','HLM_MdE','Abattement_MdE','CSG_recettes_MdE','Transferts_MdE',
+      'Sal_payg_MdE','Sal_capi_MdE','Empl_leg_MdE','Empl_cap_MdE',
       'Int_dette_MdE','Flux_net_MdE','Emprunt_MdE','Prelev_MdE','Dette_MdE',
       'Capi_nom_MdE','Capi_reel_MdE',
       'Bond_stock_MdE','Bond_issuance_MdE','Bond_coupon_MdE',
@@ -213,8 +217,8 @@ export default function App() {
         r.legacyExp_t.toFixed(1), r.capiPayout_t.toFixed(1),
         (r.legacyExp_t + r.capiPayout_t).toFixed(1),
         r.fundReturn_t.toFixed(1), r.H_t_proceeds.toFixed(1), r.abatement_t.toFixed(1),
-        r.S0_csg_revenue_t.toFixed(1),
-        r.C_s_capi_t.toFixed(1), r.emplrToLeg_t.toFixed(1), r.emplrToCap_t.toFixed(1),
+        r.S0_csg_revenue_t.toFixed(1), (r.fiscalTransfer_t ?? 0).toFixed(1),
+        r.C_s_payg_t.toFixed(1), r.C_s_capi_t.toFixed(1), r.emplrToLeg_t.toFixed(1), r.emplrToCap_t.toFixed(1),
         r.debtInterest_t.toFixed(1), r.netFlow_t.toFixed(1), r.borrowed_t.toFixed(1),
         r.levy_t.toFixed(1), r.D_t.toFixed(1),
         r.K_t.toFixed(0), (r.K_t / Math.pow(1.02, r.t)).toFixed(0),
@@ -841,6 +845,8 @@ export default function App() {
                     distinguishable from emplrToLeg's saturated #8b5cf6. */}
                 <Area type="monotone" dataKey="csgRevenue" stackId="income" fill="#c4b5fd" stroke="#7c3aed" name="Recette Équinoxe CSG/CRDS" />
                 <Area type="monotone" dataKey="emplrToLeg" stackId="income" fill="#a78bfa" stroke="#8b5cf6" name="Cotis. employeur → legacy" />
+                <Area type="monotone" dataKey="cotisSalPayg" stackId="income" fill="#fca5a5" stroke="#ef4444" name="Cotis. salarié → PAYG" />
+                <Area type="monotone" dataKey="fiscalTransfer" stackId="income" fill="#5eead4" stroke="#0d9488" name="Transferts (diversification)" />
                 <Line type="monotone" dataKey="legacyExp" stroke="#ef4444" strokeWidth={3} name="Dépenses legacy" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
