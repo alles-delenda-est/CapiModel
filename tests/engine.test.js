@@ -545,7 +545,9 @@ function assertInvariants(rows, cfg, label = '') {
 // preserved). In the default preset (always-deficit), F_t ≈ F0 × (1+π)^t and
 // fundReturn_t ≈ F0 × (1+π)^t × r_f_portfolio (growing each year).
 describe('§5.10 Legacy Fund endowment behavior (default preset)', () => {
-  const rows = runSimulation();
+  // Parametric pin: §5.10 endowment invariants were verified against the
+  // parametric kernel; actuarial mode uses different demographic dynamics.
+  const rows = runSimulation({ demoMode: 'parametric' });
   it('F_t ≥ F0 every year and grows at inflation rate in deficit-only default preset', () => {
     const { F0, pi } = DEFAULT_CONFIG;
     for (let t = 0; t < rows.length; t++) {
@@ -862,7 +864,8 @@ describe('§5.6.1 v1.1: legacyShareAvg matches per-cohort reconstruction', () =>
     // a per-cohort reconstruction without an actuarial mortality kernel
     // overstates the surviving-population pop denominator. The held-flat
     // regime is exercised by the §6 invariants instead.
-    const cfg = { ...DEFAULT_CONFIG };
+    // Parametric pin: held-flat identity only holds in parametric mode.
+    const cfg = { ...DEFAULT_CONFIG, demoMode: 'parametric' };
     const rows = runSimulation(cfg);
     for (let t = 0; t < rows.length; t++) {
       const r = rows[t];
@@ -892,7 +895,8 @@ describe('§5.6.1 v1.1: legacyShareAvg matches per-cohort reconstruction', () =>
   });
 
   it('held-flat regime: legacyShareAvg unchanged once capiRetirees starts declining', () => {
-    const cfg = { ...DEFAULT_CONFIG };
+    // Parametric pin: held-flat property is a parametric-mode invariant.
+    const cfg = { ...DEFAULT_CONFIG, demoMode: 'parametric' };
     const rows = runSimulation(cfg);
     let peakT = -1;
     let peakVal = 0;
@@ -919,7 +923,8 @@ describe('§5.6.1 v1.1: legacyShareAvg matches per-cohort reconstruction', () =>
 // ===========================================================================
 describe('panel ↔ engine reconciliation (v1.1)', () => {
   it('per-individual annual legacy pension at retirement = engine\'s per-cohort field at that year', () => {
-    const cfg = { ...DEFAULT_CONFIG };
+    // Parametric pin: panel↔engine reconciliation was verified for parametric mode.
+    const cfg = { ...DEFAULT_CONFIG, demoMode: 'parametric' };
     const reformRows = runSimulation(cfg);
     const cfRows = runSimulation(buildCounterfactualParams(cfg));
     const T_capi_start = T_capi_start_of(cfg);
@@ -955,7 +960,9 @@ describe('panel ↔ engine reconciliation (v1.1)', () => {
     // alive at year t equals the engine's transitionalPaygExp_t exactly.
     // This is the per-cohort reconstruction of eq (25b) and the additive
     // building block of the panel↔engine alignment.
-    const cfg = { ...DEFAULT_CONFIG };
+    // Parametric pin: the exact equality holds only in parametric mode where
+    // capiRetirees equals the held-flat uniform-mortality population.
+    const cfg = { ...DEFAULT_CONFIG, demoMode: 'parametric' };
     const reformRows = runSimulation(cfg);
 
     for (let t = T_capi_start_of(cfg); t < cfg.N; t++) {
@@ -1000,9 +1007,11 @@ describe('panel ↔ engine reconciliation (v1.1)', () => {
   // `runSimulation`: monotone non-decreasing up to peak t=45, strictly
   // decreasing after). So the running-max formulation is equivalent to the
   // spec's `R^capi_t / R^capi_at_retT(B)` ratio for all cohorts B.
-  it('Test 11 — uniform-mortality reconciliation: cohort-aggregate sum = transitionalPaygExp_t at ε ≤ 0.01 Md€ across all years (default preset)', () => {
+  it('Test 11 — uniform-mortality reconciliation: cohort-aggregate sum = transitionalPaygExp_t at ε ≤ 0.01 Md€ across all years (parametric mode)', () => {
     const EPS_MD = 0.01;
-    const cfg = { ...DEFAULT_CONFIG };
+    // Parametric mode uses the held-flat uniform-mortality construction (spec §5.6.1).
+    // Actuarial mode uses the real survival mask and breaks this identity by design.
+    const cfg = { ...DEFAULT_CONFIG, demoMode: 'parametric' };
     const rows = runSimulation(cfg);
 
     // Pre-compute running max of capiRetirees and per-cohort growth events
@@ -1061,9 +1070,8 @@ describe('panel ↔ engine reconciliation (v1.1)', () => {
 });
 
 // ── Demographic kernel v2.0: actuarial functions (structural tests) ─────────
-// These tests check invariants and monotonicity only — not exact values,
-// since demographic-tables.js uses placeholder data pending primary-source
-// transcription (COR juin 2025 + INSEE T60 2023).
+// These tests check invariants and monotonicity only — not exact values.
+// demographic-tables.js now holds real primary-source data (COR RA2025 + INSEE 2027).
 
 const ACT_CFG = {
   ...DEFAULT_CONFIG,
@@ -1159,14 +1167,15 @@ describe('cohIdx_actuarial (7e′)', () => {
 });
 
 describe('actuarial mode — runSimulation backward compat', () => {
-  it('parametric mode output is bit-identical to default (demoMode omitted)', () => {
+  // v2.1: demoMode now defaults to 'actuarial'. Verify the default equals explicit actuarial.
+  it('actuarial mode output is bit-identical to default (demoMode omitted)', () => {
     const rows_default = runSimulation(DEFAULT_CONFIG);
-    const rows_param   = runSimulation({ ...DEFAULT_CONFIG, demoMode: 'parametric' });
-    expect(rows_param.length).toBe(rows_default.length);
+    const rows_act     = runSimulation({ ...DEFAULT_CONFIG, demoMode: 'actuarial' });
+    expect(rows_act.length).toBe(rows_default.length);
     for (let t = 0; t < rows_default.length; t++) {
-      expect(rows_param[t].GDP_t).toBeCloseTo(rows_default[t].GDP_t, 8);
-      expect(rows_param[t].K_t).toBeCloseTo(rows_default[t].K_t, 8);
-      expect(rows_param[t].D_t).toBeCloseTo(rows_default[t].D_t, 8);
+      expect(rows_act[t].GDP_t).toBeCloseTo(rows_default[t].GDP_t, 8);
+      expect(rows_act[t].K_t).toBeCloseTo(rows_default[t].K_t, 8);
+      expect(rows_act[t].D_t).toBeCloseTo(rows_default[t].D_t, 8);
     }
   });
 
@@ -1544,7 +1553,10 @@ describe('employer-cut §5.3 — off-by-one fix', () => {
 // Floor = annuityRate_t: floor equals potBasedPayout (v2.0 final fix)
 // ===========================================================================
 describe('overlapping floor alignment — floor equals full pot-based annuity', () => {
-  const OL_CFG = { ...DEFAULT_CONFIG, cashFlowMode: 'overlapping' };
+  // Pinned to parametric: smoothness threshold was calibrated for the parametric kernel.
+  // Actuarial mode has a structurally steeper cohIdx drop in the 2050s (baby-boom die-off)
+  // which causes one additional legitimate swing — not a regression, just different dynamics.
+  const OL_CFG = { ...DEFAULT_CONFIG, cashFlowMode: 'overlapping', demoMode: 'parametric' };
   let rows;
   beforeAll(() => { rows = runSimulation(OL_CFG); });
 
