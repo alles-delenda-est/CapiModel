@@ -5,6 +5,42 @@ All notable changes to CapiModel are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to semantic versioning where appropriate.
 
+## [v2.0] — Demographic kernel
+
+Opt-in actuarial demographic kernel (`demoMode: 'actuarial'`), per
+`DemographicKernel_plan.md`. Replaces the parametric smoothstep kernel
+(eqs 7c/7d/7e) with table-driven equivalents sourced from COR June 2025
+and INSEE T60 2023.
+
+- **Actuarial kernel functions** — `activePopFactor_actuarial` (7d′),
+  `retireeIdx_actuarial` (7c′), `cohIdx_actuarial` (7e′). All produce
+  normalised indices (ratio to t=0), so downstream equations are
+  structurally unchanged. Dispatched in the §5.2 loop block by `demoMode`.
+- **§6.5 per-cohort population mask** — in actuarial mode, `legacyShareAvg_t`
+  is now a true mortality-weighted mean across capi-cohort sub-populations,
+  each aged with differential T60 survival. Replaces the v1.1 held-flat
+  blend (which froze the average at the capi-retiree peak and carried a
+  ~1.7 % conservative peak-debt bias). Parametric mode keeps the held-flat
+  blend unchanged.
+- **Démographie UI** — mode radio (paramétrique / actuariel), COR scenario
+  dropdown (haute / centrale / basse), and a Tier-B female-mortality-mix
+  slider.
+- **Config** — `demoMode` (default `'parametric'`), `demoScenario`
+  (default `'cor_central'`), `mortalityFemaleFraction` (default `0.52`).
+- **Tests & fixtures** — structural + per-cohort-mask coverage; new
+  `tests/fixtures/v2.0-actuarial-cor-central-trace.json` locks the
+  actuarial engine path. The `v1.1-default-trace.json` parametric fixture
+  is unchanged — parametric output is bit-identical to v1.x.
+
+**Data status:** the arrays in `src/demographic-tables.js` are synthetic
+placeholders (Makeham mortality, Gaussian age pyramid) calibrated to the
+correct qualitative shape. They must be replaced with primary-source COR
+juin 2025 / INSEE T60 transcriptions — a data-only change with no engine
+impact — before actuarial mode becomes the default.
+
+**Out of scope:** Monte Carlo scenario alignment (spec §9.5) — the active
+root build has no Monte Carlo module.
+
 ## [v1.1]
 
 Per-cohort PAYG accrual added to the v1.0a engine. Resolves the binary

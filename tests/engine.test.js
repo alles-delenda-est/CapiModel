@@ -1187,6 +1187,72 @@ describe('actuarial mode — runSimulation backward compat', () => {
   });
 });
 
+// ── §6.5 per-cohort population mask (actuarial legacyShareAvg) ───────────────
+// In actuarial mode the held-flat v1.1 blend is replaced by a per-cohort mask:
+// each capi-cohort sub-population ages with differential T60 mortality, so
+// legacyShareAvg_t is a true mortality-weighted mean. Older sub-cohorts carry
+// higher legacyShare AND die faster, so the mean must eventually decline —
+// unlike the parametric held-flat regime which freezes it at the peak.
+
+describe('§6.5 per-cohort population mask', () => {
+  it('legacyShareAvg stays in [0,1] across the horizon (actuarial mode)', () => {
+    const rows = runSimulation(ACT_CFG);
+    for (const r of rows) {
+      expect(r.legacyShareAvg, `t=${r.t} legacyShareAvg ≥ 0`).toBeGreaterThanOrEqual(-1e-12);
+      expect(r.legacyShareAvg, `t=${r.t} legacyShareAvg ≤ 1`).toBeLessThanOrEqual(1 + 1e-12);
+      expect(isFinite(r.legacyShareAvg), `t=${r.t} legacyShareAvg finite`).toBe(true);
+    }
+  });
+
+  it('mask declines legacyShareAvg after the capi-retiree peak (vs held-flat parametric)', () => {
+    const actRows = runSimulation(ACT_CFG);
+    // Find the last year capiRetirees grew — after this the parametric kernel
+    // holds legacyShareAvg flat, but the actuarial mask must keep ageing it down.
+    let peakT = 0;
+    for (let t = 1; t < actRows.length; t++) {
+      if (actRows[t].capiRetirees > actRows[t - 1].capiRetirees + 1e-12) peakT = t;
+    }
+    // There must be a post-peak window, and within it legacyShareAvg should
+    // strictly fall at least once (differential mortality is non-zero).
+    expect(peakT).toBeLessThan(actRows.length - 2);
+    let sawDecline = false;
+    for (let t = peakT + 2; t < actRows.length; t++) {
+      if (actRows[t].legacyShareAvg < actRows[t - 1].legacyShareAvg - 1e-9) sawDecline = true;
+    }
+    expect(sawDecline, 'actuarial legacyShareAvg should decline post-peak').toBe(true);
+  });
+
+  it('actuarial legacyShareAvg is never above the held-flat parametric path late-horizon', () => {
+    // The mask removes the documented held-flat upward bias, so once both
+    // kernels have populated their cohorts the actuarial mean should sit at or
+    // below the parametric one (older high-share cohorts thinned by mortality).
+    const actRows = runSimulation(ACT_CFG);
+    const parRows = runSimulation({ ...ACT_CFG, demoMode: 'parametric' });
+    for (let t = 40; t < actRows.length; t++) {
+      if (parRows[t].legacyShareAvg < 1e-9) continue;
+      expect(actRows[t].legacyShareAvg,
+        `t=${t}: actuarial mask should not exceed held-flat parametric`)
+        .toBeLessThanOrEqual(parRows[t].legacyShareAvg + 1e-6);
+    }
+  });
+
+  it('parametric mode does not build the per-cohort mask (held-flat preserved)', () => {
+    // Regression guard: the mask must be gated on demoMode === 'actuarial'.
+    // In parametric mode, once capiRetirees stops growing legacyShareAvg is
+    // frozen — identical to the pre-v2.0 behaviour.
+    const rows = runSimulation({ ...DEFAULT_CONFIG, demoMode: 'parametric' });
+    let peakT = 0;
+    for (let t = 1; t < rows.length; t++) {
+      if (rows[t].capiRetirees > rows[t - 1].capiRetirees + 1e-12) peakT = t;
+    }
+    for (let t = peakT + 1; t < rows.length; t++) {
+      if (rows[t].capiRetirees < 1e-12) continue;
+      expect(rows[t].legacyShareAvg, `t=${t} held flat`)
+        .toBeCloseTo(rows[peakT].legacyShareAvg, 12);
+    }
+  });
+});
+
 // PR #17 (v2.0) overlapping cash-flow mode tests.  The toggle replaces the
 // E0-indexed capi floor with a K_t-share annuity floor that scales with the
 // fund.  State guarantee continues to post any annual shortfall to D_t — but
