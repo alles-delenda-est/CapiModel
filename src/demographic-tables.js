@@ -29,19 +29,26 @@
  *                        cor_high    ← COR row "[0,7_C5]" (central LE, 5% unemployment)
  *                        cor_low     ← COR row "[0,7_C10]" (central LE, 10% unemployment)
  *
- *   ✅ INSEE_T60_QX_MALE / FEMALE — CALIBRATED. Gompertz-Makeham shape calibrated
- *                      to match COR RA2025 Fig 1.3 life-expectancy-at-65 targets
- *                      for year 2027 (central scenario):
- *                        Male:   LE(65) = 20.199 yrs  (COR RA2025 projection 2027)
- *                        Female: LE(65) = 23.868 yrs  (COR RA2025 projection 2027)
- *                      Shape is a proportional rescaling of the original Makeham
- *                      curve (scale factors: male ×0.909, female ×0.947). This
- *                      matches observed French mortality well at ages 60–90 but
- *                      uses an approximate Gompertz tail for ages 90–105.
- *                      True source: INSEE Tables de mortalité prospectives (TM)
- *                      series, https://www.insee.fr/fr/statistiques/2533382 — a
- *                      pure data swap (no engine change) if single-age qx data
- *                      becomes available.
+ *   ✅ INSEE_T60_QX_MALE / FEMALE — REAL DATA. Source: INSEE projections de
+ *                      population 2021–2070, central scenario, single-age qx
+ *                      table (00_central_QX.xlsx, sheets hyp_mortaliteH /
+ *                      hyp_mortaliteF, "Quotients de mortalité par âge pour
+ *                      100 000"). Extracted: the 2027 period column, INSEE
+ *                      ages 61–106, divided by 100 000.
+ *                      CONVENTION SHIFT: INSEE indexes qx by "âge atteint dans
+ *                      l'année" — empirically S(x+1)/S(x) = 1 − qx_insee(x+1).
+ *                      The engine needs qx[age−60] = P(die between exact age and
+ *                      age+1) = qx_insee(age+1), so engine index i holds INSEE
+ *                      qx for âge atteint 61+i. Verified: engine survival curve
+ *                      reproduces INSEE's published "Survie par âge" to <2e-6.
+ *                      INSEE LE(65) for 2027: male 20.199 yrs, female 23.868 yrs
+ *                      — these match COR RA2025 Fig 1.3 exactly (Fig 1.3 is built
+ *                      on this same INSEE central mortality projection).
+ *                      Note: a single static 2027 period vector is used for the
+ *                      whole horizon; it slightly overstates old-age mortality
+ *                      for cohorts reaching advanced ages in later decades
+ *                      (mortality keeps improving) — a known limitation of the
+ *                      single-vector engine design, not of the source data.
  *
  *   ✅ RETIREE_AGE_WEIGHTS_2027 — CALIBRATED. Derived from:
  *                      (a) French birth cohorts 1942–1963 (INSEE vital statistics);
@@ -116,18 +123,19 @@ export const COR_SCENARIOS = {
   cor_low:     COR_LOW,
 };
 
-// ---- INSEE T60 mortality (qx by single age) — CALIBRATED -----------------
-// 46 entries each, indices map age − 60 (so qxArray[0] = q(age 60), [45] = q(105)).
-// Gompertz-Makeham shape, uniformly rescaled (male ×0.909, female ×0.947) to match
-// COR RA2025 Fig 1.3 life-expectancy-at-65 projections for 2027 (central scenario):
-//   • Male:   LE(65) = 20.199 yrs → q(60)=0.00636, q(65)=0.01010, q(70)=0.01640, q(80)=0.04487, q(90)=0.12573
-//   • Female: LE(65) = 23.868 yrs → q(60)=0.00331, q(65)=0.00548, q(70)=0.00930, q(80)=0.02787, q(90)=0.08555
-// To replace with single-age qx from INSEE TM prospectives series (2023 edition):
-// Source: https://www.insee.fr/fr/statistiques/2533382
+// ---- INSEE T60 mortality (qx by single age) — REAL DATA ------------------
+// 46 entries each. Engine convention: qx[i] = P(die between exact age 60+i and
+// 61+i). Source: INSEE projections 2021–2070 central scenario, 2027 period
+// column. INSEE's "âge atteint dans l'année" qx is shifted +1 age (see header),
+// so engine index i holds INSEE qx for âge atteint 61+i.
+//   • Male:   q[0]=q(60→61)=0.00801, q[4]=q(64→65)=0.01097, q[10]=q(70)=0.01777,
+//             q[20]=q(80)=0.04228, q[30]=q(90)=0.15012. INSEE LE(65)=20.199 yrs.
+//   • Female: q[0]=q(60→61)=0.00418, q[4]=q(64→65)=0.00543, q[10]=q(70)=0.00899,
+//             q[20]=q(80)=0.02623, q[30]=q(90)=0.10585. INSEE LE(65)=23.868 yrs.
 
-export const INSEE_T60_QX_MALE = [0.006362,0.006961,0.007625,0.00837,0.009188,0.010097,0.011106,0.012233,0.013478,0.014859,0.016395,0.018094,0.019985,0.022084,0.024411,0.027001,0.029872,0.033053,0.036589,0.040515,0.044868,0.049703,0.055074,0.061035,0.067642,0.074986,0.083138,0.09218,0.102222,0.113364,0.125733,0.139465,0.154706,0.171628,0.190404,0.211252,0.23439,0.260073,0.288582,0.320227,0.355352,0.39434,0.437617,0.485647,0.538976,0.598157];
+export const INSEE_T60_QX_MALE = [0.008007,0.008756,0.009511,0.010226,0.010966,0.011675,0.012895,0.013896,0.015051,0.016427,0.017768,0.019223,0.020644,0.022453,0.024375,0.026634,0.029298,0.032229,0.035655,0.039572,0.042278,0.046764,0.051939,0.058661,0.066558,0.076,0.087345,0.099939,0.114255,0.13188,0.150118,0.170077,0.188841,0.206431,0.225296,0.247575,0.272339,0.294706,0.313765,0.327886,0.342149,0.356681,0.371457,0.386452,0.401636,0.416982];
 
-export const INSEE_T60_QX_FEMALE = [0.003313,0.003654,0.004032,0.004458,0.004941,0.005481,0.006077,0.006749,0.007506,0.008349,0.009295,0.010355,0.011539,0.012864,0.01435,0.016016,0.01788,0.019972,0.02231,0.024932,0.027867,0.031151,0.034833,0.03896,0.043579,0.048748,0.054541,0.061024,0.068294,0.076434,0.08555,0.095763,0.107197,0.119995,0.134345,0.150408,0.168402,0.188554,0.21112,0.236393,0.264704,0.296414,0.331929,0.371703,0.416248,0.466141];
+export const INSEE_T60_QX_FEMALE = [0.004176,0.004418,0.004707,0.005038,0.005425,0.005747,0.006345,0.006956,0.007543,0.00819,0.008993,0.009997,0.010997,0.012134,0.013494,0.014735,0.016319,0.018253,0.020739,0.02374,0.02623,0.029445,0.033301,0.037882,0.043264,0.049615,0.057924,0.067769,0.078837,0.091607,0.105854,0.122045,0.139841,0.158442,0.17832,0.197311,0.216962,0.237674,0.259199,0.282995,0.303666,0.317202,0.328312,0.334718,0.345911,0.357263];
 
 // ---- DREES 2027 retiree age pyramid weights (ages 64–85) — CALIBRATED ----
 // 22 entries; index = age − 64. Sum ≈ 1.0 (normalised; engine clamps output).
