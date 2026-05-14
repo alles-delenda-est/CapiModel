@@ -25,9 +25,9 @@ const UI_CONFIG = {
   cashFlowMode: 'balanced',
   geKneeRatio: 3.0,
   geFloorRatio: 8.0,
-  // PR #21: fiscal transfers enabled ('full') for all app-facing presets.
-  // 'none' kept as DEFAULT_CONFIG engine default to preserve test fixtures.
-  fiscalTransferMode: 'full',
+  // fiscalTransferMode stays 'none' (inherited from DEFAULT_CONFIG): État/FSV
+  // transfers are treated as net of debt — removing them from the revenue stream
+  // lets the true PAYG deficit show up directly in D_t.
 };
 
 /**
@@ -86,18 +86,12 @@ const v1_stress = {
 // =====================================================================
 // Paquet partiel presets (Task 4) — pedagogical scenarios showing that
 // partial reform is insufficient under v1.0a's active-pop dynamics.
-// Disposition documented per preset; verified against v1.0a engine.
 // =====================================================================
 
 /**
  * equinoxeOnly — DESIGNED CATASTROPHIC (under realistic demographics).
  * Pedagogical: shows that benefit-side reductions alone (Équinoxe) cannot
  * close the gap when demographic pressure is the binding constraint.
- *
- * v1.0a verified disposition: peak transition debt ≈ 1.5 M Md€,
- * peak total debt ≈ 2.9 M Md€, transition debt-free 2033 but pre-existing
- * debt + interest dominate. Catastrophic-by-design retained per Task 4
- * brief option (a).
  */
 const equinoxeOnly = {
   label: 'Équinoxe seul',
@@ -119,10 +113,6 @@ const equinoxeOnly = {
  * labourHousingOnly — DESIGNED CATASTROPHIC (under realistic demographics).
  * Pedagogical: shows that fiscal/labour packages alone (capi + HLM + labour
  * reform) cannot close the gap without Équinoxe AND demographic relief.
- *
- * v1.0a verified disposition: peak transition debt ≈ 10 M Md€, peak total
- * debt ≈ 20 M Md€, no debt-free year. Catastrophic-by-design retained per
- * Task 4 brief option (a).
  */
 const labourHousingOnly = {
   label: 'Travail + Logement seul',
@@ -143,16 +133,9 @@ const labourHousingOnly = {
 };
 
 /**
- * equinoxeAndLabour — RECALIBRATED to cor_central demographics (option b).
- * Pedagogical: shows that the combination Équinoxe + labour reform IS
+ * equinoxeAndLabour — Pedagogical: shows that Équinoxe + labour reform IS
  * sufficient WHEN demographic projections match COR central scenario
- * (TFR ~1.7 + sustained migration). Falls into a credible regime rather
- * than a catastrophic one.
- *
- * v1.0a verified disposition under cor_central: peak transition debt
- * ≈ 3.2 k Md€, peak total ≈ 22 k Md€, transition debt-free 2033.
- * Recalibrated per Task 4 brief option (b) because the v0.11 form
- * (with realistic demographics) blew up to peak total 412 k Md€.
+ * (TFR ~1.7 + sustained migration).
  */
 const equinoxeAndLabour = {
   label: 'Équinoxe + Travail',

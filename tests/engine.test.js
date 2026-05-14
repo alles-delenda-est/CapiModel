@@ -1586,8 +1586,12 @@ describe('overlapping floor alignment — floor equals full pot-based annuity', 
         console.warn(`[smoothness] t=${rows[i].t}: capiPayout_t changed ${((curr - prev) / prev * 100).toFixed(1)}%`);
       }
     }
-    // Allow up to 2 violations (e.g. capi phase-in ramp-up in first years).
-    expect(violations, 'capiPayout_t has too many large YoY swings').toBeLessThanOrEqual(2);
+    // Allow up to 3 violations:
+    //   t=2,3 — capi phase-in ramp-up (first cohorts, small K_t).
+    //   t≈53  — debt-clearance event: D_t hits 0, capiBonus_t activates for the
+    //            first time, causing a one-period step-change in capiPayout_t.
+    //            Threshold moves with E0 calibration but remains a single event.
+    expect(violations, 'capiPayout_t has too many large YoY swings').toBeLessThanOrEqual(3);
   });
 });
 

@@ -124,7 +124,12 @@ export const DEFAULT_CONFIG = {
   baselineTransactions: 850000,
   constructionMultiplier: 1.0,
   // §3.5 Équinoxe
-  E0: 390,
+  // E0: total pension expenditure (all régimes) at t=0 (2027), Md€.
+  // Calibrated to COR June 2024 central scenario: all-in balance −0.2% GDP ≈ −6 Md€
+  // in 2025-2027, with contributions 367 Md€ + FSV/État 40 Md€ = 407 Md€ revenue.
+  // → E0 = 367 + 40 − (−6) = 413 Md€ ≈ 13.8% of 3 000 Md€ GDP (COR range 13.5–14%).
+  // Previous value 390 understated 2027 expenditure by ~6% relative to COR data.
+  E0: 413,
   useEquinoxe: true,
   equinoxePhasing: 'immediate',
   S0_irDeduction: 5,
