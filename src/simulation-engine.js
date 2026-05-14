@@ -599,10 +599,23 @@ export function runSimulation(userConfig = {}) {
     const I_factor_t = Math.pow(1 + iota, t);                                   // (5)
     const H_factor_t = Math.pow((1 + g_h_eff) * (1 + cfg.pi), t);               // (6)
 
+    // ---------- §5.4 (pre-computed) Retirement age — needed for §5.2 retiree-stock scaling ----------
+    // A_R_t is used in two places: (a) retireeAgeScale_t below, (b) §5.4 cohort routing.
+    const A_R_t = retirementAge(t, cfg);                                        // (12)
+    // Mechanical retiree-stock reduction: when A_R rises, fewer people have crossed the threshold.
+    // Scale = T_ret(indexed) / T_ret(base) = 1 − ΔA / T_ret_base_t.  Only applied in indexed mode.
+    const T_ret_base_t = Math.max(15,
+      cfg.lifeExpAt65_Y0 + (65 - cfg.retirementAgeBase)
+      + (t / 10) * cfg.lifeExpAt65_per_decade);
+    const deltaAR_t = A_R_t - cfg.retirementAgeBase;
+    const retireeAgeScale_t = (cfg.retirementAgeMode === 'indexed' && deltaAR_t > 0)
+      ? Math.max(0.5, 1 - deltaAR_t / T_ret_base_t)
+      : 1;
+
     // ---------- §5.2 Demographic indices — dispatched by demoMode ----------
-    const retireeIdx_t = cfg.demoMode === 'actuarial'                           // (7c / 7c′)
+    const retireeIdx_t = (cfg.demoMode === 'actuarial'                          // (7c / 7c′)
       ? retireeIdx_actuarial(t, cfg)
-      : retireeIdx(t, cfg.demoProfile);
+      : retireeIdx(t, cfg.demoProfile)) * retireeAgeScale_t;
     const activePop_t  = cfg.demoMode === 'actuarial'                           // (7d / 7d′)
       ? activePopFactor_actuarial(t, cfg)
       : activePopFactor(t, cfg.demoProfile);
@@ -631,7 +644,7 @@ export function runSimulation(userConfig = {}) {
     const C_e_t = W_t * tau_e_eff;                                              // (11)
 
     // ---------- §5.4 Retirement age & cohort routing ----------
-    const A_R_t = retirementAge(t, cfg);                                        // (12)
+    // A_R_t pre-computed above (before §5.2) to enable retireeAgeScale_t.
     const sigma_capi_t = sigmaCapi(t, cfg);                                     // (15)
     const C_s_capi_t = C_s_t * sigma_capi_t;                                    // (16)
     const C_s_payg_t = C_s_t * (1 - sigma_capi_t);                              // (17)
