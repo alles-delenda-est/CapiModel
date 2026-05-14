@@ -1386,7 +1386,10 @@ export function buildCounterfactualParams(reformParams) {
  * see tests/engine.test.js for the reconciliation test).
  */
 export function computeIndividualPerspective(cfg, reformRows, cfRows, birthYear) {
-  const RETIREMENT_AGE = cfg.retirementAgeBase ?? 64;
+  // Round to integer: the panel operates on discrete year-steps so a fractional
+  // retirementAgeBase (e.g. 64.5 from the 0.5-step UI slider) must be resolved
+  // to a whole year before it is used as an array index or for age comparisons.
+  const RETIREMENT_AGE = Math.round(cfg.retirementAgeBase ?? 64);
   const LIFE_EXPECTANCY = 85;
   const N_WORKERS_M = 30;        // active population (millions, indexed)
   const KE_TO_EUR = 1000;        // engine units are k€ per worker → €
