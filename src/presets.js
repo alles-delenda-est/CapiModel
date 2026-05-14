@@ -229,8 +229,5 @@ export function extractKPIs(rows) {
     employerTaxCutInitial, employerTaxCutEventual,
     totalBondsIssued, totalRepayFund, bondNetObligation, totalBondRedemptions,
     totalPaygCounterfactual,
-    // Keep for backward compat but these are now 0 in the new model:
-    totalCouponPaid: last.cumBondCoupon_t ?? 0,
-    bondNetCostVsPayg: 0,
   };
 }

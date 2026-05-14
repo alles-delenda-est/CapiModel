@@ -576,7 +576,6 @@ export function runSimulation(userConfig = {}) {
   let K_retirees_bal_prev = 0;  // end-of-prior-period retirees' pot (for taper)
   // §5.15 Recognition bonds (PR #21b/c, PR #23). Zero-coupon CPI-linked bonds.
   // In chileMode: BR_t initialised to chileB0 (total NPV at t=0); 0 otherwise.
-  // cumBondCoupon kept for backward-compat diagnostics (always 0 in new model).
   // cumRepayFund: accumulated CDC returns + HLM proceeds + Équinoxe savings.
 
   // In chileMode: compute B_0 = total recognition bond NPV at t=0, discounted at iota.
@@ -598,7 +597,6 @@ export function runSimulation(userConfig = {}) {
   }
 
   let BR_t = chileB0;
-  let cumBondCoupon = 0; // running total of coupon payments (always 0 in new model, kept for compat)
   let cumRepayFund = 0;  // accumulated repayment fund (CDC returns + HLM + Équinoxe)
   // §5.7 HLM stock tracker: recursive so hlmActive_t taper stops depleting U_state.
   let U_state = cfg.U0;
@@ -970,7 +968,7 @@ export function runSimulation(userConfig = {}) {
     //   - Principal grows at iota (CPI-indexed) until each cohort's retirement.
     //   - At retirement: bond REDEEMS → K_t credited with NPV of that cohort's pension.
     //     Pension is then paid from K_t via the normal capi cascade (self-funded).
-    //   - No annual coupon during working life; bondCouponService_t = 0.
+    //   - No annual coupon during working life (zero-coupon structure).
     //
     // Repayment fund: accumulates CDC returns + HLM proceeds + Équinoxe savings.
     //   Outstanding net obligation at t = BR_t − cumRepayFund_t.
@@ -982,9 +980,6 @@ export function runSimulation(userConfig = {}) {
     // The bonds are a contingent liability (implicit pension debt made explicit) —
     // not cash borrowed upfront. D_t only reflects actual PAYG financing gaps.
     const bondIssuance_t = (cfg.chileMode && t === 0 && chileB0 > 0) ? chileB0 : 0;
-
-    // Zero-coupon: no annual coupon service during working life.
-    const bondCouponService_t = 0;
 
     // Bond redemption: cohort's bond matures at retirement. The face value equals the
     // annual pension cash flow for that cohort (consistent with B₀ = Σ ai/(1+iota)^t).
@@ -1367,8 +1362,7 @@ export function runSimulation(userConfig = {}) {
       fiscalTransfer_t, capiCoverage_t, fiscalGap_t,
       // PR #21b/c/PR#23: recognition bond diagnostics (zero when chileMode=false)
       // BR_t = bond stock (starts at chileB0, grows at iota, redeems at each cohort retirement).
-      BR_t, bondIssuance_t, bondRedemption_t, bondCouponService_t,
-      cumBondCoupon_t: cumBondCoupon,
+      BR_t, bondIssuance_t, bondRedemption_t,
       repayFund_t, cumRepayFund_t: cumRepayFund,
       transitionalPaygExpGross_t,
       // §5.10.1 (v1.2) tauK debt-reduction channel

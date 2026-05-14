@@ -1987,12 +1987,11 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
   const BASE = { ...DEFAULT_CONFIG, cashFlowMode: 'balanced', geKneeRatio: 3.0, geFloorRatio: 8.0 };
   const CHILE_CFG = { ...BASE, chileMode: true };
 
-  it('chileMode=false: BR_t = 0, bondIssuance_t = 0, bondCouponService_t = 0 every period', () => {
+  it('chileMode=false: BR_t = 0, bondIssuance_t = 0, bondRedemption_t = 0 every period', () => {
     const rows = runSimulation({ ...BASE, chileMode: false });
     for (const r of rows) {
       expect(r.BR_t, `t=${r.t} BR_t`).toBe(0);
       expect(r.bondIssuance_t, `t=${r.t} issuance`).toBe(0);
-      expect(r.bondCouponService_t, `t=${r.t} coupon`).toBe(0);
       expect(r.bondRedemption_t, `t=${r.t} redemption`).toBe(0);
     }
   });
@@ -2061,25 +2060,6 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
     }
   });
 
-  it('chileMode=true: bondCouponService_t >= 0 every period', () => {
-    const rows = runSimulation(CHILE_CFG);
-    for (const r of rows) {
-      expect(r.bondCouponService_t, `t=${r.t}`).toBeGreaterThanOrEqual(-1e-9);
-    }
-  });
-
-  it('chileMode=true: bondCouponService_t = 0 at t=0 (no prior bonds)', () => {
-    const rows = runSimulation(CHILE_CFG);
-    expect(rows[0].bondCouponService_t, 't=0 no prior bonds').toBe(0);
-  });
-
-  it('chileMode=true: bondCouponService_t = 0 every period (zero-coupon bond)', () => {
-    const rows = runSimulation(CHILE_CFG);
-    for (const r of rows) {
-      expect(r.bondCouponService_t, `t=${r.t}`).toBe(0);
-    }
-  });
-
   it('chileMode=true: K_t >= K_t in chileMode=false after bonds credited (bonds augment funded pot)', () => {
     const rowsNo = runSimulation({ ...BASE, chileMode: false });
     const rowsYes = runSimulation(CHILE_CFG);
@@ -2111,22 +2091,6 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
     for (const r of rows) {
       expect(r.emplrToCap_t, `t=${r.t} employer all to capi`)
         .toBeCloseTo(r.C_e_t, 6);
-    }
-  });
-
-  it('cumBondCoupon_t is non-decreasing and equals running sum of bondCouponService_t', () => {
-    const rows = runSimulation(CHILE_CFG);
-    let running = 0;
-    for (const r of rows) {
-      running += r.bondCouponService_t;
-      expect(r.cumBondCoupon_t, `t=${r.t} cumulative`).toBeCloseTo(running, 6);
-    }
-  });
-
-  it('cumBondCoupon_t = 0 every period when chileMode=false', () => {
-    const rows = runSimulation({ ...BASE, chileMode: false });
-    for (const r of rows) {
-      expect(r.cumBondCoupon_t, `t=${r.t}`).toBe(0);
     }
   });
 });
