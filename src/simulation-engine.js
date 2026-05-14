@@ -545,7 +545,8 @@ export function runSimulation(userConfig = {}) {
   const rows = [];
 
   // ---- State stocks (§2) ----
-  let F_t = cfg.F0;
+  // Legacy Fund is a reform instrument — zero it out in the no-capi counterfactual.
+  let F_t = cfg.enableCapi ? cfg.F0 : 0;
   let D_t = 0;
   let K_t = 0;
   let CI_t = 0;
@@ -867,7 +868,13 @@ export function runSimulation(userConfig = {}) {
     const emplrAvail_t = C_e_t * (1 - phiF_eff);                               // (40)
 
     let emplrToLeg_t, emplrToCap_t;
-    if (cfg.chileMode) {
+    if (!cfg.enableCapi) {
+      // No capitalisation pillar: all employer contributions fund legacy PAYG.
+      // Without this guard the leftover-employer-to-capi buffer (deficit ≤ 0 and
+      // deficit ≤ emplrAvail branches) would spuriously fund K_t and pin netFlow_t
+      // to exactly 0, making the PAYG balance insensitive to Équinoxe.
+      emplrToLeg_t = C_e_t;        emplrToCap_t = 0;
+    } else if (cfg.chileMode) {
       // All employer contributions to capi — legacy deficit fully debt-financed (§5.15).
       emplrToLeg_t = 0;            emplrToCap_t = C_e_t;
     } else if (deficit_t <= 0) {
@@ -903,11 +910,19 @@ export function runSimulation(userConfig = {}) {
     } else {
       // alpha (PAYG-surplus-to-debt routing) is only active in legacy mode.
       // In overlapping/balanced modes the K-side cascade owns debt repayment.
-      const alpha_eff = (cfg.cashFlowMode === 'overlapping' || cfg.cashFlowMode === 'balanced')
-        ? 0 : (cfg.alpha ?? 1);
+      // Exception: when capi is off there is no cascade, so PAYG surpluses must
+      // repay debt directly regardless of cashFlowMode.
+      const alpha_eff = !cfg.enableCapi
+        ? (cfg.alpha ?? 1)
+        : (cfg.cashFlowMode === 'overlapping' || cfg.cashFlowMode === 'balanced')
+          ? 0 : (cfg.alpha ?? 1);
       const repaid_t = Math.min(alpha_eff * netFlow_t, D_t);
       D_t = D_t - repaid_t;
-      F_t = F_t * (1 + cfg.pi) + (netFlow_t - repaid_t);                       // (43) v1.2
+      if (cfg.enableCapi) {
+        F_t = F_t * (1 + cfg.pi) + (netFlow_t - repaid_t);                     // (43) v1.2
+      }
+      // else: no reform fund — PAYG surplus beyond debt repayment is a fiscal
+      // improvement not tracked as a separate stock.
     }
 
     // ---------- §5.11 Transition levy (smoothed) ----------
