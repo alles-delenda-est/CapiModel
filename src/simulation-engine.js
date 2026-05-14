@@ -59,13 +59,11 @@ export const DEFAULT_CONFIG = {
   Y0: 2027,
   pi: 0.02,
   w_r: 0.004,
-  // §4 (v2.0) demographic kernel mode.
-  //   'parametric' — existing smoothstep kernel (eqs 7a–e). Backward-compat default.
-  //   'actuarial'  — COR juin 2025 + INSEE T60 table-driven kernel.
-  // 'parametric' is bit-identical to v1.x output; 'actuarial' will become the
-  // default in v2.1 once the placeholder data in src/demographic-tables.js is
-  // replaced with primary-source transcriptions.
-  demoMode: 'parametric',
+  // §4 (v2.0/v2.1) demographic kernel mode.
+  //   'parametric' — smoothstep kernel (eqs 7a–e). Bit-identical to v1.x output.
+  //   'actuarial'  — COR RA2025 + INSEE T60 2027 table-driven kernel (default v2.1+).
+  // src/demographic-tables.js now holds primary-source data; 'actuarial' is the default.
+  demoMode: 'actuarial',
   // §4 (v2.0) actuarial-mode scenario (ignored when demoMode === 'parametric').
   // 'cor_central' | 'cor_high' | 'cor_low'
   demoScenario: 'cor_central',

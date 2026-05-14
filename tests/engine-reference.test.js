@@ -1,4 +1,4 @@
-// Reference traces (§11.3) for v1.1 default-preset.
+// Reference traces (§11.3) for v1.1 parametric-mode preset.
 //
 // Assertion strategy:
 //   1. Spec-mandated anchors at t=0, 22, 33, 69 (per Task 2 brief).
@@ -10,7 +10,12 @@
 // `tests/fixtures/v1.0a-default-trace.json` as an archival snapshot of the
 // pre-§5.6.1 binary-cohort behaviour.
 //
-// **Engine-change protocol.** Any future change that alters default-preset
+// v2.1 note: demoMode now defaults to 'actuarial'. This file tests the
+// parametric mode explicitly (demoMode:'parametric') to preserve the v1.1
+// regression baseline as a permanent backward-compat guard. The actuarial
+// default path is separately locked by v2.0-actuarial-cor-central-trace.json.
+//
+// **Engine-change protocol.** Any future change that alters parametric-preset
 // output will fail the regression and require either:
 //   - a fixture update committed in a PR with explicit per-field justification, OR
 //   - a fix to the engine.
@@ -27,7 +32,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = resolve(__dirname, 'fixtures/v1.1-default-trace.json');
 const FIXTURE = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8'));
 
-const rows = runSimulation();
+// Explicit parametric pin — demoMode defaults to 'actuarial' since v2.1.
+const rows = runSimulation({ demoMode: 'parametric' });
 
 // =================== §11.3 spec-mandated anchors ===================
 

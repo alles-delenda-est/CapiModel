@@ -25,21 +25,44 @@ and INSEE T60 2023.
 - **Démographie UI** — mode radio (paramétrique / actuariel), COR scenario
   dropdown (haute / centrale / basse), and a Tier-B female-mortality-mix
   slider.
-- **Config** — `demoMode` (default `'parametric'`), `demoScenario`
-  (default `'cor_central'`), `mortalityFemaleFraction` (default `0.52`).
+- **Config** — `demoMode` (default `'parametric'` at v2.0, promoted to
+  `'actuarial'` at v2.1), `demoScenario` (default `'cor_central'`),
+  `mortalityFemaleFraction` (default `0.52`).
 - **Tests & fixtures** — structural + per-cohort-mask coverage; new
   `tests/fixtures/v2.0-actuarial-cor-central-trace.json` locks the
   actuarial engine path. The `v1.1-default-trace.json` parametric fixture
   is unchanged — parametric output is bit-identical to v1.x.
 
-**Data status:** the arrays in `src/demographic-tables.js` are synthetic
-placeholders (Makeham mortality, Gaussian age pyramid) calibrated to the
-correct qualitative shape. They must be replaced with primary-source COR
-juin 2025 / INSEE T60 transcriptions — a data-only change with no engine
-impact — before actuarial mode becomes the default.
-
 **Out of scope:** Monte Carlo scenario alignment (spec §9.5) — the active
 root build has no Monte Carlo module.
+
+## [v2.1] — Real demographic data + actuarial default
+
+Primary-source data transcription for `src/demographic-tables.js`; promotes
+`demoMode` default from `'parametric'` to `'actuarial'`. No engine changes.
+
+- **COR_*.P_act** — Real COR RA2025 active population (cotisants). Source:
+  `hypo_cotisants_chomage_2025.xlsx`, "Emploi total" sheet. Scenarios:
+  `cor_central` ← Chô_7%, `cor_high` ← Chô_5%, `cor_low` ← Chô_10%.
+  Data 2024–2070; flat-extrapolated 2071–2096.
+- **COR_*.P_ret** — Real COR RA2025 retiree counts. Source: `Données
+  complémentaires RA2025`, sheet "Cotisants_Retraités", "tous retraités"
+  rows. P_ret is driven by mortality/longevity (not unemployment): all
+  three economic scenarios diverge by at most ~58k out of ~21M at 2070.
+  Data 2024–2070; flat-extrapolated 2071–2096.
+- **INSEE_T60_QX_MALE / _FEMALE** — Real INSEE population projections 2021–
+  2070, central scenario, single-age qx table (`00_central_QX.xlsx`, 2027
+  period column, ages 61–106 ÷ 100 000). Convention: engine index `i`
+  holds `qx_insee(61+i)` (INSEE "âge atteint dans l'année" offset). Verified:
+  engine survival curve reproduces INSEE published "Survie par âge" to <2e-6.
+  LE(65) 2027: male 20.199 yr, female 23.868 yr (matches COR RA2025 Fig 1.3).
+- **RETIREE_AGE_WEIGHTS_2027** — Calibrated from INSEE birth cohorts 1942–1963
+  × period survival × COR RA2025 Fig 4.6 taux de retraités by age. Modal
+  weight at age 68 (peak baby-boom cohort); WWII dip at age 83.
+- **`demoMode` default → `'actuarial'`** — Now that all four arrays hold
+  primary-source data, the actuarial kernel is the simulator default. The
+  `v1.1-default-trace.json` parametric fixture test is explicitly pinned
+  to `demoMode:'parametric'` as a permanent backward-compat guard.
 
 ## [v1.1]
 
