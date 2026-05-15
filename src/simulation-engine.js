@@ -618,6 +618,19 @@ export function runSimulation(userConfig = {}) {
   const delta_eff = cfg.delta * clamp(2 - cm, 0.3, 1.7);       // §5.1 eq (6b)
   const T_capi_start = T_capi_start_of(cfg);                   // §5.4 eq (14)
   const capiRampSpan = capiRampSpan_of(cfg);                   // §5.6
+
+  // §5.13a chileMode incompatibility override (PR #25 fix).
+  // Recognition bonds (chileMode) divert 100% of contributions to capi from
+  // t=0, leaving PAYG with effectively no contribution revenue. The legacy
+  // waterfall amortises this via the lambda transition levy and the
+  // surplusLevy mechanism (both scale with capi inflow / K growth). The
+  // balanced/overlapping cascades enforce strict K↔PAYG separation, capping
+  // capiDebtRepaid at ~1 % of GDP — orders of magnitude too tight for a 100 %
+  // diversion deficit. Result: D_t runs away exponentially against the r_d
+  // cap. Force the legacy waterfall whenever chileMode is on; preserve the
+  // user's cashFlowMode choice for non-chile runs.
+  const effectiveCashFlowMode = cfg.chileMode ? 'legacy' : cfg.cashFlowMode;
+
   for (let t = 0; t < cfg.N; t++) {
     const K_start_t = K_t;                  // snapshot before any this-year mutations
 
@@ -873,7 +886,7 @@ export function runSimulation(userConfig = {}) {
     // phiF (employer floor to capi) is only active in legacy mode.
     // In overlapping/balanced modes the cascade covers capi payout from K_t directly,
     // so all employer contributions flow to legacy first (phiF = 0 effective).
-    const phiF_eff = (cfg.cashFlowMode === 'overlapping' || cfg.cashFlowMode === 'balanced')
+    const phiF_eff = (effectiveCashFlowMode === 'overlapping' || effectiveCashFlowMode === 'balanced')
       ? 0 : (cfg.phiF ?? 0);
     const emplrAvail_t = C_e_t * (1 - phiF_eff);                               // (40)
 
@@ -924,7 +937,7 @@ export function runSimulation(userConfig = {}) {
       // repay debt directly regardless of cashFlowMode.
       const alpha_eff = !cfg.enableCapi
         ? (cfg.alpha ?? 1)
-        : (cfg.cashFlowMode === 'overlapping' || cfg.cashFlowMode === 'balanced')
+        : (effectiveCashFlowMode === 'overlapping' || effectiveCashFlowMode === 'balanced')
           ? 0 : (cfg.alpha ?? 1);
       const repaid_t = Math.min(alpha_eff * netFlow_t, D_t);
       D_t = D_t - repaid_t;
@@ -942,7 +955,7 @@ export function runSimulation(userConfig = {}) {
     // SPEC AMBIGUITY 2: spec writes T_capi_start(t) suggesting time-variation,
     // but T_capi_start is a constant in v1.0 per eq (14).
     // SPEC AMBIGUITY 4: D_t in levyPhaseOut is post-§5.10 value.
-    const isCascadeMode  = (cfg.cashFlowMode === 'overlapping' || cfg.cashFlowMode === 'balanced');
+    const isCascadeMode  = (effectiveCashFlowMode === 'overlapping' || effectiveCashFlowMode === 'balanced');
     const T_lambda_eff   = Math.max(cfg.Tlambda ?? 15, T_capi_start);
     const levyActivation = isCascadeMode ? 0
       : smoothstep(t, T_lambda_eff - 1, T_lambda_eff + 1);
@@ -1041,7 +1054,7 @@ export function runSimulation(userConfig = {}) {
     //   balanced    — same numerator but K_avail_t denominator (post-contribution),
     //                 avoiding the start-of-period timing distortion.
     //   legacy      — parametric smoothstep ramp (backward-compat, bit-identical).
-    if (cfg.cashFlowMode === 'balanced') {
+    if (effectiveCashFlowMode === 'balanced') {
       // K_avail must be computed early in balanced mode so the share denominator
       // is internally consistent. Compute it here; the cascade reuses it.
       K_avail_t = K_t * (1 + r_cn_eff_t) + netCapiFlow_t;                        // (50″)
@@ -1049,7 +1062,7 @@ export function runSimulation(userConfig = {}) {
         K_avail_t,
         sumCapiContrib,
       });                                                                        // (53a″)
-    } else if (cfg.cashFlowMode === 'overlapping') {
+    } else if (effectiveCashFlowMode === 'overlapping') {
       capiAssetShare_t = K_t > 0 ? Math.min(1, Math.max(0, sumCapiContrib / K_t)) : 0; // (53a′)
     } else {
       capiAssetShare_t = smoothstep(t, T_capi_start, T_capi_start + 30)
@@ -1058,7 +1071,7 @@ export function runSimulation(userConfig = {}) {
     capiRetireeShare_t = retireeIdx_t > 0 ? capiRetirees_t / retireeIdx_t : 0;
     potBasedPayout_t   = K_t * annuityRate_t * capiAssetShare_t;               // (53) diagnostic
 
-    if (cfg.cashFlowMode === 'overlapping') {
+    if (effectiveCashFlowMode === 'overlapping') {
       // ======== §5.13 OVERLAPPING CASCADE (PR #17) ========
       //
       // K_t × r_c (real capi-fund return) is the cascade budget, distributed
@@ -1149,7 +1162,7 @@ export function runSimulation(userConfig = {}) {
       surplusLevy_t      = 0;
       // ======== END OVERLAPPING CASCADE ========
 
-    } else if (cfg.cashFlowMode === 'balanced') {
+    } else if (effectiveCashFlowMode === 'balanced') {
       // ======== §5.13 BALANCED CASCADE (PR #18) ========
       //
       // Strict separation of concerns:

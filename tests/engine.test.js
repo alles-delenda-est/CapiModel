@@ -2065,8 +2065,11 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
   });
 
   it('chileMode=true: K_t >= K_t in chileMode=false after bonds credited (bonds augment funded pot)', () => {
-    const rowsNo = runSimulation({ ...BASE, chileMode: false });
-    const rowsYes = runSimulation(CHILE_CFG);
+    // Use legacy cashFlowMode in both runs for apples-to-apples comparison.
+    // (chileMode forces legacy cascade internally per PR #25 fix; pinning the
+    // non-chile baseline to legacy as well keeps the comparison cascade-consistent.)
+    const rowsNo = runSimulation({ ...BASE, chileMode: false, cashFlowMode: 'legacy' });
+    const rowsYes = runSimulation({ ...CHILE_CFG, cashFlowMode: 'legacy' });
     const firstBondYear = rowsYes.find(r => r.bondIssuance_t > 1e-6);
     if (firstBondYear) {
       for (let i = firstBondYear.t; i < rowsYes.length; i++) {
@@ -2096,5 +2099,30 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
       expect(r.emplrToCap_t, `t=${r.t} employer all to capi`)
         .toBeCloseTo(r.C_e_t, 6);
     }
+  });
+
+  // PR #25 regression: chileMode + balanced/overlapping cascade used to blow up
+  // D_t to ~2×10^8 Md€ because the cascade's strict separation capped debt
+  // repayment at ~1% of GDP — orders of magnitude too tight for chileMode's
+  // 100% contribution diversion. Fix forces legacy cascade internally when
+  // chileMode is on.
+  it('PR #25: chileMode produces identical output regardless of cashFlowMode', () => {
+    const legacy = runSimulation({ ...DEFAULT_CONFIG, chileMode: true, cashFlowMode: 'legacy' });
+    const balanced = runSimulation({ ...DEFAULT_CONFIG, chileMode: true, cashFlowMode: 'balanced' });
+    const overlapping = runSimulation({ ...DEFAULT_CONFIG, chileMode: true, cashFlowMode: 'overlapping' });
+    for (let i = 0; i < legacy.length; i++) {
+      expect(balanced[i].D_t, `t=${i} balanced vs legacy D_t`).toBeCloseTo(legacy[i].D_t, 6);
+      expect(balanced[i].K_t, `t=${i} balanced vs legacy K_t`).toBeCloseTo(legacy[i].K_t, 6);
+      expect(overlapping[i].D_t, `t=${i} overlapping vs legacy D_t`).toBeCloseTo(legacy[i].D_t, 6);
+      expect(overlapping[i].K_t, `t=${i} overlapping vs legacy K_t`).toBeCloseTo(legacy[i].K_t, 6);
+    }
+  });
+
+  it('PR #25: chileMode + balanced does not run away (peak D_t reasonable)', () => {
+    // Pre-fix: peak D_t was ~2e8 Md€ — completely unrealistic.
+    // Post-fix: peak D_t should be in the same order of magnitude as legacy.
+    const rows = runSimulation({ ...DEFAULT_CONFIG, chileMode: true, cashFlowMode: 'balanced' });
+    const peakD = Math.max(...rows.map(r => r.D_t));
+    expect(peakD, 'peak D_t with chileMode + balanced').toBeLessThan(50000); // 50k Md€ ceiling
   });
 });
