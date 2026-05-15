@@ -233,10 +233,19 @@ export const DEFAULT_CONFIG = {
   fiscalTransferBase: 40,
   fiscalTransferMode: 'none',
 
-  // §5.13a Canonical reform modes (PR #21 — engine flags only; UI in this PR,
-  // full economic logic in a future PR).
+  // §5.13a Canonical reform modes (PR #21 — engine flags; PR #24 — Sweden logic).
   chileMode: false,    // recognition bonds for pre-reform PAYG contributions (indexed to French inflation)
-  swedenMode: false,   // automatic balance mechanism (NDC-style)
+  swedenMode: false,   // NDC PAYG with Automatic Balance Mechanism + small funded pillar
+  // §5.16 Swedish mode (PR #24) — calibrated against Inkomstpension + Premiepension.
+  // Sweden splits 18.5% total contributions as 16% NDC + 2.5% PPM = 13.5% to funded.
+  // For France's ~28% total rate, 4% wages ≈ 14% of contributions to capi.
+  // swedenCapiRate: fraction of WAGES (not contributions) routed to capi pillar.
+  // Slider range 0.01–0.06 in UI; >tau_s would draw from employer side (capped).
+  swedenCapiRate: 0.04,
+  // ABM: automatic indexation/benefit haircut when PAYG resources < outflows.
+  // Floor caps the haircut so pensions never fall below `swedenABMFloor × pre-cut`.
+  swedenABM: true,
+  swedenABMFloor: 0.50,
 };
 
 // =================== Pure helpers ===================
@@ -687,7 +696,14 @@ export function runSimulation(userConfig = {}) {
     // ---------- §5.4 Retirement age & cohort routing ----------
     // A_R_t pre-computed above (before §5.2) to enable retireeAgeScale_t.
     // In chileMode all worker contributions flow to capitalisation from t=0 (§5.15).
-    const sigma_capi_t = cfg.chileMode ? 1 : sigmaCapi(t, cfg);                  // (15)
+    // In swedenMode (§5.16) a fixed slice swedenCapiRate of W_t goes to the funded
+    // pillar (Premiepension-style) — converted to a sigma_capi equivalent so the
+    // rest of the engine is unchanged. Capped at 1 if swedenCapiRate > tau_s.
+    const sigma_capi_t = cfg.chileMode
+      ? 1
+      : cfg.swedenMode
+        ? Math.min(1, (cfg.swedenCapiRate ?? 0) / Math.max(cfg.tau_s, 1e-9))
+        : sigmaCapi(t, cfg);                                                      // (15)
     const C_s_capi_t = C_s_t * sigma_capi_t;                                    // (16)
     const C_s_payg_t = C_s_t * (1 - sigma_capi_t);                              // (17)
 
@@ -731,7 +747,9 @@ export function runSimulation(userConfig = {}) {
     const S0_total = S0_brackets_t + S0_irDeduction_t + S0_csg_t;
 
     // ---------- §5.6 (continued): legacyExp_t now uses E0_legacy_t ----------
-    const legacyExp_t = Math.max(0, E0_legacy_t * legacyRetirees_t * I_factor_t); // (25)
+    // ABM (Sweden mode §5.16) may mutate legacyExp_t / transitionalPaygExp_t /
+    // totalLegacyOutflow_t below — hence `let` rather than `const`.
+    let legacyExp_t = Math.max(0, E0_legacy_t * legacyRetirees_t * I_factor_t); // (25)
 
     // ---------- §5.6.1 / §6.5: per-cohort PAYG accrual ----------
     // `legacyShareAvg_t` is the population-weighted mean legacy-accrual share
@@ -810,9 +828,9 @@ export function runSimulation(userConfig = {}) {
       0,
       capiRetirees_t * legacyShareAvg_t * E0_legacy_t * I_factor_t,
     );
-    const transitionalPaygExp_t = cfg.chileMode ? 0 : transitionalPaygExpGross_t;
+    let transitionalPaygExp_t = cfg.chileMode ? 0 : transitionalPaygExpGross_t;
     // (25c) total PAYG outflow funded by the legacy fund.
-    const totalLegacyOutflow_t = legacyExp_t + transitionalPaygExp_t;
+    let totalLegacyOutflow_t = legacyExp_t + transitionalPaygExp_t;
     // Snapshot the pre-update value for the balanced cascade (§5.13 balanced uses
     // the new-retiree delta, but capiRetirees_prev is updated before that block runs).
     const capiRetirees_prev_snap = capiRetirees_prev;
@@ -879,17 +897,38 @@ export function runSimulation(userConfig = {}) {
     const nonEmplrNet_t = fundReturn_t + H_t_proceeds + abatement_t
                         + C_s_payg_t + S0_csg_revenue_t - debtInterest_t
                         + fiscalTransfer_t;                                      // (38′)
-    // v1.1 eq (39'): deficit measured against TOTAL PAYG outflow
-    // (legacy-cohort + transitional-cohort accrued rights), not legacy-cohort
-    // alone. legacyExp_t is preserved as a separate diagnostic; the waterfall
-    // consumes totalLegacyOutflow_t.
-    const deficit_t = totalLegacyOutflow_t - nonEmplrNet_t;                     // (39')
     // phiF (employer floor to capi) is only active in legacy mode.
     // In overlapping/balanced modes the cascade covers capi payout from K_t directly,
     // so all employer contributions flow to legacy first (phiF = 0 effective).
     const phiF_eff = (effectiveCashFlowMode === 'overlapping' || effectiveCashFlowMode === 'balanced')
       ? 0 : (cfg.phiF ?? 0);
     const emplrAvail_t = C_e_t * (1 - phiF_eff);                               // (40)
+
+    // §5.9b §5.16 Automatic Balance Mechanism (Sweden NDC) — PR #24.
+    // Inspired by the Inkomstpension "balansindex": if projected outflows exceed
+    // available PAYG resources, indexation is haircut proportionally so the
+    // system stays solvent without borrowing. Floor capped at swedenABMFloor
+    // (default 0.5) to avoid degenerate near-zero pension outcomes.
+    // Cuts apply pro-rata to legacy + transitional PAYG buckets.
+    let abmFactor_t = 1;
+    let abmCut_t = 0;
+    if (cfg.swedenMode && cfg.swedenABM && totalLegacyOutflow_t > 1e-9) {
+      const paygResources_t = nonEmplrNet_t + emplrAvail_t;
+      if (totalLegacyOutflow_t > paygResources_t) {
+        const rawRatio = paygResources_t / totalLegacyOutflow_t;
+        abmFactor_t = Math.max(cfg.swedenABMFloor ?? 0.5, rawRatio);
+        abmCut_t = totalLegacyOutflow_t * (1 - abmFactor_t);
+        legacyExp_t *= abmFactor_t;
+        transitionalPaygExp_t *= abmFactor_t;
+        totalLegacyOutflow_t = legacyExp_t + transitionalPaygExp_t;
+      }
+    }
+
+    // v1.1 eq (39'): deficit measured against TOTAL PAYG outflow
+    // (legacy-cohort + transitional-cohort accrued rights), not legacy-cohort
+    // alone. legacyExp_t is preserved as a separate diagnostic; the waterfall
+    // consumes totalLegacyOutflow_t.
+    const deficit_t = totalLegacyOutflow_t - nonEmplrNet_t;                     // (39')
 
     let emplrToLeg_t, emplrToCap_t;
     if (!cfg.enableCapi) {
@@ -1382,6 +1421,8 @@ export function runSimulation(userConfig = {}) {
       legacyShareAvg: legacyShareAvg_t,
       transitionalPaygExp_t,
       totalLegacyOutflow_t,
+      // §5.16 Swedish ABM diagnostics (0/1 when disabled, signed when active)
+      abmFactor_t, abmCut_t,
       // §5.7 HLM
       U_t, delta_U_t, units_sold, priceDiscount_t, P_eff_t, gain_t, hlmActive_t,
       H_t_proceeds,
