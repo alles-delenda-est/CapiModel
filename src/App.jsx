@@ -356,12 +356,15 @@ export default function App() {
           <div className="canonical-mode-label">
             Mode Chilien — obligations de reconnaissance
             <span className="canonical-mode-hint">
-              Émet à t=0 un stock unique d'obligations d'État zéro coupon indexées sur
-              l'inflation (DL 3500 chilien). Valeur totale = NPV des droits accumulés de tous
-              les cotisants transitionnels. BR_t croît à l'inflation et se rembourse lors de la
-              retraite de chaque cohorte (K_t↑). Le fonds de remboursement (CDC + HLM + économies
-              Équinoxe) couvre partiellement le stock ; le solde est l'obligation nette résiduelle.
-              Voir onglet <strong>Obligations</strong> pour les graphiques dédiés.
+              Dans ce cas, l'état émet à t=0 (01.01.2027) à chaque cotisant actuel une obligation
+              d'État zéro coupon indexée sur l'inflation, dont la valeur nominale = NPV des droits
+              accumulés du cotisant transitionnel. Les obligations, majorées par l'inflation
+              entretemps, sont remboursées lors de la retraite de chaque cotisant et les fonds
+              déposés sur son compte de capitalisation.
+              Un fonds de remboursement (doté des actifs actuels de la CDC + les recettes de ventes
+              de HLM + économies Équinoxe) couvre partiellement le stock ; le solde est l'obligation
+              nette résiduelle que l'état doit financer. Voir onglet <strong>Obligations</strong> pour
+              les graphiques dédiés.
             </span>
           </div>
           <div className="canonical-mode-buttons">
