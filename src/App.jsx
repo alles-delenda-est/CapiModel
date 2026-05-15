@@ -110,7 +110,10 @@ function rowToChart(r) {
     pvCapiPayoutCum: r.pvCapiPayoutCum_t,
     gdp: r.GDP_t,
     // Recognition bonds
-    bondCouponService: r.bondCouponService_t ?? 0,
+    bondIssuanceChart: r.bondIssuance_t ?? 0,
+    bondStock: r.BR_t ?? 0,
+    bondRedemption: r.bondRedemption_t ?? 0,
+    cumRepayFund: r.cumRepayFund_t ?? 0,
   }
 }
 
@@ -140,9 +143,9 @@ const TABLE_COLUMNS = [
   { key: 'borrowed_t',  label: 'Emprunt',  always: false, render: r => r.borrowed_t.toFixed(1) },
   { key: 'levy_t',      label: 'Prélèv.',  always: false, render: r => r.levy_t.toFixed(1) },
   { key: 'K_t',         label: 'Capi nom.', always: false, render: r => fmtN(r.K_t) },
-  { key: 'bondCouponService_t', label: 'Coupon obl.', always: false, render: r => (r.bondCouponService_t ?? 0).toFixed(1) },
   { key: 'bondIssuance_t', label: 'Émis. obl.', always: false, render: r => (r.bondIssuance_t ?? 0).toFixed(1) },
   { key: 'BR_t',        label: 'Stock obl.', always: false, render: r => fmtN(r.BR_t ?? 0) },
+  { key: 'transitionalPaygExpGross_t', label: 'PAYG contref.', always: false, render: r => (r.transitionalPaygExpGross_t ?? 0).toFixed(1) },
 ]
 
 const CHART_TABS = [
@@ -150,6 +153,7 @@ const CHART_TABS = [
   { id: 'dette',          label: 'Dette & Taux' },
   { id: 'capitalisation', label: 'Capitalisation' },
   { id: 'flux',           label: 'Flux & VAN' },
+  { id: 'obligations',    label: 'Obligations' },
 ]
 
 // --- Main App ---
@@ -199,7 +203,7 @@ export default function App() {
       'Sal_payg_MdE','Sal_capi_MdE','Empl_leg_MdE','Empl_cap_MdE',
       'Int_dette_MdE','Flux_net_MdE','Emprunt_MdE','Prelev_MdE','Dette_MdE',
       'Capi_nom_MdE','Capi_reel_MdE',
-      'Bond_stock_MdE','Bond_issuance_MdE','Bond_coupon_MdE',
+      'Bond_stock_MdE','Bond_issuance_MdE','Bond_payg_counterfactual_MdE',
       'r_d_pct','Spread_pct',
       'Workers_active_M',
       'Retirees_total_M','Retirees_legacy_M','Retirees_transition_M','Retirees_capi_pure_M',
@@ -225,7 +229,8 @@ export default function App() {
         r.debtInterest_t.toFixed(1), r.netFlow_t.toFixed(1), r.borrowed_t.toFixed(1),
         r.levy_t.toFixed(1), r.D_t.toFixed(1),
         r.K_t.toFixed(0), (r.K_t / Math.pow(1.02, r.t)).toFixed(0),
-        (r.BR_t ?? 0).toFixed(1), (r.bondIssuance_t ?? 0).toFixed(1), (r.bondCouponService_t ?? 0).toFixed(1),
+        (r.BR_t ?? 0).toFixed(1), (r.bondIssuance_t ?? 0).toFixed(1),
+        (r.transitionalPaygExpGross_t ?? 0).toFixed(1),
         (r.r_d_t * 100).toFixed(2), (r.spread_t * 100).toFixed(2),
         workersM.toFixed(2),
         retTotalM.toFixed(2), retLegacyM.toFixed(2), retTransitionM.toFixed(2), retCapiPureM.toFixed(2),
@@ -349,11 +354,17 @@ export default function App() {
         {/* 2 — Mode Chilien (recognition bonds) */}
         <div className="canonical-mode-group">
           <div className="canonical-mode-label">
-            Mode Chilien — bonos de reconocimiento
+            Mode Chilien — obligations de reconnaissance
             <span className="canonical-mode-hint">
-              Crédite les travailleurs pour leurs cotisations PAYG antérieures via
-              des obligations de reconnaissance converties en droits capi à la retraite.
-              <em> Logique économique complète dans un prochain PR.</em>
+              Dans ce cas, l'état émet à t=0 (01.01.2027) à chaque cotisant actuel une obligation
+              d'État zéro coupon indexée sur l'inflation, dont la valeur nominale = NPV des droits
+              accumulés du cotisant transitionnel. Les obligations, majorées par l'inflation
+              entretemps, sont remboursées lors de la retraite de chaque cotisant et les fonds
+              déposés sur son compte de capitalisation.
+              Un fonds de remboursement (doté des actifs actuels de la CDC + les recettes de ventes
+              de HLM + économies Équinoxe) couvre partiellement le stock ; le solde est l'obligation
+              nette résiduelle que l'état doit financer. Voir onglet <strong>Obligations</strong> pour
+              les graphiques dédiés.
             </span>
           </div>
           <div className="canonical-mode-buttons">
@@ -790,6 +801,43 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* Bond KPIs — only shown when chileMode active */}
+        {params.chileMode && (
+          <>
+            <h3 style={{ marginTop: '1.25rem', marginBottom: '0.5rem', fontSize: '1rem', color: 'var(--color-text-secondary)' }}>
+              Obligations de reconnaissance (Mode Chilien)
+            </h3>
+            <div className="kpi-grid">
+              <div className="kpi-card">
+                <h3>Obligations initiales B₀</h3>
+                <div className="kpi-value">{fmtMd(kpis.totalBondsIssued)} €</div>
+                <div className="kpi-sub">Émission unique à t=0 (NPV total droits acquis)</div>
+              </div>
+              <div className="kpi-card">
+                <h3>Fonds de remboursement total</h3>
+                <div className="kpi-value">{fmtMd(kpis.totalRepayFund)} €</div>
+                <div className="kpi-sub">CDC + HLM + économies Équinoxe (cumulé)</div>
+              </div>
+              <div className="kpi-card">
+                <h3>Obligation nette résiduelle</h3>
+                <div className={`kpi-value ${kpis.bondNetObligation > 0 ? 'kpi-warn' : 'kpi-ok'}`}>
+                  {fmtMd(kpis.bondNetObligation)} €</div>
+                <div className="kpi-sub">BR_t final − fonds de remboursement cumulé</div>
+              </div>
+              <div className="kpi-card">
+                <h3>Transferts K_t (rachats)</h3>
+                <div className="kpi-value">{fmtMd(kpis.totalBondRedemptions)} €</div>
+                <div className="kpi-sub">Σ rachats obligation crédités au fonds capi</div>
+              </div>
+              <div className="kpi-card">
+                <h3>Contrefactuel PAYG total</h3>
+                <div className="kpi-value">{fmtMd(kpis.totalPaygCounterfactual)} €</div>
+                <div className="kpi-sub">Flux transitional PAYG si pas de chileMode</div>
+              </div>
+            </div>
+          </>
+        )}
         </CollapsibleSection>
       </section>
 
@@ -912,7 +960,6 @@ export default function App() {
                 {kpis.debtFreeYear && <ReferenceLine yAxisId="left" x={kpis.debtFreeYear} stroke="var(--color-success)" strokeDasharray="4 4" />}
                 <Line yAxisId="left" type="monotone" dataKey="debt" stroke="#dc2626" strokeWidth={3} name="Dette (Md€)" dot={false} />
                 <Line yAxisId="right" type="monotone" dataKey="r_d" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" name="r_d effectif (%)" dot={false} />
-                {params.chileMode && <Line yAxisId="left" type="monotone" dataKey="bondCouponService" stroke="#f59e0b" strokeWidth={2} strokeDasharray="4 2" name="Coupon obl. reconn. (Md€)" dot={false} />}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -983,6 +1030,55 @@ export default function App() {
               </ComposedChart>
             </ResponsiveContainer>
           </div>
+        </div>
+
+        {/* Tab: Obligations — visible only when chileMode active */}
+        <div style={{ visibility: activeChartTab === 'obligations' ? 'visible' : 'hidden', height: activeChartTab === 'obligations' ? 'auto' : 0, overflow: 'hidden' }}>
+          {params.chileMode ? (
+            <div>
+              <div className="chart-container">
+                <h3>Stock obligations vs fonds de remboursement (Md€)</h3>
+                <p className="chart-note">
+                  Stock BR_t = obligations en circulation (émet à t=0, croît à l&apos;inflation, racheté à la retraite de chaque cohorte).
+                  Fonds de remboursement cumulé = CDC (rendements) + HLM + économies Équinoxe.
+                  L&apos;écart représente l&apos;obligation nette résiduelle de l&apos;État.
+                </p>
+                <ResponsiveContainer width="100%" height={300}>
+                  <ComposedChart data={chartData} margin={{ top: 8, right: 24, bottom: 8, left: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }} />
+                    <Tooltip formatter={(v) => `${v?.toFixed(1)} Md€`} />
+                    <Legend />
+                    <Area yAxisId="left" type="monotone" dataKey="bondStock" fill="#fef3c7" stroke="#f59e0b" strokeWidth={2} name="Stock obligations BR_t (Md€)" dot={false} />
+                    <Line yAxisId="left" type="monotone" dataKey="cumRepayFund" stroke="#10b981" strokeWidth={2} name="Fonds de remboursement cumulé (Md€)" dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="chart-container" style={{ marginTop: '1.5rem' }}>
+                <h3>Rachats annuels d&apos;obligations à la retraite (Md€/an)</h3>
+                <p className="chart-note">
+                  Montant annuel des obligations arrivant à échéance (= NPV pension de la cohorte partant en retraite cette année),
+                  crédité au fonds de capitalisation K_t. Stable les 15 premières années (aucune cohorte transitionnelle à la retraite),
+                  puis décroissant au fil des départs.
+                </p>
+                <ResponsiveContainer width="100%" height={260}>
+                  <ComposedChart data={chartData} margin={{ top: 8, right: 24, bottom: 8, left: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} label={{ value: 'Md€', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }} />
+                    <Tooltip formatter={(v) => `${v?.toFixed(1)} Md€`} />
+                    <Legend />
+                    <Bar yAxisId="left" dataKey="bondRedemption" fill="#f59e0b" name="Rachat obligation (Md€/an)" />
+                    <Bar yAxisId="left" dataKey="bondIssuanceChart" fill="#6366f1" name="Émission initiale t=0 (Md€)" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          ) : (
+            <p>Activez le <strong>Mode Chilien</strong> dans les paramètres pour voir les graphiques d&apos;obligations de reconnaissance.</p>
+          )}
         </div>
 
         {/* κ–φ Pareto frontier: peak debt vs capi payout ratio */}

@@ -1586,8 +1586,12 @@ describe('overlapping floor alignment — floor equals full pot-based annuity', 
         console.warn(`[smoothness] t=${rows[i].t}: capiPayout_t changed ${((curr - prev) / prev * 100).toFixed(1)}%`);
       }
     }
-    // Allow up to 2 violations (e.g. capi phase-in ramp-up in first years).
-    expect(violations, 'capiPayout_t has too many large YoY swings').toBeLessThanOrEqual(2);
+    // Allow up to 3 violations:
+    //   t=2,3 — capi phase-in ramp-up (first cohorts, small K_t).
+    //   t≈53  — debt-clearance event: D_t hits 0, capiBonus_t activates for the
+    //            first time, causing a one-period step-change in capiPayout_t.
+    //            Threshold moves with E0 calibration but remains a single event.
+    expect(violations, 'capiPayout_t has too many large YoY swings').toBeLessThanOrEqual(3);
   });
 });
 
@@ -1987,12 +1991,12 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
   const BASE = { ...DEFAULT_CONFIG, cashFlowMode: 'balanced', geKneeRatio: 3.0, geFloorRatio: 8.0 };
   const CHILE_CFG = { ...BASE, chileMode: true };
 
-  it('chileMode=false: BR_t = 0, bondIssuance_t = 0, bondCouponService_t = 0 every period', () => {
+  it('chileMode=false: BR_t = 0, bondIssuance_t = 0, bondRedemption_t = 0 every period', () => {
     const rows = runSimulation({ ...BASE, chileMode: false });
     for (const r of rows) {
       expect(r.BR_t, `t=${r.t} BR_t`).toBe(0);
       expect(r.bondIssuance_t, `t=${r.t} issuance`).toBe(0);
-      expect(r.bondCouponService_t, `t=${r.t} coupon`).toBe(0);
+      expect(r.bondRedemption_t, `t=${r.t} redemption`).toBe(0);
     }
   });
 
@@ -2003,11 +2007,10 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
     }
   });
 
-  it('chileMode=true: BR_t is non-decreasing (cumulative issuance tracker)', () => {
+  it('chileMode=true: BR_t is non-negative every period (NPV annuity stock)', () => {
     const rows = runSimulation(CHILE_CFG);
-    for (let i = 1; i < rows.length; i++) {
-      expect(rows[i].BR_t, `t=${rows[i].t} >= previous`)
-        .toBeGreaterThanOrEqual(rows[i - 1].BR_t - 1e-9);
+    for (const r of rows) {
+      expect(r.BR_t, `t=${r.t} non-negative`).toBeGreaterThanOrEqual(-1e-9);
     }
   });
 
@@ -2018,33 +2021,46 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
     }
   });
 
-  it('chileMode=true: bondIssuance_t = 0 when transitionalPaygExpGross_t = 0', () => {
+  it('chileMode=true: bondIssuance_t = chileB0 at t=0 only (one-off issuance)', () => {
+    const rows = runSimulation(CHILE_CFG);
+    // t=0: big one-off issuance (chileB0 > 0)
+    expect(rows[0].bondIssuance_t, 't=0 one-off issuance').toBeGreaterThan(0);
+    // t>0: no more issuances
+    for (const r of rows.slice(1)) {
+      expect(r.bondIssuance_t, `t=${r.t} no issuance after t=0`).toBe(0);
+    }
+  });
+
+  it('chileMode=true: bondRedemption_t >= 0 every period', () => {
+    const rows = runSimulation(CHILE_CFG);
+    for (const r of rows) {
+      expect(r.bondRedemption_t, `t=${r.t}`).toBeGreaterThanOrEqual(-1e-9);
+    }
+  });
+
+  it('chileMode=true: bondRedemption_t = 0 when transitionalPaygExpGross_t = 0', () => {
     const rows = runSimulation(CHILE_CFG);
     for (const r of rows) {
       if (r.transitionalPaygExpGross_t < 1e-9) {
-        expect(r.bondIssuance_t, `t=${r.t} no issuance when no gross expense`).toBeLessThan(1e-9);
+        expect(r.bondRedemption_t, `t=${r.t}`).toBeLessThan(1e-9);
       }
     }
   });
 
-  it('chileMode=true: bondCouponService_t >= 0 every period', () => {
-    const rows = runSimulation(CHILE_CFG);
-    for (const r of rows) {
-      expect(r.bondCouponService_t, `t=${r.t}`).toBeGreaterThanOrEqual(-1e-9);
-    }
-  });
-
-  it('chileMode=true: bondCouponService_t = 0 at t=0 (no prior bonds)', () => {
-    const rows = runSimulation(CHILE_CFG);
-    expect(rows[0].bondCouponService_t, 't=0 no prior bonds').toBe(0);
-  });
-
-  it('chileMode=true: bondCouponService_t = 0 when BR_t (prior) = 0', () => {
+  it('chileMode=true: cumRepayFund_t is non-decreasing', () => {
     const rows = runSimulation(CHILE_CFG);
     for (let i = 1; i < rows.length; i++) {
-      if (rows[i - 1].BR_t < 1e-9) {
-        expect(rows[i].bondCouponService_t, `t=${rows[i].t} no coupon before first issuance`).toBeLessThan(1e-9);
-      }
+      expect(rows[i].cumRepayFund_t, `t=${rows[i].t}`)
+        .toBeGreaterThanOrEqual(rows[i - 1].cumRepayFund_t - 1e-9);
+    }
+  });
+
+  it('chileMode=false: bondRedemption_t = 0, repayFund_t = 0, cumRepayFund_t = 0 every period', () => {
+    const rows = runSimulation({ ...BASE, chileMode: false });
+    for (const r of rows) {
+      expect(r.bondRedemption_t, `t=${r.t}`).toBe(0);
+      expect(r.repayFund_t, `t=${r.t}`).toBe(0);
+      expect(r.cumRepayFund_t, `t=${r.t}`).toBe(0);
     }
   });
 
@@ -2060,13 +2076,25 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
     }
   });
 
-  it('chileMode=true: BR_t grows only while transitionalPaygExpGross_t > 0', () => {
+  it('chileMode=true: sigma_capi_t = 1 every period (100% contributions to capi)', () => {
     const rows = runSimulation(CHILE_CFG);
-    const lastGrossPositive = [...rows].reverse().find(r => r.transitionalPaygExpGross_t > 1e-6);
-    if (lastGrossPositive) {
-      for (const r of rows.filter(r => r.t > lastGrossPositive.t)) {
-        expect(r.bondIssuance_t, `t=${r.t} no new bonds`).toBeLessThan(1e-6);
-      }
+    for (const r of rows) {
+      expect(r.sigma_capi_t, `t=${r.t} sigma=1`).toBeCloseTo(1, 9);
+    }
+  });
+
+  it('chileMode=true: C_s_payg_t = 0 every period', () => {
+    const rows = runSimulation(CHILE_CFG);
+    for (const r of rows) {
+      expect(r.C_s_payg_t, `t=${r.t} no payg contributions`).toBeCloseTo(0, 6);
+    }
+  });
+
+  it('chileMode=true: emplrToCap_t = C_e_t every period (employer 100% to capi)', () => {
+    const rows = runSimulation(CHILE_CFG);
+    for (const r of rows) {
+      expect(r.emplrToCap_t, `t=${r.t} employer all to capi`)
+        .toBeCloseTo(r.C_e_t, 6);
     }
   });
 });

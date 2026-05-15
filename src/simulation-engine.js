@@ -124,7 +124,12 @@ export const DEFAULT_CONFIG = {
   baselineTransactions: 850000,
   constructionMultiplier: 1.0,
   // §3.5 Équinoxe
-  E0: 390,
+  // E0: total pension expenditure (all régimes) at t=0 (2027), Md€.
+  // Calibrated to COR June 2024 central scenario: all-in balance −0.2% GDP ≈ −6 Md€
+  // in 2025-2027, with contributions 367 Md€ + FSV/État 40 Md€ = 407 Md€ revenue.
+  // → E0 = 367 + 40 − (−6) = 413 Md€ ≈ 13.8% of 3 000 Md€ GDP (COR range 13.5–14%).
+  // Previous value 390 understated 2027 expenditure by ~6% relative to COR data.
+  E0: 413,
   useEquinoxe: true,
   equinoxePhasing: 'immediate',
   S0_irDeduction: 5,
@@ -545,7 +550,8 @@ export function runSimulation(userConfig = {}) {
   const rows = [];
 
   // ---- State stocks (§2) ----
-  let F_t = cfg.F0;
+  // Legacy Fund is a reform instrument — zero it out in the no-capi counterfactual.
+  let F_t = cfg.enableCapi ? cfg.F0 : 0;
   let D_t = 0;
   let K_t = 0;
   let CI_t = 0;
@@ -574,9 +580,30 @@ export function runSimulation(userConfig = {}) {
   // retired cohorts, preventing early-year floor inflation from including workers' pot.
   let K_retirees_bal = 0;
   let K_retirees_bal_prev = 0;  // end-of-prior-period retirees' pot (for taper)
-  // §5.15 Recognition bonds (PR #21b). Cumulative issuance accounting tracker;
-  // bonds are credited to K_t at issuance. 0 when chileMode=false.
-  let BR_t = 0;
+  // §5.15 Recognition bonds (PR #21b/c, PR #23). Zero-coupon CPI-linked bonds.
+  // In chileMode: BR_t initialised to chileB0 (total NPV at t=0); 0 otherwise.
+  // cumRepayFund: accumulated CDC returns + HLM proceeds + Équinoxe savings.
+
+  // In chileMode: compute B_0 = total recognition bond NPV at t=0, discounted at iota.
+  // Since transitionalPaygExpGross_t and annuityRate_t are independent of contribution
+  // routing (D_t, K_t), a chileMode=false dry run gives exact values. No recursion
+  // risk — the dry run has chileMode=false so skips this block.
+  let chileB0 = 0;
+  if (cfg.chileMode) {
+    const dryRows = runSimulation({ ...cfg, chileMode: false });
+    // iota = min(fisher(w_r, pi), pi) — same formula used inside the main loop.
+    const iotaDry = Math.min(fisher(cfg.w_r, cfg.pi), cfg.pi);
+    // B₀ = PV of all future transitional pension cash flows discounted at iota.
+    // This is the implicit pension debt made explicit — not capital required to fund
+    // a perpetuity (which would inflate by ~1/annuityRate ≈ 20×).
+    chileB0 = dryRows.reduce((sum, r, i) => {
+      const ai = r.transitionalPaygExpGross_t ?? 0;
+      return ai > 0 ? sum + ai / Math.pow(1 + iotaDry, i) : sum;
+    }, 0);
+  }
+
+  let BR_t = chileB0;
+  let cumRepayFund = 0;  // accumulated repayment fund (CDC returns + HLM + Équinoxe)
   // §5.7 HLM stock tracker: recursive so hlmActive_t taper stops depleting U_state.
   let U_state = cfg.U0;
 
@@ -645,7 +672,8 @@ export function runSimulation(userConfig = {}) {
 
     // ---------- §5.4 Retirement age & cohort routing ----------
     // A_R_t pre-computed above (before §5.2) to enable retireeAgeScale_t.
-    const sigma_capi_t = sigmaCapi(t, cfg);                                     // (15)
+    // In chileMode all worker contributions flow to capitalisation from t=0 (§5.15).
+    const sigma_capi_t = cfg.chileMode ? 1 : sigmaCapi(t, cfg);                  // (15)
     const C_s_capi_t = C_s_t * sigma_capi_t;                                    // (16)
     const C_s_payg_t = C_s_t * (1 - sigma_capi_t);                              // (17)
 
@@ -809,7 +837,12 @@ export function runSimulation(userConfig = {}) {
     // v1.2 fix: use REAL rate so the inflation component πF_t stays in the fund.
     // r_f_portfolio_n retained in row output as a diagnostic field only.
     const fundReturn_t = F_t * cfg.r_f_portfolio;                               // (36) v1.2
-    const abatement_t  = cfg.A0 * Omega_t * empFactor * activePop_t;            // (37)
+    // The abatement revenue ("suppression de l'abattement fiscal") is a
+    // tax-side measure within the Équinoxe package — gated on useEquinoxe and
+    // phased like the §5.5 components (S0_brackets / S0_irDeduction / S0_csg).
+    const abatement_t  = cfg.useEquinoxe
+      ? cfg.A0 * Omega_t * empFactor * activePop_t * phaseFactor_t
+      : 0;                                                                     // (37)
     // v1.0a eq (38): S0_csg_revenue_t added as a tax-side revenue stream that
     // applies to all retiree pension income (legacy + capi). Distinct from the
     // benefit-side reductions (eqs 21a/21b) which only affect legacy.
@@ -845,7 +878,16 @@ export function runSimulation(userConfig = {}) {
     const emplrAvail_t = C_e_t * (1 - phiF_eff);                               // (40)
 
     let emplrToLeg_t, emplrToCap_t;
-    if (deficit_t <= 0) {
+    if (!cfg.enableCapi) {
+      // No capitalisation pillar: all employer contributions fund legacy PAYG.
+      // Without this guard the leftover-employer-to-capi buffer (deficit ≤ 0 and
+      // deficit ≤ emplrAvail branches) would spuriously fund K_t and pin netFlow_t
+      // to exactly 0, making the PAYG balance insensitive to Équinoxe.
+      emplrToLeg_t = C_e_t;        emplrToCap_t = 0;
+    } else if (cfg.chileMode) {
+      // All employer contributions to capi — legacy deficit fully debt-financed (§5.15).
+      emplrToLeg_t = 0;            emplrToCap_t = C_e_t;
+    } else if (deficit_t <= 0) {
       emplrToLeg_t = 0;            emplrToCap_t = C_e_t;
     } else if (deficit_t <= emplrAvail_t) {
       emplrToLeg_t = deficit_t;    emplrToCap_t = C_e_t - deficit_t;
@@ -878,11 +920,19 @@ export function runSimulation(userConfig = {}) {
     } else {
       // alpha (PAYG-surplus-to-debt routing) is only active in legacy mode.
       // In overlapping/balanced modes the K-side cascade owns debt repayment.
-      const alpha_eff = (cfg.cashFlowMode === 'overlapping' || cfg.cashFlowMode === 'balanced')
-        ? 0 : (cfg.alpha ?? 1);
+      // Exception: when capi is off there is no cascade, so PAYG surpluses must
+      // repay debt directly regardless of cashFlowMode.
+      const alpha_eff = !cfg.enableCapi
+        ? (cfg.alpha ?? 1)
+        : (cfg.cashFlowMode === 'overlapping' || cfg.cashFlowMode === 'balanced')
+          ? 0 : (cfg.alpha ?? 1);
       const repaid_t = Math.min(alpha_eff * netFlow_t, D_t);
       D_t = D_t - repaid_t;
-      F_t = F_t * (1 + cfg.pi) + (netFlow_t - repaid_t);                       // (43) v1.2
+      if (cfg.enableCapi) {
+        F_t = F_t * (1 + cfg.pi) + (netFlow_t - repaid_t);                     // (43) v1.2
+      }
+      // else: no reform fund — PAYG surplus beyond debt repayment is a fiscal
+      // improvement not tracked as a separate stock.
     }
 
     // ---------- §5.11 Transition levy (smoothed) ----------
@@ -936,35 +986,49 @@ export function runSimulation(userConfig = {}) {
       ? cfg.r_f_annuity / (1 - Math.pow(1 + cfg.r_f_annuity, -T_ret_t))
       : 1 / T_ret_t;                                                            // (53)
 
-    // ---------- §5.15 Recognition bonds (PR #21b, PR #21c) ----------
-    // When chileMode is active, transitionalPaygExp_t was set to 0 above (PAYG
-    // pensions replaced by a funded mechanism). Instead, the state issues recognition
-    // bonds equal to the PV of accrued PAYG obligations, credited DIRECTLY to K_t
-    // at retirement. Pensions are then paid from the augmented funded pot via the
-    // normal balanced cascade (floor + bonus steps).
+    // ---------- §5.15 Recognition bonds (PR #21b/c, PR #23) ----------
+    // Zero-coupon principal-inflation-linked bonds (Chilean DL 3500 structure):
+    //   - One-time issuance at t=0: D_t ↑ by chileB0 (total NPV of all transitional
+    //     workers' accrued pension rights). BR_t initialised to chileB0.
+    //   - Principal grows at iota (CPI-indexed) until each cohort's retirement.
+    //   - At retirement: bond REDEEMS → K_t credited with NPV of that cohort's pension.
+    //     Pension is then paid from K_t via the normal capi cascade (self-funded).
+    //   - No annual coupon during working life (zero-coupon structure).
     //
-    // Bond structure: indexed to French inflation (iota); zero redemption value.
-    // Each year the outstanding bond stock (BR_t) pays a coupon = BR_t × iota.
-    // Stock-flow at issuance: D_t ↑ (state recognises obligation as explicit debt);
-    //                         K_t ↑ by same (credited to capi pot).
-    // Stock-flow each year:   coupon service D_t ↑ by BR_t × iota (debt-financed).
-    //                         BR_t is monotonically non-decreasing (cumulative tracker).
+    // Repayment fund: accumulates CDC returns + HLM proceeds + Équinoxe savings.
+    //   Outstanding net obligation at t = BR_t − cumRepayFund_t.
+    //
+    // All contributions route to capi from t=0 (§5.4/§5.9 above); legacy pensions
+    // for PAYG-only workers are debt-financed, repaid over time by the repayment fund.
 
-    // Annual coupon on outstanding bonds (use BR_t BEFORE this year's issuance).
-    const bondCouponService_t = cfg.chileMode ? BR_t * iota : 0;
-    if (bondCouponService_t > 0) {
-      D_t        += bondCouponService_t;                                           // (§5.15-c)
-      borrowed_t += bondCouponService_t;
+    // Bond issuance at t=0: recorded in BR_t (off-balance-sheet obligation), NOT D_t.
+    // The bonds are a contingent liability (implicit pension debt made explicit) —
+    // not cash borrowed upfront. D_t only reflects actual PAYG financing gaps.
+    const bondIssuance_t = (cfg.chileMode && t === 0 && chileB0 > 0) ? chileB0 : 0;
+
+    // Bond redemption: cohort's bond matures at retirement. The face value equals the
+    // annual pension cash flow for that cohort (consistent with B₀ = Σ ai/(1+iota)^t).
+    // Credited to K_t so the capi pot covers the transitional pension from here on.
+    let bondRedemption_t = 0;
+    if (cfg.chileMode && transitionalPaygExpGross_t > 0) {
+      bondRedemption_t = transitionalPaygExpGross_t;
+      K_t += bondRedemption_t;                                                   // (§5.15-b)
+      sumCapiContrib += bondRedemption_t;
     }
 
-    let bondIssuance_t = 0;
-    if (cfg.chileMode && transitionalPaygExpGross_t > 0 && annuityRate_t > 1e-6) {
-      bondIssuance_t = transitionalPaygExpGross_t / annuityRate_t;
-      D_t        += bondIssuance_t;                                               // (§5.15-a)
-      borrowed_t += bondIssuance_t;
-      K_t        += bondIssuance_t;                                               // (§5.15-b) credited to funded pot
-      BR_t       += bondIssuance_t;                                               // cumulative accounting
+    // Bond stock: starts at chileB0, grows at iota (CPI), shrinks at each redemption.
+    if (cfg.chileMode) {
+      BR_t = Math.max(0, BR_t * (1 + iota) - bondRedemption_t);
     }
+
+    // Repayment fund: CDC returns + HLM proceeds + Équinoxe savings.
+    const equinoxeSavings_t = cfg.chileMode
+      ? S0_legacy_t * Math.max(legacyRetirees_t, 0) + S0_csg_revenue_t
+      : 0;
+    const repayFund_t = cfg.chileMode
+      ? Math.max(0, fundReturn_t + H_t_proceeds + equinoxeSavings_t)
+      : 0;
+    if (cfg.chileMode) cumRepayFund += repayFund_t;
 
     // Accumulate net capi contributions for the accounting-identity asset share.
     // Must happen before §5.12 uses capiAssetShare_t so the running sum reflects
@@ -1321,9 +1385,10 @@ export function runSimulation(userConfig = {}) {
       K_retirees_bal_t: K_retirees_bal,
       // PR #21: fiscal transfer diagnostics
       fiscalTransfer_t, capiCoverage_t, fiscalGap_t,
-      // PR #21b: recognition bond diagnostics (zero when chileMode=false)
-      // BR_t = cumulative bonds issued (diagnostic; equals ΔD_t from issuance).
-      BR_t, bondIssuance_t, bondCouponService_t,
+      // PR #21b/c/PR#23: recognition bond diagnostics (zero when chileMode=false)
+      // BR_t = bond stock (starts at chileB0, grows at iota, redeems at each cohort retirement).
+      BR_t, bondIssuance_t, bondRedemption_t,
+      repayFund_t, cumRepayFund_t: cumRepayFund,
       transitionalPaygExpGross_t,
       // §5.10.1 (v1.2) tauK debt-reduction channel
       K_floor_t, tauKLevy_t,
