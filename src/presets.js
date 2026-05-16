@@ -34,8 +34,8 @@ const UI_CONFIG = {
  * v1_default — all §3 defaults exactly as the spec specifies them.
  */
 const v1_default = {
-  label: 'Hypothèses de base (v1.0a)',
-  description: 'Tous les paramètres aux valeurs par défaut du spec v1.0a §3.',
+  label: 'Hypothèses de base',
+  description: 'Tous les paramètres aux valeurs par défaut du spec §3.',
   params: { ...UI_CONFIG },
 };
 
@@ -139,7 +139,7 @@ const labourHousingOnly = {
  */
 const equinoxeAndLabour = {
   label: 'Équinoxe + Travail',
-  description: 'Équinoxe + réforme du travail (sans capi/HLM). Démographie COR central (recalibrée v1.0a). Montre que cette combinaison soutient le système si les projections COR centrales se réalisent.',
+  description: 'Équinoxe + réforme du travail (sans capi/HLM). Démographie COR central (recalibrée). Montre que cette combinaison soutient le système si les projections COR centrales se réalisent.',
   params: {
     ...UI_CONFIG,
     demoProfile: 'cor_central',

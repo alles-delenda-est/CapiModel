@@ -23,7 +23,7 @@ const TIPS = {
   pi: "Le taux d'inflation annuel. Mesure la hausse générale des prix. La BCE vise 2% par an.",
   w_r: "La croissance annuelle des salaires au-delà de l'inflation (anchored sur ~0,4%/an INSEE 2014–2024).",
   r_f_portfolio: "Rendement réel du fonds legacy (CDC/FRR/Agirc-Arrco). Portefeuille institutionnel diversifié 60/40, médiane historique OCDE ~4,5% réel.",
-  r_f_annuity: "Taux réel auquel l'État peut couvrir une rente indexée sur l'inflation (≈ OATi 2024–2026, ~1,5% réel). v1.0a sépare ce taux de r_f_portfolio pour résoudre l'arbitrage carry-trade.",
+  r_f_annuity: "Taux réel auquel l'État peut couvrir une rente indexée sur l'inflation (≈ OATi 2024–2026, ~1,5% réel). Distinct de r_f_portfolio pour éviter un arbitrage carry-trade.",
   r_c: "Rendement réel du pot de capitalisation. Anchored sur Norvège GPFG / Ontario Teachers' (~4,5% réel).",
   r_d_base: "Taux nominal de l'OAT 10 ans pré-réforme (~3,5% début 2026).",
   extraSpread: "Surcoût additionnel sur le taux d'emprunt, pour tester un stress financier.",
@@ -44,15 +44,15 @@ const TIPS = {
   hlmDiscount: "Applique une décote volume aux prix HLM.",
   lambda: "Fraction des flux de capi prélevée pour rembourser la dette de transition.",
   alpha: "Fraction du surplus annuel dirigée vers le remboursement de dette (1 = total).",
-  tauK: "⚠️ Paramètre expert v1.2 — Prélèvement annuel sur le stock K_t du fonds capi → remboursement dette de transition. Fires uniquement si D_t > 0 ; s'arrête automatiquement une fois la dette remboursée. Un plancher de solvabilité empêche K_t de tomber sous le niveau nécessaire pour servir la rente garantie. Optimum empirique ≈ 3,0 % : peak debt −75 %, intérêts totaux −88 %, dette terminale ≈ 12 Md€ à t=69. Plafond de sécurité < 3,5 % : à 3,5 % K_t tombe à 0 en fin d'horizon, déclenchant la garantie d'État et un pic terminal de dette. Interaction λ : λ réduit les flux entrant dans K_t (eq 45) et tauK réduit le stock de K_t (eq 57+) — les deux sont additifs ; réduire λ si tauK > 0.",
+  tauK: "⚠️ Paramètre expert — Prélèvement annuel sur le stock K_t du fonds capi → remboursement dette de transition. Fires uniquement si D_t > 0 ; s'arrête automatiquement une fois la dette remboursée. Un plancher de solvabilité empêche K_t de tomber sous le niveau nécessaire pour servir la rente garantie. Optimum empirique ≈ 3,0 % : peak debt −75 %, intérêts totaux −88 %, dette terminale ≈ 12 Md€ à t=69. Plafond de sécurité < 3,5 % : à 3,5 % K_t tombe à 0 en fin d'horizon, déclenchant la garantie d'État et un pic terminal de dette. Interaction λ : λ réduit les flux entrant dans K_t (eq 45) et tauK réduit le stock de K_t (eq 57+) — les deux sont additifs ; réduire λ si tauK > 0.",
   Tlambda: "Année à partir de laquelle le prélèvement de transition s'active (smoothing ±1 an).",
   phiF: "Plancher employeur vers la capitalisation (0 = waterfall complet vers legacy d'abord).",
   thetaBuffer: "Réserve de croissance annuelle du fonds capi : la fraction de la croissance de K_t au-delà de θ × K_t est automatiquement reversée au remboursement de la dette de transition. Agit uniquement quand K_t croît (ne touche jamais au principal). Porte D_t/PIB comme gate : inactive sous 10 % D/PIB, pleinement active au-delà de 50 %. À θ = 1 % (défaut) : pic dette −81 % (1 713 vs 9 036 Md€), quasi-extinction de la dette en 2072. Se désactive naturellement à zéro quand D_t = 0.",
-  deltaTauxPatronal: "Baisse du taux de cotisation employeur, activée en année 2 de la réforme (2029). Sans compensation tauK, tout delta > 0 provoque une spirale de dette catastrophique (ex. 0,5 % seul → pic 55 000 Md€). Plage viable : 0–1 % avec tauK ≈ 1,5–5×delta. Optimum v1.3 à delta=0,5 % : tauK=2,5 % → intérêts totaux −80 %, dette terminale 17 Md€, allègement initial ≈7 Md€/an (2029), allègement éventuel ≈630 Md€/an (fin d'horizon).",
+  deltaTauxPatronal: "Baisse du taux de cotisation employeur, activée en année 2 de la réforme (2029). Sans compensation tauK, tout delta > 0 provoque une spirale de dette catastrophique (ex. 0,5 % seul → pic 55 000 Md€). Plage viable : 0–1 % avec tauK ≈ 1,5–5×delta. Optimum à delta=0,5 % : tauK=2,5 % → intérêts totaux −80 %, dette terminale 17 Md€, allègement initial ≈7 Md€/an (2029), allègement éventuel ≈630 Md€/an (fin d'horizon).",
   T_hlm: "Durée du programme de cession HLM (5 ans de taper en fin).",
-  capiAssetShareSteadyState: "Part actuarielle de long terme du pot capi détenue par les retraités (vs travailleurs en accumulation). Eq (53a) v1.0a remplace le partage par tête (qui exproprait les travailleurs).",
+  capiAssetShareSteadyState: "Part actuarielle de long terme du pot capi détenue par les retraités (vs travailleurs en accumulation). Eq (53a) remplace le partage par tête (qui exproprait les travailleurs).",
   equinoxePhasing: "Profil temporel de mise en œuvre Équinoxe : immediate, phased-5y/-10y, partial-50/-75.",
-  K_debt_trigger: "Seuil K_t (Md€) de déclenchement du remboursement de dette prioritaire dans la cascade v2.0. En dessous du seuil : le surplus de rendement réel va aux retraités capi (bonus). Au-dessus : il rembourse la dette de transition en priorité. Valeur optimale ≈ 8 000 Md€ — protège la génération transitionnelle 2047–2066 (+30 % de versement) tout en assurant une dette à zéro vers 2073. Régler à 0 pour le mode dette-en-priorité constant ; 30 000 Md€ = report total (jamais remboursé).",
+  K_debt_trigger: "Seuil K_t (Md€) de déclenchement du remboursement de dette prioritaire dans la cascade. En dessous du seuil : le surplus de rendement réel va aux retraités capi (bonus). Au-dessus : il rembourse la dette de transition en priorité. Valeur optimale ≈ 8 000 Md€ — protège la génération transitionnelle 2047–2066 (+30 % de versement) tout en assurant une dette à zéro vers 2073. Régler à 0 pour le mode dette-en-priorité constant ; 30 000 Md€ = report total (jamais remboursé).",
 }
 
 function Toggle({ label, checked, onChange, tip }) {
@@ -287,8 +287,8 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1>CapiModel v1.0a — Transition Retraites PAYG → Capitalisation</h1>
-        <p className="subtitle">Simulateur — moteur v1.0a</p>
+        <h1>CapiModel — Transition Retraites PAYG → Capitalisation</h1>
+        <p className="subtitle">Simulateur</p>
       </header>
 
       <Navigation currentPage={currentPage} navigateTo={navigateTo} />
@@ -309,10 +309,10 @@ export default function App() {
       {showLegacyUrlNotice && !legacyUrlNoticeDismissed && (
         <section className="section" style={{ background: '#fef3c7', border: '1px solid #f59e0b' }}>
           <p style={{ margin: 0 }}>
-            <strong>URL legacy détectée.</strong> Cette URL contient des paramètres v0.11
+            <strong>URL legacy détectée.</strong> Cette URL contient d'anciens paramètres
             (par ex. <code>existingDebtGrowth</code>, <code>r_f</code>) qui ne sont plus
-            supportés par le moteur v1.0a. Le simulateur s'est ouvert avec les valeurs par
-            défaut v1.0a. Voir notes de migration dans la page « Hypothèses ».
+            pris en charge. Le simulateur s'est ouvert avec les valeurs par
+            défaut. Voir notes de migration dans la page « Hypothèses ».
             <button onClick={() => setLegacyUrlNoticeDismissed(true)}
               style={{ marginLeft: 12 }}>OK</button>
           </p>
@@ -321,7 +321,7 @@ export default function App() {
 
       {/* PRESETS */}
       <section className="section preset-section">
-        <h2>Scénarios v1.0a</h2>
+        <h2>Scénarios</h2>
         <div className="preset-grid">
           {Object.entries(PRESETS).map(([key, preset]) => (
             <button key={key} className={`preset-btn ${activePreset === key ? 'active' : ''}`}
@@ -544,7 +544,7 @@ export default function App() {
                   defaultValue={DEFAULT_CONFIG.constructionMultiplier} />
               </CollapsibleSection>
 
-              <CollapsibleSection title="Âge de retraite (NEW v1.0)" level="critical" defaultOpen={true}>
+              <CollapsibleSection title="Âge de retraite" level="critical" defaultOpen={true}>
                 <EnhancedSlider id="retirementAgeBase" label="Âge de retraite (base)" value={p.retirementAgeBase}
                   onChange={v => setParam('retirementAgeBase', v)} min={60} max={70} step={0.5} unit="ans" decimals={1} tip={TIPS.retirementAgeBase}
                   defaultValue={DEFAULT_CONFIG.retirementAgeBase} />
@@ -613,20 +613,20 @@ export default function App() {
               {/* ===== TIER B — expert menu ===== */}
 
               {expertMode && (
-                <CollapsibleSection title="Tier B — Cascade v2.0 (mode équilibré, PR #18)" level="advanced">
+                <CollapsibleSection title="Tier B — Cascade (mode équilibré)" level="advanced">
                   <div className="toggle-row">
                     <label style={{ minWidth: 140 }}>Mode cascade</label>
                     <select value={p.cashFlowMode}
                       onChange={e => setParam('cashFlowMode', e.target.value)}>
                       <option value="balanced">balanced (PR #18 — défaut)</option>
                       <option value="overlapping">overlapping (PR #17 — historique)</option>
-                      <option value="legacy">legacy (v1.3 — historique)</option>
+                      <option value="legacy">legacy (historique)</option>
                     </select>
                   </div>
                   <div className="input-help">
                     <strong>balanced</strong> : K préservé, dette repayée uniquement par surplus
                     plafonné, capi jamais ne subventionne PAYG. <strong>overlapping</strong> : ancien
-                    cascade PR #17. <strong>legacy</strong> : waterfall v1.3.
+                    cascade historique. <strong>legacy</strong> : waterfall historique.
                   </div>
 
                   <EnhancedSlider id="annuityFloorRate" label="Plancher rente capi (annuityFloorRate)"
@@ -779,9 +779,9 @@ export default function App() {
 
 
               {expertMode && (
-                <CollapsibleSection title="Tier B — Baisse des charges patronales (v1.3)" level="advanced">
+                <CollapsibleSection title="Tier B — Baisse des charges patronales" level="advanced">
                   <div className="input-help" style={{ color: 'var(--color-warning, #b45309)', marginBottom: 8 }}>
-                    ⚠️ Paramètre v1.3 expérimental. Plage viable&nbsp;: Δτ_e ≤&nbsp;0,5&nbsp;% (step) avec
+                    ⚠️ Paramètre expérimental. Plage viable&nbsp;: Δτ_e ≤&nbsp;0,5&nbsp;% (step) avec
                     τ_K ≈&nbsp;2,5&nbsp;%. Tout incrément annuel (PA&nbsp;&gt;&nbsp;0) est catastrophique.
                     Allègement initial ≈&nbsp;7&nbsp;Md€/an&nbsp;; éventuel ≈&nbsp;630&nbsp;Md€/an (t=69).
                   </div>
@@ -1005,8 +1005,8 @@ export default function App() {
           <div className="chart-container">
             <h3>Bilan du fonds legacy — Dépenses vs. Revenus (Md€)</h3>
             <p className="chart-note">
-              Aire empilée = revenus du fonds. La nouvelle aire violet pâle « Recette Équinoxe CSG/CRDS »
-              (v1.0a, eq 22) est la composante tax-side restaurée sur tous les retraités.
+              Aire empilée = revenus du fonds. L'aire violet pâle « Recette Équinoxe CSG/CRDS »
+              (eq 22) est la composante tax-side restaurée sur tous les retraités.
               Au-dessus de la ligne rouge = excédent (remboursement dette).
             </p>
             <ResponsiveContainer width="100%" height={340}>
@@ -1251,7 +1251,7 @@ export default function App() {
       </>}
 
       <footer className="footer">
-        CapiModel v1.0a · Spec @c466e6b ·
+        CapiModel · Spec @c466e6b ·
         <a href="https://github.com/alles-delenda-est/CapiModel" style={{ color: 'var(--color-primary-light)', marginLeft: 4 }}>Source</a>
       </footer>
     </div>

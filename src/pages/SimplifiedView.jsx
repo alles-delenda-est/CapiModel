@@ -359,7 +359,7 @@ export default function SimplifiedView({ navigateTo }) {
             <p className="sv-kpi-explain">
               Le montant maximum que l'État devrait emprunter pour
               financer la transition. Pour comparaison, la dette publique
-              française actuelle est d'environ 3200Md€.
+              française actuelle est d'environ 3&nbsp;200&nbsp;Md€.
             </p>
           </div>
 

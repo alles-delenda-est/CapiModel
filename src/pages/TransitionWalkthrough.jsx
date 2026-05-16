@@ -366,9 +366,9 @@ export default function TransitionWalkthrough({ navigateTo }) {
   return (
     <div className="tw-app">
       <header className="tw-header">
-        <h1>Parcours de la transition (v1.0a)</h1>
+        <h1>Parcours de la transition</h1>
         <p className="tw-subtitle">
-          Les cinq étapes de la réforme, superposées pas à pas sur le moteur v1.0a.
+          Les cinq étapes de la réforme, superposées pas à pas sur le moteur.
         </p>
       </header>
 
