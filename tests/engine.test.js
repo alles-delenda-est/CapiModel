@@ -2125,4 +2125,53 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
     const peakD = Math.max(...rows.map(r => r.D_t));
     expect(peakD, 'peak D_t with chileMode + balanced').toBeLessThan(50000); // 50k Md€ ceiling
   });
+
+  // PR #26 — bond redemption accounting correctness
+  it('PR #26: drawnFromRepayFund_t + debtFinancedRedemption_t = bondRedemption_t every period', () => {
+    const rows = runSimulation(CHILE_CFG);
+    for (const r of rows) {
+      const sum = (r.drawnFromRepayFund_t ?? 0) + (r.debtFinancedRedemption_t ?? 0);
+      expect(sum, `t=${r.t} redemption split sums to total`).toBeCloseTo(r.bondRedemption_t ?? 0, 6);
+    }
+  });
+
+  it('PR #26: drawnFromRepayFund_t <= bondRedemption_t every period (cannot draw more than needed)', () => {
+    const rows = runSimulation(CHILE_CFG);
+    for (const r of rows) {
+      expect(r.drawnFromRepayFund_t ?? 0, `t=${r.t}`).toBeLessThanOrEqual((r.bondRedemption_t ?? 0) + 1e-9);
+    }
+  });
+
+  it('PR #26: repayFundBalance_t is non-negative every period (cannot overdraw)', () => {
+    const rows = runSimulation(CHILE_CFG);
+    for (const r of rows) {
+      expect(r.repayFundBalance_t ?? 0, `t=${r.t} balance non-negative`).toBeGreaterThanOrEqual(-1e-9);
+    }
+  });
+
+  it('PR #26: cumRepayFund_t >= drawnFromRepayFund cumulative (balance is subset of inflows)', () => {
+    const rows = runSimulation(CHILE_CFG);
+    let cumDrawn = 0;
+    for (const r of rows) {
+      cumDrawn += r.drawnFromRepayFund_t ?? 0;
+      expect(r.cumRepayFund_t, `t=${r.t} cumulative inflows >= cumulative draws`).toBeGreaterThanOrEqual(cumDrawn - 1e-6);
+    }
+  });
+
+  it('PR #26: chileMode=false: new fields are all zero every period', () => {
+    const rows = runSimulation({ ...BASE, chileMode: false });
+    for (const r of rows) {
+      expect(r.drawnFromRepayFund_t ?? 0, `t=${r.t}`).toBe(0);
+      expect(r.debtFinancedRedemption_t ?? 0, `t=${r.t}`).toBe(0);
+      expect(r.repayFundBalance_t ?? 0, `t=${r.t}`).toBe(0);
+    }
+  });
+
+  it('PR #26: chileMode total redemptions = drawn + debt-financed (global conservation)', () => {
+    const rows = runSimulation(CHILE_CFG);
+    const totalRedemptions = rows.reduce((s, r) => s + (r.bondRedemption_t ?? 0), 0);
+    const totalDrawn = rows.reduce((s, r) => s + (r.drawnFromRepayFund_t ?? 0), 0);
+    const totalDebtFinanced = rows.reduce((s, r) => s + (r.debtFinancedRedemption_t ?? 0), 0);
+    expect(totalDrawn + totalDebtFinanced).toBeCloseTo(totalRedemptions, 3);
+  });
 });

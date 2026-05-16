@@ -145,6 +145,9 @@ const TABLE_COLUMNS = [
   { key: 'K_t',         label: 'Capi nom.', always: false, render: r => fmtN(r.K_t) },
   { key: 'bondIssuance_t', label: 'Émis. obl.', always: false, render: r => (r.bondIssuance_t ?? 0).toFixed(1) },
   { key: 'BR_t',        label: 'Stock obl.', always: false, render: r => fmtN(r.BR_t ?? 0) },
+  { key: 'drawnFromRepayFund_t', label: 'Tirage fonds', always: false, render: r => (r.drawnFromRepayFund_t ?? 0).toFixed(1) },
+  { key: 'debtFinancedRedemption_t', label: 'Rachat dettes', always: false, render: r => (r.debtFinancedRedemption_t ?? 0).toFixed(1) },
+  { key: 'repayFundBalance_t', label: 'Solde fonds', always: false, render: r => fmtN(r.repayFundBalance_t ?? 0) },
   { key: 'transitionalPaygExpGross_t', label: 'PAYG contref.', always: false, render: r => (r.transitionalPaygExpGross_t ?? 0).toFixed(1) },
 ]
 
@@ -203,7 +206,7 @@ export default function App() {
       'Sal_payg_MdE','Sal_capi_MdE','Empl_leg_MdE','Empl_cap_MdE',
       'Int_dette_MdE','Flux_net_MdE','Emprunt_MdE','Prelev_MdE','Dette_MdE',
       'Capi_nom_MdE','Capi_reel_MdE',
-      'Bond_stock_MdE','Bond_issuance_MdE','Bond_payg_counterfactual_MdE',
+      'Bond_stock_MdE','Bond_issuance_MdE','Bond_drawn_from_repay_fund_MdE','Bond_debt_financed_MdE','Bond_repay_fund_balance_MdE','Bond_payg_counterfactual_MdE',
       'r_d_pct','Spread_pct',
       'Workers_active_M',
       'Retirees_total_M','Retirees_legacy_M','Retirees_transition_M','Retirees_capi_pure_M',
@@ -230,6 +233,7 @@ export default function App() {
         r.levy_t.toFixed(1), r.D_t.toFixed(1),
         r.K_t.toFixed(0), (r.K_t / Math.pow(1.02, r.t)).toFixed(0),
         (r.BR_t ?? 0).toFixed(1), (r.bondIssuance_t ?? 0).toFixed(1),
+        (r.drawnFromRepayFund_t ?? 0).toFixed(1), (r.debtFinancedRedemption_t ?? 0).toFixed(1), (r.repayFundBalance_t ?? 0).toFixed(1),
         (r.transitionalPaygExpGross_t ?? 0).toFixed(1),
         (r.r_d_t * 100).toFixed(2), (r.spread_t * 100).toFixed(2),
         workersM.toFixed(2),
@@ -815,15 +819,31 @@ export default function App() {
                 <div className="kpi-sub">Émission unique à t=0 (NPV total droits acquis)</div>
               </div>
               <div className="kpi-card">
-                <h3>Fonds de remboursement total</h3>
+                <h3>Fonds de remboursement (entrées)</h3>
                 <div className="kpi-value">{fmtMd(kpis.totalRepayFund)} €</div>
                 <div className="kpi-sub">CDC + HLM + économies Équinoxe (cumulé)</div>
               </div>
               <div className="kpi-card">
-                <h3>Obligation nette résiduelle</h3>
+                <h3>Fonds de remboursement (solde)</h3>
+                <div className="kpi-value kpi-ok">{fmtMd(kpis.finalRepayFundBalance)} €</div>
+                <div className="kpi-sub">Solde non dépensé en fin d'horizon</div>
+              </div>
+              <div className="kpi-card">
+                <h3>Rachats via fonds</h3>
+                <div className="kpi-value kpi-ok">{fmtMd(kpis.totalDrawnFromRepayFund)} €</div>
+                <div className="kpi-sub">Fraction des rachats couverte par le fonds</div>
+              </div>
+              <div className="kpi-card">
+                <h3>Rachats financés par dette</h3>
+                <div className={`kpi-value ${kpis.totalDebtFinancedRedemptions > 0 ? 'kpi-warn' : 'kpi-ok'}`}>
+                  {fmtMd(kpis.totalDebtFinancedRedemptions)} €</div>
+                <div className="kpi-sub">Portion non couverte par le fonds → D_t</div>
+              </div>
+              <div className="kpi-card">
+                <h3>Obligation nette résiduelle (BR_t)</h3>
                 <div className={`kpi-value ${kpis.bondNetObligation > 0 ? 'kpi-warn' : 'kpi-ok'}`}>
                   {fmtMd(kpis.bondNetObligation)} €</div>
-                <div className="kpi-sub">BR_t final − fonds de remboursement cumulé</div>
+                <div className="kpi-sub">Stock BR_t fin d'horizon (obligations non encore rachetées)</div>
               </div>
               <div className="kpi-card">
                 <h3>Transferts K_t (rachats)</h3>

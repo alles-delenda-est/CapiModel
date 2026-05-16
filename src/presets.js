@@ -199,8 +199,14 @@ export function extractKPIs(rows) {
   // New model: one-off issuance at t=0 (chileB0), zero-coupon, redeems at each cohort retirement.
   const totalBondsIssued = rows[0]?.bondIssuance_t ?? 0;  // one-off at t=0 = chileB0
   const totalRepayFund = last.cumRepayFund_t ?? 0;
-  const bondNetObligation = (last.BR_t ?? 0) - totalRepayFund;  // outstanding at end of horizon
+  // PR #26: bondNetObligation = remaining BR_t stock at end of horizon (bonds not yet redeemed).
+  // The old BR_t − cumRepayFund formula was incorrect (repayFund inflows were never spent from it).
+  const bondNetObligation = last.BR_t ?? 0;
   const totalBondRedemptions = rows.reduce((s, r) => s + (r.bondRedemption_t ?? 0), 0);
+  // PR #26: split of how redemptions were funded.
+  const totalDebtFinancedRedemptions = rows.reduce((s, r) => s + (r.debtFinancedRedemption_t ?? 0), 0);
+  const totalDrawnFromRepayFund = rows.reduce((s, r) => s + (r.drawnFromRepayFund_t ?? 0), 0);
+  const finalRepayFundBalance = last.repayFundBalance_t ?? 0;
   // PAYG counterfactual: sum of what transitional PAYG flow would have been.
   const totalPaygCounterfactual = rows.reduce((s, r) => s + (r.transitionalPaygExpGross_t ?? 0), 0);
   return {
@@ -211,6 +217,7 @@ export function extractKPIs(rows) {
     totalCapiShortfall, peakCapiShortfall, firstShortfallYear,
     employerTaxCutInitial, employerTaxCutEventual,
     totalBondsIssued, totalRepayFund, bondNetObligation, totalBondRedemptions,
+    totalDebtFinancedRedemptions, totalDrawnFromRepayFund, finalRepayFundBalance,
     totalPaygCounterfactual,
   };
 }

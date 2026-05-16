@@ -603,7 +603,8 @@ export function runSimulation(userConfig = {}) {
   }
 
   let BR_t = chileB0;
-  let cumRepayFund = 0;  // accumulated repayment fund (CDC returns + HLM + Équinoxe)
+  let repayFundBalance = 0;  // spendable balance: inflows less amounts already spent on redemptions
+  let cumRepayFund = 0;      // cumulative inflows to the repayment fund (diagnostic, never spent from)
   // §5.7 HLM stock tracker: recursive so hlmActive_t taper stops depleting U_state.
   let U_state = cfg.U0;
 
@@ -1022,9 +1023,20 @@ export function runSimulation(userConfig = {}) {
     // Bond redemption: cohort's bond matures at retirement. The face value equals the
     // annual pension cash flow for that cohort (consistent with B₀ = Σ ai/(1+iota)^t).
     // Credited to K_t so the capi pot covers the transitional pension from here on.
+    //
+    // PR #26 accounting fix: redemptions must be funded from the repayment fund balance.
+    // Any shortfall is debt-financed (D_t ↑), so the net position is correctly stated.
     let bondRedemption_t = 0;
+    let drawnFromRepayFund_t = 0;
+    let debtFinancedRedemption_t = 0;
     if (cfg.chileMode && transitionalPaygExpGross_t > 0) {
       bondRedemption_t = transitionalPaygExpGross_t;
+      // First: draw from accumulated repay-fund balance (CDC returns, HLM, Équinoxe).
+      drawnFromRepayFund_t = Math.min(bondRedemption_t, repayFundBalance);
+      repayFundBalance -= drawnFromRepayFund_t;
+      // Remainder: state borrows to cover the unfunded portion.
+      debtFinancedRedemption_t = bondRedemption_t - drawnFromRepayFund_t;
+      if (debtFinancedRedemption_t > 0) D_t += debtFinancedRedemption_t;        // (§5.15-d)
       K_t += bondRedemption_t;                                                   // (§5.15-b)
       sumCapiContrib += bondRedemption_t;
     }
@@ -1035,13 +1047,17 @@ export function runSimulation(userConfig = {}) {
     }
 
     // Repayment fund: CDC returns + HLM proceeds + Équinoxe savings.
+    // Inflows are added to the spendable balance first; draws happen at redemption above.
     const equinoxeSavings_t = cfg.chileMode
       ? S0_legacy_t * Math.max(legacyRetirees_t, 0) + S0_csg_revenue_t
       : 0;
     const repayFund_t = cfg.chileMode
       ? Math.max(0, fundReturn_t + H_t_proceeds + equinoxeSavings_t)
       : 0;
-    if (cfg.chileMode) cumRepayFund += repayFund_t;
+    if (cfg.chileMode) {
+      repayFundBalance += repayFund_t;
+      cumRepayFund += repayFund_t;
+    }
 
     // Accumulate net capi contributions for the accounting-identity asset share.
     // Must happen before §5.12 uses capiAssetShare_t so the running sum reflects
@@ -1402,6 +1418,8 @@ export function runSimulation(userConfig = {}) {
       // BR_t = bond stock (starts at chileB0, grows at iota, redeems at each cohort retirement).
       BR_t, bondIssuance_t, bondRedemption_t,
       repayFund_t, cumRepayFund_t: cumRepayFund,
+      // PR #26: bond redemption funding split (zero when chileMode=false)
+      drawnFromRepayFund_t, debtFinancedRedemption_t, repayFundBalance_t: repayFundBalance,
       transitionalPaygExpGross_t,
       // §5.10.1 (v1.2) tauK debt-reduction channel
       K_floor_t, tauKLevy_t,
