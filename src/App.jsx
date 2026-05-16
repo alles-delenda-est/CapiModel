@@ -91,8 +91,10 @@ function rowToChart(r) {
     fiscalTransfer: r.fiscalTransfer_t, // §5.9a diversification (CSG/FSV/État)
     // Expenditure
     legacyExp: r.legacyExp_t,
+    ndcPaygPension: r.ndcPaygPension_t ?? 0,
     capiPayout: r.capiPayout_t,
-    totalPensionExp: r.legacyExp_t + r.capiPayout_t,
+    paygTotalOutflow: r.legacyExp_t + (r.ndcPaygPension_t ?? 0),
+    totalPensionExp: r.legacyExp_t + r.capiPayout_t + (r.ndcPaygPension_t ?? 0),
     // Stocks & rates
     debt: r.D_t,
     r_d: r.r_d_t * 100,
@@ -204,7 +206,7 @@ export default function App() {
     const R0 = params.R0 ?? 18;
     const headers = [
       'Annee',
-      'Dep_legacy_MdE','Dep_capi_MdE','Total_pensions_MdE',
+      'Dep_legacy_MdE','Dep_NDC_payg_MdE','Dep_capi_MdE','Total_pensions_MdE',
       'Rend_fonds_MdE','HLM_MdE','Abattement_MdE','CSG_recettes_MdE','Transferts_MdE',
       'Sal_payg_MdE','Sal_capi_MdE','Empl_leg_MdE','Empl_cap_MdE',
       'Int_dette_MdE','Flux_net_MdE','Emprunt_MdE','Prelev_MdE','Dette_MdE',
@@ -228,8 +230,8 @@ export default function App() {
       const avgCapiKE = capiRetM > 0.001 ? r.capiPayout_t / capiRetM : 0;
       return [
         r.year,
-        r.legacyExp_t.toFixed(1), r.capiPayout_t.toFixed(1),
-        (r.legacyExp_t + r.capiPayout_t).toFixed(1),
+        r.legacyExp_t.toFixed(1), (r.ndcPaygPension_t ?? 0).toFixed(1), r.capiPayout_t.toFixed(1),
+        (r.legacyExp_t + (r.ndcPaygPension_t ?? 0) + r.capiPayout_t).toFixed(1),
         r.fundReturn_t.toFixed(1), r.H_t_proceeds.toFixed(1), r.abatement_t.toFixed(1),
         r.S0_csg_revenue_t.toFixed(1), (r.fiscalTransfer_t ?? 0).toFixed(1),
         r.C_s_payg_t.toFixed(1), r.C_s_capi_t.toFixed(1), r.emplrToLeg_t.toFixed(1), r.emplrToCap_t.toFixed(1),
@@ -1023,12 +1025,16 @@ export default function App() {
                 <Area type="monotone" dataKey="emplrToLeg" stackId="income" fill="#a78bfa" stroke="#8b5cf6" name="Cotis. employeur → legacy" />
                 <Area type="monotone" dataKey="cotisSalPayg" stackId="income" fill="#fca5a5" stroke="#ef4444" name="Cotis. salarié → PAYG" />
                 <Area type="monotone" dataKey="fiscalTransfer" stackId="income" fill="#5eead4" stroke="#0d9488" name="Transferts (diversification)" />
-                <Line type="monotone" dataKey="legacyExp" stroke="#ef4444" strokeWidth={3} name="Dépenses legacy" dot={false} />
+                <Line type="monotone" dataKey="paygTotalOutflow" stroke="#ef4444" strokeWidth={3} name={params.swedenMode ? 'Dépenses PAYG (legacy + NDC)' : 'Dépenses legacy'} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
           <div className="chart-container">
-            <h3>Dépenses retraites — Legacy (PAYG) vs. Capitalisation (Md€)</h3>
+            <h3>
+              {params.swedenMode
+                ? 'Dépenses retraites — Legacy, NDC (Inkomstpension) et pilier financé (PPM) (Md€)'
+                : 'Dépenses retraites — Legacy (PAYG) vs. Capitalisation (Md€)'}
+            </h3>
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart data={chartData} margin={{ bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -1036,8 +1042,11 @@ export default function App() {
                 <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8 }} tick={{ fontSize: 14 }} />
                 <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} />
                 <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
-                <Area type="monotone" dataKey="legacyExp" stackId="pensions" fill="#fca5a5" stroke="#ef4444" name="Pensions legacy" />
-                <Area type="monotone" dataKey="capiPayout" stackId="pensions" fill="#86efac" stroke="#059669" name="Pensions capi" />
+                <Area type="monotone" dataKey="legacyExp" stackId="pensions" fill="#fca5a5" stroke="#ef4444" name="Pensions legacy (ancien PAYG)" />
+                {params.swedenMode && (
+                  <Area type="monotone" dataKey="ndcPaygPension" stackId="pensions" fill="#fde68a" stroke="#d97706" name="Pensions NDC — Inkomstpension (PAYG notionnel)" />
+                )}
+                <Area type="monotone" dataKey="capiPayout" stackId="pensions" fill="#86efac" stroke="#059669" name={params.swedenMode ? 'Pensions pilier financé — PPM' : 'Pensions capi'} />
                 <Line type="monotone" dataKey="totalPensionExp" stroke="#1e293b" strokeWidth={2} strokeDasharray="5 5" name="Total pensions" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
