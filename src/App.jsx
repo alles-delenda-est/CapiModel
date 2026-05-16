@@ -96,7 +96,7 @@ function rowToChart(r) {
     paygTotalOutflow: r.legacyExp_t + (r.ndcPaygPension_t ?? 0),
     totalPensionExp: r.legacyExp_t + r.capiPayout_t + (r.ndcPaygPension_t ?? 0),
     // Stocks & rates
-    debt: r.D_t,
+    debt: Math.round(r.D_t * 10) / 10,
     r_d: r.r_d_t * 100,
     capi: r.K_t,
     capiReal: r.K_t / Math.pow(1 + 0.02, r.t),
