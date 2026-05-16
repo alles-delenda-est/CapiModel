@@ -91,10 +91,12 @@ function rowToChart(r) {
     fiscalTransfer: r.fiscalTransfer_t, // §5.9a diversification (CSG/FSV/État)
     // Expenditure
     legacyExp: r.legacyExp_t,
+    ndcPaygPension: r.ndcPaygPension_t ?? 0,
     capiPayout: r.capiPayout_t,
-    totalPensionExp: r.legacyExp_t + r.capiPayout_t,
+    paygTotalOutflow: r.legacyExp_t + (r.ndcPaygPension_t ?? 0),
+    totalPensionExp: r.legacyExp_t + r.capiPayout_t + (r.ndcPaygPension_t ?? 0),
     // Stocks & rates
-    debt: r.D_t,
+    debt: Math.round(r.D_t * 10) / 10,
     r_d: r.r_d_t * 100,
     capi: r.K_t,
     capiReal: r.K_t / Math.pow(1 + 0.02, r.t),
@@ -149,6 +151,9 @@ const TABLE_COLUMNS = [
   { key: 'debtFinancedRedemption_t', label: 'Rachat dettes', always: false, render: r => (r.debtFinancedRedemption_t ?? 0).toFixed(1) },
   { key: 'repayFundBalance_t', label: 'Solde fonds', always: false, render: r => fmtN(r.repayFundBalance_t ?? 0) },
   { key: 'transitionalPaygExpGross_t', label: 'PAYG contref.', always: false, render: r => (r.transitionalPaygExpGross_t ?? 0).toFixed(1) },
+  { key: 'abmFactor_t',      label: 'ABM facteur', always: false, render: r => (r.abmFactor_t ?? 1).toFixed(3) },
+  { key: 'abmCut_t',         label: 'ABM coupe',   always: false, render: r => (r.abmCut_t ?? 0).toFixed(1) },
+  { key: 'ndcPaygPension_t', label: 'NDC PAYG',    always: false, render: r => (r.ndcPaygPension_t ?? 0).toFixed(1) },
 ]
 
 const CHART_TABS = [
@@ -201,12 +206,13 @@ export default function App() {
     const R0 = params.R0 ?? 18;
     const headers = [
       'Annee',
-      'Dep_legacy_MdE','Dep_capi_MdE','Total_pensions_MdE',
+      'Dep_legacy_MdE','Dep_NDC_payg_MdE','Dep_capi_MdE','Total_pensions_MdE',
       'Rend_fonds_MdE','HLM_MdE','Abattement_MdE','CSG_recettes_MdE','Transferts_MdE',
       'Sal_payg_MdE','Sal_capi_MdE','Empl_leg_MdE','Empl_cap_MdE',
       'Int_dette_MdE','Flux_net_MdE','Emprunt_MdE','Prelev_MdE','Dette_MdE',
       'Capi_nom_MdE','Capi_reel_MdE',
       'Bond_stock_MdE','Bond_issuance_MdE','Bond_drawn_from_repay_fund_MdE','Bond_debt_financed_MdE','Bond_repay_fund_balance_MdE','Bond_payg_counterfactual_MdE',
+      'ABM_factor','ABM_cut_MdE',
       'r_d_pct','Spread_pct',
       'Workers_active_M',
       'Retirees_total_M','Retirees_legacy_M','Retirees_transition_M','Retirees_capi_pure_M',
@@ -224,8 +230,8 @@ export default function App() {
       const avgCapiKE = capiRetM > 0.001 ? r.capiPayout_t / capiRetM : 0;
       return [
         r.year,
-        r.legacyExp_t.toFixed(1), r.capiPayout_t.toFixed(1),
-        (r.legacyExp_t + r.capiPayout_t).toFixed(1),
+        r.legacyExp_t.toFixed(1), (r.ndcPaygPension_t ?? 0).toFixed(1), r.capiPayout_t.toFixed(1),
+        (r.legacyExp_t + (r.ndcPaygPension_t ?? 0) + r.capiPayout_t).toFixed(1),
         r.fundReturn_t.toFixed(1), r.H_t_proceeds.toFixed(1), r.abatement_t.toFixed(1),
         r.S0_csg_revenue_t.toFixed(1), (r.fiscalTransfer_t ?? 0).toFixed(1),
         r.C_s_payg_t.toFixed(1), r.C_s_capi_t.toFixed(1), r.emplrToLeg_t.toFixed(1), r.emplrToCap_t.toFixed(1),
@@ -235,6 +241,7 @@ export default function App() {
         (r.BR_t ?? 0).toFixed(1), (r.bondIssuance_t ?? 0).toFixed(1),
         (r.drawnFromRepayFund_t ?? 0).toFixed(1), (r.debtFinancedRedemption_t ?? 0).toFixed(1), (r.repayFundBalance_t ?? 0).toFixed(1),
         (r.transitionalPaygExpGross_t ?? 0).toFixed(1),
+        (r.abmFactor_t ?? 1).toFixed(3), (r.abmCut_t ?? 0).toFixed(1),
         (r.r_d_t * 100).toFixed(2), (r.spread_t * 100).toFixed(2),
         workersM.toFixed(2),
         retTotalM.toFixed(2), retLegacyM.toFixed(2), retTransitionM.toFixed(2), retCapiPureM.toFixed(2),
@@ -379,20 +386,31 @@ export default function App() {
               <button
                 key={String(value)}
                 className={`canonical-btn ${params.chileMode === value ? 'active' : ''}`}
-                onClick={() => setParam('chileMode', value)}
+                onClick={() => {
+                  // Mutex with Sweden mode
+                  if (value) setParams(prev => ({ ...prev, chileMode: true, swedenMode: false }));
+                  else setParam('chileMode', false);
+                }}
               >{label}</button>
             ))}
           </div>
         </div>
 
-        {/* 3 — Mode Suédois (automatic balance mechanism) */}
+        {/* 3 — Mode Suédois (NDC + ABM + small funded pillar) */}
         <div className="canonical-mode-group">
           <div className="canonical-mode-label">
-            Mode Suédois — mécanisme d'équilibrage automatique
+            Mode Suédois — équilibrage automatique + petit pilier capi
             <span className="canonical-mode-hint">
-              Ajuste automatiquement les prestations si le ratio actifs/passifs du
-              système dépasse un seuil critique, évitant la spirale de dette.
-              <em> Logique économique complète dans un prochain PR.</em>
+              Inspiré du système suédois Inkomstpension + Premiepension (1999), dernières
+              «&nbsp;grandes réformes&nbsp;» dans un pays européen. Garde le PAYG comme système
+              principal mais bascule sur un compte notionnel par cotisant ({Math.round((params.swedenCapiRate ?? 0.04) * 100)}%
+              des salaires en capitalisation réelle, que vous pouvez ajuster avec le slider
+              à droite, le reste en notionnel PAYG). Le mécanisme d'équilibrage automatique (ABM)
+              coupe l'indexation des pensions lorsque les ressources PAYG passent en-dessous des
+              décaissements, gardant le système solvable sans recourir à la dette. Avec une baisse
+              automatique du niveau des pensions en années défavorables (plancher à {Math.round((params.swedenABMFloor ?? 0.5) * 100)}%),
+              cette solution élimine le conflit intergénérationnel parce que les retraités et les
+              actifs partagent les fruits de la croissance économique.
             </span>
           </div>
           <div className="canonical-mode-buttons">
@@ -403,10 +421,39 @@ export default function App() {
               <button
                 key={String(value)}
                 className={`canonical-btn ${params.swedenMode === value ? 'active' : ''}`}
-                onClick={() => setParam('swedenMode', value)}
+                onClick={() => {
+                  if (value) setParams(prev => ({ ...prev, swedenMode: true, chileMode: false }));
+                  else setParam('swedenMode', false);
+                }}
               >{label}</button>
             ))}
           </div>
+          {params.swedenMode && (
+            <div className="canonical-mode-sub" style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              <EnhancedSlider
+                id="swedenCapiRate"
+                label="Part capi (% des salaires)"
+                value={params.swedenCapiRate}
+                onChange={v => setParam('swedenCapiRate', v)}
+                min={0.01} max={0.06} step={0.005} unit="" decimals={3}
+                defaultValue={DEFAULT_CONFIG.swedenCapiRate}
+                tip="Fraction des salaires bruts dirigée vers le pilier capi réel. Sweden: 2,5%. Au-delà de ~5%, le déficit de transition redevient significatif."
+              />
+              <div className="canonical-mode-buttons" style={{ alignSelf: 'end' }}>
+                <span style={{ fontSize: '0.85em', marginRight: '0.5rem' }}>ABM&nbsp;:</span>
+                {[
+                  { value: true,  label: 'On' },
+                  { value: false, label: 'Off' },
+                ].map(({ value, label }) => (
+                  <button
+                    key={String(value)}
+                    className={`canonical-btn ${params.swedenABM === value ? 'active' : ''}`}
+                    onClick={() => setParam('swedenABM', value)}
+                  >{label}</button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -858,6 +905,41 @@ export default function App() {
             </div>
           </>
         )}
+
+        {/* ABM KPIs — only shown when swedenMode + ABM active */}
+        {params.swedenMode && params.swedenABM && (
+          <>
+            <h3 style={{ marginTop: '1.25rem', marginBottom: '0.5rem', fontSize: '1rem', color: 'var(--color-text-secondary)' }}>
+              Équilibrage automatique (Mode Suédois)
+            </h3>
+            <div className="kpi-grid">
+              <div className="kpi-card">
+                <h3>Coupe pension totale cumulée</h3>
+                <div className={`kpi-value ${kpis.totalABMCut > 0 ? 'kpi-warn' : 'kpi-ok'}`}>
+                  {fmtMd(kpis.totalABMCut)} €</div>
+                <div className="kpi-sub">Σ coupes ABM sur 70 ans (prestations non-versées)</div>
+              </div>
+              <div className="kpi-card">
+                <h3>Coupe annuelle de pointe</h3>
+                <div className={`kpi-value ${kpis.peakABMCut > 0 ? 'kpi-warn' : 'kpi-ok'}`}>
+                  {fmtMd(kpis.peakABMCut)} €</div>
+                <div className="kpi-sub">Pire année: {kpis.peakABMCutYear ?? '—'}</div>
+              </div>
+              <div className="kpi-card">
+                <h3>Niveau pension minimum</h3>
+                <div className={`kpi-value ${kpis.minABMFactor < 0.95 ? 'kpi-warn' : 'kpi-ok'}`}>
+                  {(kpis.minABMFactor * 100).toFixed(1)}%
+                </div>
+                <div className="kpi-sub">Pension la plus basse vs sans ABM (planché : {Math.round((params.swedenABMFloor ?? 0.5) * 100)}%)</div>
+              </div>
+              <div className="kpi-card">
+                <h3>Années avec coupe ABM</h3>
+                <div className="kpi-value">{kpis.abmYearsActive} / 70</div>
+                <div className="kpi-sub">Années où le PAYG aurait été en déficit sans ABM</div>
+              </div>
+            </div>
+          </>
+        )}
         </CollapsibleSection>
       </section>
 
@@ -943,12 +1025,16 @@ export default function App() {
                 <Area type="monotone" dataKey="emplrToLeg" stackId="income" fill="#a78bfa" stroke="#8b5cf6" name="Cotis. employeur → legacy" />
                 <Area type="monotone" dataKey="cotisSalPayg" stackId="income" fill="#fca5a5" stroke="#ef4444" name="Cotis. salarié → PAYG" />
                 <Area type="monotone" dataKey="fiscalTransfer" stackId="income" fill="#5eead4" stroke="#0d9488" name="Transferts (diversification)" />
-                <Line type="monotone" dataKey="legacyExp" stroke="#ef4444" strokeWidth={3} name="Dépenses legacy" dot={false} />
+                <Line type="monotone" dataKey="paygTotalOutflow" stroke="#ef4444" strokeWidth={3} name={params.swedenMode ? 'Dépenses PAYG (legacy + NDC)' : 'Dépenses legacy'} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
           <div className="chart-container">
-            <h3>Dépenses retraites — Legacy (PAYG) vs. Capitalisation (Md€)</h3>
+            <h3>
+              {params.swedenMode
+                ? 'Dépenses retraites — Legacy, NDC (Inkomstpension) et pilier financé (PPM) (Md€)'
+                : 'Dépenses retraites — Legacy (PAYG) vs. Capitalisation (Md€)'}
+            </h3>
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart data={chartData} margin={{ bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -956,8 +1042,11 @@ export default function App() {
                 <YAxis width={55} label={{ value: 'Md€', angle: -90, position: 'insideLeft', dx: -8 }} tick={{ fontSize: 14 }} />
                 <Tooltip formatter={(v) => `${typeof v === 'number' ? v.toFixed(1) : v} Md€`} />
                 <Legend wrapperStyle={{ fontSize: 14 }} iconType="circle" />
-                <Area type="monotone" dataKey="legacyExp" stackId="pensions" fill="#fca5a5" stroke="#ef4444" name="Pensions legacy" />
-                <Area type="monotone" dataKey="capiPayout" stackId="pensions" fill="#86efac" stroke="#059669" name="Pensions capi" />
+                <Area type="monotone" dataKey="legacyExp" stackId="pensions" fill="#fca5a5" stroke="#ef4444" name="Pensions legacy (ancien PAYG)" />
+                {params.swedenMode && (
+                  <Area type="monotone" dataKey="ndcPaygPension" stackId="pensions" fill="#fde68a" stroke="#d97706" name="Pensions NDC — Inkomstpension (PAYG notionnel)" />
+                )}
+                <Area type="monotone" dataKey="capiPayout" stackId="pensions" fill="#86efac" stroke="#059669" name={params.swedenMode ? 'Pensions pilier financé — PPM' : 'Pensions capi'} />
                 <Line type="monotone" dataKey="totalPensionExp" stroke="#1e293b" strokeWidth={2} strokeDasharray="5 5" name="Total pensions" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>

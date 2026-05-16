@@ -209,6 +209,14 @@ export function extractKPIs(rows) {
   const finalRepayFundBalance = last.repayFundBalance_t ?? 0;
   // PAYG counterfactual: sum of what transitional PAYG flow would have been.
   const totalPaygCounterfactual = rows.reduce((s, r) => s + (r.transitionalPaygExpGross_t ?? 0), 0);
+  // §5.16 Sweden ABM KPIs (zero when swedenMode=false or ABM disabled).
+  const totalABMCut = rows.reduce((s, r) => s + (r.abmCut_t ?? 0), 0);
+  const peakABMCut = Math.max(0, ...rows.map(r => r.abmCut_t ?? 0));
+  const peakABMCutRow = rows.find(r => (r.abmCut_t ?? 0) === peakABMCut);
+  const peakABMCutYear = peakABMCutRow?.year ?? null;
+  // Minimum balancing ratio = worst pension haircut (1.0 = no cut, 0.5 = floor).
+  const minABMFactor = Math.min(1, ...rows.map(r => r.abmFactor_t ?? 1));
+  const abmYearsActive = rows.filter(r => (r.abmFactor_t ?? 1) < 0.999).length;
   return {
     peakDebt, peakDebtYear, debtFreeYear, totalInterest,
     finalCapi, finalCapiReal, netPosition, minSpread, S0,
@@ -219,5 +227,6 @@ export function extractKPIs(rows) {
     totalBondsIssued, totalRepayFund, bondNetObligation, totalBondRedemptions,
     totalDebtFinancedRedemptions, totalDrawnFromRepayFund, finalRepayFundBalance,
     totalPaygCounterfactual,
+    totalABMCut, peakABMCut, peakABMCutYear, minABMFactor, abmYearsActive,
   };
 }

@@ -2175,3 +2175,108 @@ describe('PR #21b/c recognition bonds — chileMode invariants', () => {
     expect(totalDrawn + totalDebtFinanced).toBeCloseTo(totalRedemptions, 3);
   });
 });
+
+// ===========================================================================
+// PR #24 — Sweden mode (NDC + ABM + small funded pillar)
+// ===========================================================================
+describe('PR #24 Sweden mode — NDC + Automatic Balance Mechanism', () => {
+  const SWEDEN_CFG = { ...DEFAULT_CONFIG, swedenMode: true, cashFlowMode: 'balanced' };
+
+  it('swedenMode=false: abmFactor_t = 1 and abmCut_t = 0 every period', () => {
+    const rows = runSimulation(DEFAULT_CONFIG);
+    for (const r of rows) {
+      expect(r.abmFactor_t, `t=${r.t}`).toBe(1);
+      expect(r.abmCut_t, `t=${r.t}`).toBe(0);
+    }
+  });
+
+  it('swedenMode=true: sigma_capi_t = swedenCapiRate / tau_s every period', () => {
+    const rows = runSimulation(SWEDEN_CFG);
+    const expected = SWEDEN_CFG.swedenCapiRate / SWEDEN_CFG.tau_s;
+    for (const r of rows) {
+      expect(r.sigma_capi_t, `t=${r.t}`).toBeCloseTo(expected, 9);
+    }
+  });
+
+  it('swedenMode + ABM: abmFactor_t bounded by [swedenABMFloor, 1] every period', () => {
+    const rows = runSimulation(SWEDEN_CFG);
+    for (const r of rows) {
+      expect(r.abmFactor_t, `t=${r.t}`).toBeGreaterThanOrEqual(SWEDEN_CFG.swedenABMFloor - 1e-12);
+      expect(r.abmFactor_t, `t=${r.t}`).toBeLessThanOrEqual(1 + 1e-12);
+    }
+  });
+
+  it('swedenMode + ABM: PAYG never borrows in deficit (D_t never grows from PAYG)', () => {
+    // With ABM, the PAYG side always self-balances. D_t can still grow from
+    // the K-side cascade (capi shortfall) but never from PAYG borrowing.
+    const rows = runSimulation(SWEDEN_CFG);
+    // Compare to no-ABM variant: D_t should be strictly lower (or equal).
+    const rowsNoABM = runSimulation({ ...SWEDEN_CFG, swedenABM: false });
+    for (let i = 0; i < rows.length; i++) {
+      expect(rows[i].D_t, `t=${i} ABM should not exceed no-ABM D_t`)
+        .toBeLessThanOrEqual(rowsNoABM[i].D_t + 1e-6);
+    }
+  });
+
+  it('swedenMode + ABM: abmCut_t = (1 - abmFactor_t) × pre-cut totalLegacyOutflow', () => {
+    const rows = runSimulation(SWEDEN_CFG);
+    for (const r of rows) {
+      if (r.abmFactor_t < 0.999) {
+        // pre-cut outflow = post-cut outflow / abmFactor
+        const preCutOutflow = r.totalLegacyOutflow_t / r.abmFactor_t;
+        const expectedCut = preCutOutflow * (1 - r.abmFactor_t);
+        expect(r.abmCut_t, `t=${r.t}`).toBeCloseTo(expectedCut, 6);
+      }
+    }
+  });
+
+  it('swedenMode + ABM: abmCut_t = 0 when abmFactor_t = 1 (no deficit)', () => {
+    const rows = runSimulation(SWEDEN_CFG);
+    for (const r of rows) {
+      if (Math.abs(r.abmFactor_t - 1) < 1e-12) {
+        expect(r.abmCut_t, `t=${r.t}`).toBe(0);
+      }
+    }
+  });
+
+  it('swedenCapiRate slider: higher capi share → smaller PAYG revenue base', () => {
+    const low = runSimulation({ ...SWEDEN_CFG, swedenCapiRate: 0.02 });
+    const high = runSimulation({ ...SWEDEN_CFG, swedenCapiRate: 0.05 });
+    expect(high[0].C_s_payg_t, 'higher capi → less PAYG').toBeLessThan(low[0].C_s_payg_t);
+    expect(high[0].C_s_capi_t, 'higher capi → more capi').toBeGreaterThan(low[0].C_s_capi_t);
+  });
+
+  it('swedenMode + ABM: actually fires under default parameters (integration)', () => {
+    // Regression guard: a future change that silently neutralises the ABM (e.g.
+    // a bug widening the resource base back to "total fiscal capacity") would
+    // leave all the per-period invariant tests passing while making the
+    // mechanism a no-op. This test asserts the ABM is observable: at least one
+    // year has a cut, and the cumulative cut is non-trivial.
+    const rows = runSimulation(SWEDEN_CFG);
+    const activeYears = rows.filter(r => (r.abmFactor_t ?? 1) < 0.999).length;
+    const totalCut = rows.reduce((s, r) => s + (r.abmCut_t ?? 0), 0);
+    expect(activeYears, 'ABM should activate in at least one year').toBeGreaterThan(0);
+    expect(totalCut, 'cumulative ABM cut should be non-trivial (>1 Md€)').toBeGreaterThan(1);
+  });
+
+  it('swedenMode forces effective cashFlowMode to legacy (no balanced/overlapping cascade)', () => {
+    // The balanced/overlapping cascades are full-capitalisation constructs that
+    // under-size the K floor when only ~35% of contributions feed K. Forcing
+    // legacy mode prevents K runaway. Diagnostic: balanced-mode-only fields
+    // (surplusLevy_t, debtSweepCapacity_t, etc.) must be zero throughout.
+    const rows = runSimulation({ ...DEFAULT_CONFIG, swedenMode: true, cashFlowMode: 'balanced' });
+    for (const r of rows) {
+      expect(r.surplusLevy_t ?? 0, `t=${r.t} surplusLevy should be 0`).toBe(0);
+      expect(r.debtSweepCapacity_t ?? 0, `t=${r.t} debtSweepCapacity should be 0`).toBe(0);
+    }
+  });
+
+  it('swedenMode=true and chileMode=true are not asserted mutually exclusive by engine (UI mutex)', () => {
+    // Engine allows both flags set. UI handles mutex. chileMode takes precedence
+    // in sigma_capi computation (sigma=1 wins).
+    const rows = runSimulation({ ...DEFAULT_CONFIG, swedenMode: true, chileMode: true });
+    for (const r of rows) {
+      expect(r.sigma_capi_t, `t=${r.t} chile wins`).toBe(1);
+    }
+  });
+});

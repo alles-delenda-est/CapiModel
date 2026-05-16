@@ -233,10 +233,19 @@ export const DEFAULT_CONFIG = {
   fiscalTransferBase: 40,
   fiscalTransferMode: 'none',
 
-  // §5.13a Canonical reform modes (PR #21 — engine flags only; UI in this PR,
-  // full economic logic in a future PR).
+  // §5.13a Canonical reform modes (PR #21 — engine flags; PR #24 — Sweden logic).
   chileMode: false,    // recognition bonds for pre-reform PAYG contributions (indexed to French inflation)
-  swedenMode: false,   // automatic balance mechanism (NDC-style)
+  swedenMode: false,   // NDC PAYG with Automatic Balance Mechanism + small funded pillar
+  // §5.16 Swedish mode (PR #24) — calibrated against Inkomstpension + Premiepension.
+  // Sweden splits 18.5% total contributions as 16% NDC + 2.5% PPM = 13.5% to funded.
+  // For France's ~28% total rate, 4% wages ≈ 14% of contributions to capi.
+  // swedenCapiRate: fraction of WAGES (not contributions) routed to capi pillar.
+  // Slider range 0.01–0.06 in UI; >tau_s would draw from employer side (capped).
+  swedenCapiRate: 0.04,
+  // ABM: automatic indexation/benefit haircut when PAYG resources < outflows.
+  // Floor caps the haircut so pensions never fall below `swedenABMFloor × pre-cut`.
+  swedenABM: true,
+  swedenABMFloor: 0.50,
 };
 
 // =================== Pure helpers ===================
@@ -630,10 +639,17 @@ export function runSimulation(userConfig = {}) {
   // diversion deficit. Result: D_t runs away exponentially against the r_d
   // cap. Force the legacy waterfall whenever chileMode is on; preserve the
   // user's cashFlowMode choice for non-chile runs.
-  const effectiveCashFlowMode = cfg.chileMode ? 'legacy' : cfg.cashFlowMode;
-
   for (let t = 0; t < cfg.N; t++) {
     const K_start_t = K_t;                  // snapshot before any this-year mutations
+
+    // swedenMode and chileMode both force the legacy waterfall. The balanced/overlapping
+    // cascades are full-capitalisation constructs (K must cover ALL future pensions, so
+    // the floor scales with capiPayout). In swedenMode only ~35% of contributions feed K;
+    // in chileMode 100% of contributions divert to capi but the legacy deficit is fully
+    // debt-financed — in both cases the cascade under-sizes the floor and K compounds
+    // unchecked. Legacy mode keeps capi → debt repayment pathways open and avoids runaway.
+    // (PR #25 fix for chileMode; extended to swedenMode in PR #30.)
+    const effectiveCashFlowMode = (cfg.swedenMode || cfg.chileMode) ? 'legacy' : cfg.cashFlowMode;
 
     // ---------- §5.1 Growth factors ----------
     const Omega_t    = Math.pow(1 + w_n, t);                                    // (4)
@@ -687,7 +703,20 @@ export function runSimulation(userConfig = {}) {
     // ---------- §5.4 Retirement age & cohort routing ----------
     // A_R_t pre-computed above (before §5.2) to enable retireeAgeScale_t.
     // In chileMode all worker contributions flow to capitalisation from t=0 (§5.15).
-    const sigma_capi_t = cfg.chileMode ? 1 : sigmaCapi(t, cfg);                  // (15)
+    // In swedenMode (§5.16) a fixed slice swedenCapiRate of W_t goes to the funded
+    // pillar (Premiepension-style) — converted to a sigma_capi equivalent so the
+    // rest of the engine is unchanged. Capped at 1 if swedenCapiRate > tau_s.
+    //
+    // Calibration note: with default swedenCapiRate=0.04 and tau_s≈0.1131, sigma_capi
+    // ≈ 35% of employee contributions route to the funded pillar. Sweden's actual PPM
+    // is ~13.5% (2.5/18.5). The higher French value reflects the smaller payroll base
+    // (tau_s vs Sweden's 18.5%) and stronger funded-pillar ambition; users can lower
+    // swedenCapiRate to mirror Sweden's split more closely.
+    const sigma_capi_t = cfg.chileMode
+      ? 1
+      : cfg.swedenMode
+        ? Math.min(1, (cfg.swedenCapiRate ?? 0) / Math.max(cfg.tau_s, 1e-9))
+        : sigmaCapi(t, cfg);                                                      // (15)
     const C_s_capi_t = C_s_t * sigma_capi_t;                                    // (16)
     const C_s_payg_t = C_s_t * (1 - sigma_capi_t);                              // (17)
 
@@ -731,7 +760,9 @@ export function runSimulation(userConfig = {}) {
     const S0_total = S0_brackets_t + S0_irDeduction_t + S0_csg_t;
 
     // ---------- §5.6 (continued): legacyExp_t now uses E0_legacy_t ----------
-    const legacyExp_t = Math.max(0, E0_legacy_t * legacyRetirees_t * I_factor_t); // (25)
+    // ABM (Sweden mode §5.16) may mutate legacyExp_t / transitionalPaygExp_t /
+    // totalLegacyOutflow_t below — hence `let` rather than `const`.
+    let legacyExp_t = Math.max(0, E0_legacy_t * legacyRetirees_t * I_factor_t); // (25)
 
     // ---------- §5.6.1 / §6.5: per-cohort PAYG accrual ----------
     // `legacyShareAvg_t` is the population-weighted mean legacy-accrual share
@@ -810,9 +841,27 @@ export function runSimulation(userConfig = {}) {
       0,
       capiRetirees_t * legacyShareAvg_t * E0_legacy_t * I_factor_t,
     );
-    const transitionalPaygExp_t = cfg.chileMode ? 0 : transitionalPaygExpGross_t;
+    let transitionalPaygExp_t = cfg.chileMode ? 0 : transitionalPaygExpGross_t;
     // (25c) total PAYG outflow funded by the legacy fund.
-    const totalLegacyOutflow_t = legacyExp_t + transitionalPaygExp_t;
+    let totalLegacyOutflow_t = legacyExp_t + transitionalPaygExp_t;
+    // §5.16 NDC PAYG pension (swedenMode): reform-cohort retirees draw (1−sigma_capi)
+    // of their pension from NDC notional accounts, funded by current PAYG contributions.
+    // This is the Inkomstpension side (16/18.5 ≈ 86% of contributions notionally).
+    // Without this term, the funded pillar (PPM, K_t) would appear to cover ALL reform
+    // pensions — understating PAYG pressure and making ABM effectively invisible.
+    //
+    // Approximation: pureCapi_t uses (1 − legacyShareAvg_t) as a proxy for "share of
+    // capi retirees with no legacy rights." legacyShareAvg_t is a survival-weighted
+    // running average, not a strict reform-cohort flag, so during transition years
+    // (when transitional and pure-reform cohorts co-exist) the term may slightly
+    // overestimate pure-reform headcount. Acceptable for a proof-of-concept; a clean
+    // fix would require tracking a separate pureReform_t cohort stock.
+    let ndcPaygPension_t = 0;
+    if (cfg.swedenMode) {
+      const pureCapi_t = capiRetirees_t * (1 - legacyShareAvg_t);
+      ndcPaygPension_t = (1 - sigma_capi_t) * pureCapi_t * cfg.E0 * I_factor_t;
+      totalLegacyOutflow_t += ndcPaygPension_t;
+    }
     // Snapshot the pre-update value for the balanced cascade (§5.13 balanced uses
     // the new-retiree delta, but capiRetirees_prev is updated before that block runs).
     const capiRetirees_prev_snap = capiRetirees_prev;
@@ -879,17 +928,53 @@ export function runSimulation(userConfig = {}) {
     const nonEmplrNet_t = fundReturn_t + H_t_proceeds + abatement_t
                         + C_s_payg_t + S0_csg_revenue_t - debtInterest_t
                         + fiscalTransfer_t;                                      // (38′)
-    // v1.1 eq (39'): deficit measured against TOTAL PAYG outflow
-    // (legacy-cohort + transitional-cohort accrued rights), not legacy-cohort
-    // alone. legacyExp_t is preserved as a separate diagnostic; the waterfall
-    // consumes totalLegacyOutflow_t.
-    const deficit_t = totalLegacyOutflow_t - nonEmplrNet_t;                     // (39')
     // phiF (employer floor to capi) is only active in legacy mode.
     // In overlapping/balanced modes the cascade covers capi payout from K_t directly,
     // so all employer contributions flow to legacy first (phiF = 0 effective).
     const phiF_eff = (effectiveCashFlowMode === 'overlapping' || effectiveCashFlowMode === 'balanced')
       ? 0 : (cfg.phiF ?? 0);
     const emplrAvail_t = C_e_t * (1 - phiF_eff);                               // (40)
+
+    // §5.9b §5.16 Automatic Balance Mechanism (Sweden NDC) — PR #24.
+    // Inspired by the Inkomstpension "balansindex": if projected outflows exceed
+    // available PAYG resources, indexation is haircut proportionally so the
+    // system stays solvent without borrowing. Floor capped at swedenABMFloor
+    // (default 0.5) to avoid degenerate near-zero pension outcomes.
+    //
+    // Resource base is STRICTLY PAYG contributions (employee PAYG + employer
+    // available). Excludes fund return, HLM proceeds, abatement, CSG, and fiscal
+    // transfers — those are discretionary fiscal levers, not contribution-based
+    // flows, and folding them in would turn the automatic mechanism into a
+    // discretionary backstop and silently absorb the shocks it is supposed to
+    // expose. This is a deliberate departure from a permissive "total fiscal
+    // capacity" reading toward the narrow balansindex definition.
+    //
+    // Cuts apply pro-rata to legacy + transitional PAYG + NDC PAYG buckets.
+    // INVARIANT: pre-ABM totalLegacyOutflow_t MUST equal legacyExp_t +
+    // transitionalPaygExp_t + ndcPaygPension_t. If a fourth PAYG expense type
+    // is ever added to totalLegacyOutflow_t upstream, it must also be cut
+    // here and included in the reconstruction below, otherwise abmCut_t and
+    // the post-cut total will drift out of accounting consistency.
+    let abmFactor_t = 1;
+    let abmCut_t = 0;
+    if (cfg.swedenMode && cfg.swedenABM && totalLegacyOutflow_t > 1e-9) {
+      const paygResources_t = C_s_payg_t + emplrAvail_t;
+      if (totalLegacyOutflow_t > paygResources_t) {
+        const rawRatio = paygResources_t / totalLegacyOutflow_t;
+        abmFactor_t = Math.max(cfg.swedenABMFloor ?? 0.5, rawRatio);
+        abmCut_t = totalLegacyOutflow_t * (1 - abmFactor_t);
+        legacyExp_t *= abmFactor_t;
+        transitionalPaygExp_t *= abmFactor_t;
+        ndcPaygPension_t *= abmFactor_t;
+        totalLegacyOutflow_t = legacyExp_t + transitionalPaygExp_t + ndcPaygPension_t;
+      }
+    }
+
+    // v1.1 eq (39'): deficit measured against TOTAL PAYG outflow
+    // (legacy-cohort + transitional-cohort accrued rights), not legacy-cohort
+    // alone. legacyExp_t is preserved as a separate diagnostic; the waterfall
+    // consumes totalLegacyOutflow_t.
+    const deficit_t = totalLegacyOutflow_t - nonEmplrNet_t;                     // (39')
 
     let emplrToLeg_t, emplrToCap_t;
     if (!cfg.enableCapi) {
@@ -1310,8 +1395,14 @@ export function runSimulation(userConfig = {}) {
       // ======== §5.12 / §5.13 LEGACY WATERFALL (v1.3) ========
       K_avail_t = K_t * (1 + r_cn_eff_t) + netCapiFlow_t;                      // (50)
 
-      // Legacy floor: E0-indexed (can deplete K_t in late years)
-      capiPayoutFloor_t = cfg.E0 * capiRetirees_t * I_factor_t;                // (51)
+      // In swedenMode the funded pillar (PPM) only covers sigma_capi_t of each
+      // reform-cohort retiree's pension; the NDC PAYG side (ndcPaygPension_t,
+      // above) covers (1 − sigma_capi_t) for pure-reform retirees. Without this
+      // scaling, K is asked to pay the full E0 per retiree while ndcPaygPension
+      // independently covers (1−sigma) of the same obligation → K depletes in
+      // ~5 years and the debt explodes. Legacy floor: E0-indexed (can deplete K_t in late years)
+      const pillarSigma = cfg.swedenMode ? sigma_capi_t : 1;
+      capiPayoutFloor_t = pillarSigma * cfg.E0 * capiRetirees_t * I_factor_t;  // (51)
       capiPayoutDesired_t = Math.max(capiPayoutFloor_t, potBasedPayout_t);      // (54)
       shortfall_t  = Math.max(0, capiPayoutDesired_t - K_avail_t);
       capiPayout_t = capiPayoutDesired_t;
@@ -1382,6 +1473,8 @@ export function runSimulation(userConfig = {}) {
       legacyShareAvg: legacyShareAvg_t,
       transitionalPaygExp_t,
       totalLegacyOutflow_t,
+      // §5.16 Swedish ABM diagnostics (0/1 when disabled, signed when active)
+      abmFactor_t, abmCut_t, ndcPaygPension_t,
       // §5.7 HLM
       U_t, delta_U_t, units_sold, priceDiscount_t, P_eff_t, gain_t, hlmActive_t,
       H_t_proceeds,
