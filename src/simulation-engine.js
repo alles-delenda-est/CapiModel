@@ -639,18 +639,17 @@ export function runSimulation(userConfig = {}) {
   // diversion deficit. Result: D_t runs away exponentially against the r_d
   // cap. Force the legacy waterfall whenever chileMode is on; preserve the
   // user's cashFlowMode choice for non-chile runs.
-  const effectiveCashFlowMode = cfg.chileMode ? 'legacy' : cfg.cashFlowMode;
-
   for (let t = 0; t < cfg.N; t++) {
     const K_start_t = K_t;                  // snapshot before any this-year mutations
 
-    // swedenMode forces the legacy waterfall: the balanced/overlapping cascades
-    // are full-capitalisation constructs (K must cover ALL future pensions, so
-    // the floor scales with capiPayout). In swedenMode only ~35% of contributions
-    // feed K — the NDC PAYG side carries the rest — so the cascade under-sizes
-    // the floor and K compounds unchecked. Legacy mode keeps capi → debt repayment
-    // pathways open and avoids the K runaway.
-    const effectiveCashFlowMode = cfg.swedenMode ? 'legacy' : cfg.cashFlowMode;
+    // swedenMode and chileMode both force the legacy waterfall. The balanced/overlapping
+    // cascades are full-capitalisation constructs (K must cover ALL future pensions, so
+    // the floor scales with capiPayout). In swedenMode only ~35% of contributions feed K;
+    // in chileMode 100% of contributions divert to capi but the legacy deficit is fully
+    // debt-financed — in both cases the cascade under-sizes the floor and K compounds
+    // unchecked. Legacy mode keeps capi → debt repayment pathways open and avoids runaway.
+    // (PR #25 fix for chileMode; extended to swedenMode in PR #30.)
+    const effectiveCashFlowMode = (cfg.swedenMode || cfg.chileMode) ? 'legacy' : cfg.cashFlowMode;
 
     // ---------- §5.1 Growth factors ----------
     const Omega_t    = Math.pow(1 + w_n, t);                                    // (4)
