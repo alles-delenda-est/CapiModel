@@ -212,7 +212,7 @@ export default function App() {
       'Int_dette_MdE','Flux_net_MdE','Emprunt_MdE','Prelev_MdE','Dette_MdE',
       'Capi_nom_MdE','Capi_reel_MdE',
       'Bond_stock_MdE','Bond_issuance_MdE','Bond_drawn_from_repay_fund_MdE','Bond_debt_financed_MdE','Bond_repay_fund_balance_MdE','Bond_payg_counterfactual_MdE',
-      'ABM_factor','ABM_cut_MdE','NDC_payg_pension_MdE',
+      'ABM_factor','ABM_cut_MdE',
       'r_d_pct','Spread_pct',
       'Workers_active_M',
       'Retirees_total_M','Retirees_legacy_M','Retirees_transition_M','Retirees_capi_pure_M',
@@ -241,7 +241,7 @@ export default function App() {
         (r.BR_t ?? 0).toFixed(1), (r.bondIssuance_t ?? 0).toFixed(1),
         (r.drawnFromRepayFund_t ?? 0).toFixed(1), (r.debtFinancedRedemption_t ?? 0).toFixed(1), (r.repayFundBalance_t ?? 0).toFixed(1),
         (r.transitionalPaygExpGross_t ?? 0).toFixed(1),
-        (r.abmFactor_t ?? 1).toFixed(3), (r.abmCut_t ?? 0).toFixed(1), (r.ndcPaygPension_t ?? 0).toFixed(1),
+        (r.abmFactor_t ?? 1).toFixed(3), (r.abmCut_t ?? 0).toFixed(1),
         (r.r_d_t * 100).toFixed(2), (r.spread_t * 100).toFixed(2),
         workersM.toFixed(2),
         retTotalM.toFixed(2), retLegacyM.toFixed(2), retTransitionM.toFixed(2), retCapiPureM.toFixed(2),
@@ -404,7 +404,7 @@ export default function App() {
               Inspiré du système suédois Inkomstpension + Premiepension (1999), dernières
               «&nbsp;grandes réformes&nbsp;» dans un pays européen. Garde le PAYG comme système
               principal mais bascule sur un compte notionnel par cotisant ({Math.round((params.swedenCapiRate ?? 0.04) * 100)}%
-              des salaires en capitalisation réelle, ce qui vous pouvez ajuster avec le slider
+              des salaires en capitalisation réelle, que vous pouvez ajuster avec le slider
               à droite, le reste en notionnel PAYG). Le mécanisme d'équilibrage automatique (ABM)
               coupe l'indexation des pensions lorsque les ressources PAYG passent en-dessous des
               décaissements, gardant le système solvable sans recourir à la dette. Avec une baisse

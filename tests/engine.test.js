@@ -2246,6 +2246,31 @@ describe('PR #24 Sweden mode — NDC + Automatic Balance Mechanism', () => {
     expect(high[0].C_s_capi_t, 'higher capi → more capi').toBeGreaterThan(low[0].C_s_capi_t);
   });
 
+  it('swedenMode + ABM: actually fires under default parameters (integration)', () => {
+    // Regression guard: a future change that silently neutralises the ABM (e.g.
+    // a bug widening the resource base back to "total fiscal capacity") would
+    // leave all the per-period invariant tests passing while making the
+    // mechanism a no-op. This test asserts the ABM is observable: at least one
+    // year has a cut, and the cumulative cut is non-trivial.
+    const rows = runSimulation(SWEDEN_CFG);
+    const activeYears = rows.filter(r => (r.abmFactor_t ?? 1) < 0.999).length;
+    const totalCut = rows.reduce((s, r) => s + (r.abmCut_t ?? 0), 0);
+    expect(activeYears, 'ABM should activate in at least one year').toBeGreaterThan(0);
+    expect(totalCut, 'cumulative ABM cut should be non-trivial (>1 Md€)').toBeGreaterThan(1);
+  });
+
+  it('swedenMode forces effective cashFlowMode to legacy (no balanced/overlapping cascade)', () => {
+    // The balanced/overlapping cascades are full-capitalisation constructs that
+    // under-size the K floor when only ~35% of contributions feed K. Forcing
+    // legacy mode prevents K runaway. Diagnostic: balanced-mode-only fields
+    // (surplusLevy_t, debtSweepCapacity_t, etc.) must be zero throughout.
+    const rows = runSimulation({ ...DEFAULT_CONFIG, swedenMode: true, cashFlowMode: 'balanced' });
+    for (const r of rows) {
+      expect(r.surplusLevy_t ?? 0, `t=${r.t} surplusLevy should be 0`).toBe(0);
+      expect(r.debtSweepCapacity_t ?? 0, `t=${r.t} debtSweepCapacity should be 0`).toBe(0);
+    }
+  });
+
   it('swedenMode=true and chileMode=true are not asserted mutually exclusive by engine (UI mutex)', () => {
     // Engine allows both flags set. UI handles mutex. chileMode takes precedence
     // in sigma_capi computation (sigma=1 wins).

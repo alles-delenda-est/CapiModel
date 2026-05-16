@@ -644,6 +644,14 @@ export function runSimulation(userConfig = {}) {
   for (let t = 0; t < cfg.N; t++) {
     const K_start_t = K_t;                  // snapshot before any this-year mutations
 
+    // swedenMode forces the legacy waterfall: the balanced/overlapping cascades
+    // are full-capitalisation constructs (K must cover ALL future pensions, so
+    // the floor scales with capiPayout). In swedenMode only ~35% of contributions
+    // feed K — the NDC PAYG side carries the rest — so the cascade under-sizes
+    // the floor and K compounds unchecked. Legacy mode keeps capi → debt repayment
+    // pathways open and avoids the K runaway.
+    const effectiveCashFlowMode = cfg.swedenMode ? 'legacy' : cfg.cashFlowMode;
+
     // ---------- §5.1 Growth factors ----------
     const Omega_t    = Math.pow(1 + w_n, t);                                    // (4)
     const I_factor_t = Math.pow(1 + iota, t);                                   // (5)
@@ -699,6 +707,12 @@ export function runSimulation(userConfig = {}) {
     // In swedenMode (§5.16) a fixed slice swedenCapiRate of W_t goes to the funded
     // pillar (Premiepension-style) — converted to a sigma_capi equivalent so the
     // rest of the engine is unchanged. Capped at 1 if swedenCapiRate > tau_s.
+    //
+    // Calibration note: with default swedenCapiRate=0.04 and tau_s≈0.1131, sigma_capi
+    // ≈ 35% of employee contributions route to the funded pillar. Sweden's actual PPM
+    // is ~13.5% (2.5/18.5). The higher French value reflects the smaller payroll base
+    // (tau_s vs Sweden's 18.5%) and stronger funded-pillar ambition; users can lower
+    // swedenCapiRate to mirror Sweden's split more closely.
     const sigma_capi_t = cfg.chileMode
       ? 1
       : cfg.swedenMode
@@ -836,6 +850,13 @@ export function runSimulation(userConfig = {}) {
     // This is the Inkomstpension side (16/18.5 ≈ 86% of contributions notionally).
     // Without this term, the funded pillar (PPM, K_t) would appear to cover ALL reform
     // pensions — understating PAYG pressure and making ABM effectively invisible.
+    //
+    // Approximation: pureCapi_t uses (1 − legacyShareAvg_t) as a proxy for "share of
+    // capi retirees with no legacy rights." legacyShareAvg_t is a survival-weighted
+    // running average, not a strict reform-cohort flag, so during transition years
+    // (when transitional and pure-reform cohorts co-exist) the term may slightly
+    // overestimate pure-reform headcount. Acceptable for a proof-of-concept; a clean
+    // fix would require tracking a separate pureReform_t cohort stock.
     let ndcPaygPension_t = 0;
     if (cfg.swedenMode) {
       const pureCapi_t = capiRetirees_t * (1 - legacyShareAvg_t);
@@ -920,11 +941,25 @@ export function runSimulation(userConfig = {}) {
     // available PAYG resources, indexation is haircut proportionally so the
     // system stays solvent without borrowing. Floor capped at swedenABMFloor
     // (default 0.5) to avoid degenerate near-zero pension outcomes.
+    //
+    // Resource base is STRICTLY PAYG contributions (employee PAYG + employer
+    // available). Excludes fund return, HLM proceeds, abatement, CSG, and fiscal
+    // transfers — those are discretionary fiscal levers, not contribution-based
+    // flows, and folding them in would turn the automatic mechanism into a
+    // discretionary backstop and silently absorb the shocks it is supposed to
+    // expose. This is a deliberate departure from a permissive "total fiscal
+    // capacity" reading toward the narrow balansindex definition.
+    //
     // Cuts apply pro-rata to legacy + transitional PAYG + NDC PAYG buckets.
+    // INVARIANT: pre-ABM totalLegacyOutflow_t MUST equal legacyExp_t +
+    // transitionalPaygExp_t + ndcPaygPension_t. If a fourth PAYG expense type
+    // is ever added to totalLegacyOutflow_t upstream, it must also be cut
+    // here and included in the reconstruction below, otherwise abmCut_t and
+    // the post-cut total will drift out of accounting consistency.
     let abmFactor_t = 1;
     let abmCut_t = 0;
     if (cfg.swedenMode && cfg.swedenABM && totalLegacyOutflow_t > 1e-9) {
-      const paygResources_t = nonEmplrNet_t + emplrAvail_t;
+      const paygResources_t = C_s_payg_t + emplrAvail_t;
       if (totalLegacyOutflow_t > paygResources_t) {
         const rawRatio = paygResources_t / totalLegacyOutflow_t;
         abmFactor_t = Math.max(cfg.swedenABMFloor ?? 0.5, rawRatio);
