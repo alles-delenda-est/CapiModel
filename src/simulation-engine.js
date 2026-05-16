@@ -1396,8 +1396,14 @@ export function runSimulation(userConfig = {}) {
       // ======== §5.12 / §5.13 LEGACY WATERFALL (v1.3) ========
       K_avail_t = K_t * (1 + r_cn_eff_t) + netCapiFlow_t;                      // (50)
 
-      // Legacy floor: E0-indexed (can deplete K_t in late years)
-      capiPayoutFloor_t = cfg.E0 * capiRetirees_t * I_factor_t;                // (51)
+      // In swedenMode the funded pillar (PPM) only covers sigma_capi_t of each
+      // reform-cohort retiree's pension; the NDC PAYG side (ndcPaygPension_t,
+      // above) covers (1 − sigma_capi_t) for pure-reform retirees. Without this
+      // scaling, K is asked to pay the full E0 per retiree while ndcPaygPension
+      // independently covers (1−sigma) of the same obligation → K depletes in
+      // ~5 years and the debt explodes. Legacy floor: E0-indexed (can deplete K_t in late years)
+      const pillarSigma = cfg.swedenMode ? sigma_capi_t : 1;
+      capiPayoutFloor_t = pillarSigma * cfg.E0 * capiRetirees_t * I_factor_t;  // (51)
       capiPayoutDesired_t = Math.max(capiPayoutFloor_t, potBasedPayout_t);      // (54)
       shortfall_t  = Math.max(0, capiPayoutDesired_t - K_avail_t);
       capiPayout_t = capiPayoutDesired_t;
