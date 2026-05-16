@@ -831,6 +831,17 @@ export function runSimulation(userConfig = {}) {
     let transitionalPaygExp_t = cfg.chileMode ? 0 : transitionalPaygExpGross_t;
     // (25c) total PAYG outflow funded by the legacy fund.
     let totalLegacyOutflow_t = legacyExp_t + transitionalPaygExp_t;
+    // §5.16 NDC PAYG pension (swedenMode): reform-cohort retirees draw (1−sigma_capi)
+    // of their pension from NDC notional accounts, funded by current PAYG contributions.
+    // This is the Inkomstpension side (16/18.5 ≈ 86% of contributions notionally).
+    // Without this term, the funded pillar (PPM, K_t) would appear to cover ALL reform
+    // pensions — understating PAYG pressure and making ABM effectively invisible.
+    let ndcPaygPension_t = 0;
+    if (cfg.swedenMode) {
+      const pureCapi_t = capiRetirees_t * (1 - legacyShareAvg_t);
+      ndcPaygPension_t = (1 - sigma_capi_t) * pureCapi_t * cfg.E0 * I_factor_t;
+      totalLegacyOutflow_t += ndcPaygPension_t;
+    }
     // Snapshot the pre-update value for the balanced cascade (§5.13 balanced uses
     // the new-retiree delta, but capiRetirees_prev is updated before that block runs).
     const capiRetirees_prev_snap = capiRetirees_prev;
@@ -909,7 +920,7 @@ export function runSimulation(userConfig = {}) {
     // available PAYG resources, indexation is haircut proportionally so the
     // system stays solvent without borrowing. Floor capped at swedenABMFloor
     // (default 0.5) to avoid degenerate near-zero pension outcomes.
-    // Cuts apply pro-rata to legacy + transitional PAYG buckets.
+    // Cuts apply pro-rata to legacy + transitional PAYG + NDC PAYG buckets.
     let abmFactor_t = 1;
     let abmCut_t = 0;
     if (cfg.swedenMode && cfg.swedenABM && totalLegacyOutflow_t > 1e-9) {
@@ -920,7 +931,8 @@ export function runSimulation(userConfig = {}) {
         abmCut_t = totalLegacyOutflow_t * (1 - abmFactor_t);
         legacyExp_t *= abmFactor_t;
         transitionalPaygExp_t *= abmFactor_t;
-        totalLegacyOutflow_t = legacyExp_t + transitionalPaygExp_t;
+        ndcPaygPension_t *= abmFactor_t;
+        totalLegacyOutflow_t = legacyExp_t + transitionalPaygExp_t + ndcPaygPension_t;
       }
     }
 
@@ -1422,7 +1434,7 @@ export function runSimulation(userConfig = {}) {
       transitionalPaygExp_t,
       totalLegacyOutflow_t,
       // §5.16 Swedish ABM diagnostics (0/1 when disabled, signed when active)
-      abmFactor_t, abmCut_t,
+      abmFactor_t, abmCut_t, ndcPaygPension_t,
       // §5.7 HLM
       U_t, delta_U_t, units_sold, priceDiscount_t, P_eff_t, gain_t, hlmActive_t,
       H_t_proceeds,

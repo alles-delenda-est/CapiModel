@@ -149,8 +149,9 @@ const TABLE_COLUMNS = [
   { key: 'debtFinancedRedemption_t', label: 'Rachat dettes', always: false, render: r => (r.debtFinancedRedemption_t ?? 0).toFixed(1) },
   { key: 'repayFundBalance_t', label: 'Solde fonds', always: false, render: r => fmtN(r.repayFundBalance_t ?? 0) },
   { key: 'transitionalPaygExpGross_t', label: 'PAYG contref.', always: false, render: r => (r.transitionalPaygExpGross_t ?? 0).toFixed(1) },
-  { key: 'abmFactor_t', label: 'ABM facteur', always: false, render: r => (r.abmFactor_t ?? 1).toFixed(3) },
-  { key: 'abmCut_t',    label: 'ABM coupe',   always: false, render: r => (r.abmCut_t ?? 0).toFixed(1) },
+  { key: 'abmFactor_t',      label: 'ABM facteur', always: false, render: r => (r.abmFactor_t ?? 1).toFixed(3) },
+  { key: 'abmCut_t',         label: 'ABM coupe',   always: false, render: r => (r.abmCut_t ?? 0).toFixed(1) },
+  { key: 'ndcPaygPension_t', label: 'NDC PAYG',    always: false, render: r => (r.ndcPaygPension_t ?? 0).toFixed(1) },
 ]
 
 const CHART_TABS = [
@@ -209,7 +210,7 @@ export default function App() {
       'Int_dette_MdE','Flux_net_MdE','Emprunt_MdE','Prelev_MdE','Dette_MdE',
       'Capi_nom_MdE','Capi_reel_MdE',
       'Bond_stock_MdE','Bond_issuance_MdE','Bond_drawn_from_repay_fund_MdE','Bond_debt_financed_MdE','Bond_repay_fund_balance_MdE','Bond_payg_counterfactual_MdE',
-      'ABM_factor','ABM_cut_MdE',
+      'ABM_factor','ABM_cut_MdE','NDC_payg_pension_MdE',
       'r_d_pct','Spread_pct',
       'Workers_active_M',
       'Retirees_total_M','Retirees_legacy_M','Retirees_transition_M','Retirees_capi_pure_M',
@@ -238,7 +239,7 @@ export default function App() {
         (r.BR_t ?? 0).toFixed(1), (r.bondIssuance_t ?? 0).toFixed(1),
         (r.drawnFromRepayFund_t ?? 0).toFixed(1), (r.debtFinancedRedemption_t ?? 0).toFixed(1), (r.repayFundBalance_t ?? 0).toFixed(1),
         (r.transitionalPaygExpGross_t ?? 0).toFixed(1),
-        (r.abmFactor_t ?? 1).toFixed(3), (r.abmCut_t ?? 0).toFixed(1),
+        (r.abmFactor_t ?? 1).toFixed(3), (r.abmCut_t ?? 0).toFixed(1), (r.ndcPaygPension_t ?? 0).toFixed(1),
         (r.r_d_t * 100).toFixed(2), (r.spread_t * 100).toFixed(2),
         workersM.toFixed(2),
         retTotalM.toFixed(2), retLegacyM.toFixed(2), retTransitionM.toFixed(2), retCapiPureM.toFixed(2),
@@ -398,14 +399,16 @@ export default function App() {
           <div className="canonical-mode-label">
             Mode Suédois — équilibrage automatique + petit pilier capi
             <span className="canonical-mode-hint">
-              Garde le PAYG comme système principal mais bascule sur un compte
-              notionnel par cotisant ({Math.round((params.swedenCapiRate ?? 0.04) * 100)}% des salaires en
-              capitalisation réelle, le reste en notionnel PAYG). Le mécanisme d'équilibrage
-              automatique (ABM) coupe l'indexation des pensions lorsque les ressources PAYG
-              passent en-dessous des décaissements, gardant le système solvable sans
-              recourir à la dette. Au prix d'une baisse automatique du niveau des pensions
-              en années défavorables (planché à {Math.round((params.swedenABMFloor ?? 0.5) * 100)}%
-              du niveau pré-coupe). Inspiré du système suédois Inkomstpension + Premiepension (1999).
+              Inspiré du système suédois Inkomstpension + Premiepension (1999), dernières
+              «&nbsp;grandes réformes&nbsp;» dans un pays européen. Garde le PAYG comme système
+              principal mais bascule sur un compte notionnel par cotisant ({Math.round((params.swedenCapiRate ?? 0.04) * 100)}%
+              des salaires en capitalisation réelle, ce qui vous pouvez ajuster avec le slider
+              à droite, le reste en notionnel PAYG). Le mécanisme d'équilibrage automatique (ABM)
+              coupe l'indexation des pensions lorsque les ressources PAYG passent en-dessous des
+              décaissements, gardant le système solvable sans recourir à la dette. Avec une baisse
+              automatique du niveau des pensions en années défavorables (plancher à {Math.round((params.swedenABMFloor ?? 0.5) * 100)}%),
+              cette solution élimine le conflit intergénérationnel parce que les retraités et les
+              actifs partagent les fruits de la croissance économique.
             </span>
           </div>
           <div className="canonical-mode-buttons">
