@@ -54,15 +54,15 @@ export default function HypothesesPage() {
             </tr>
             <tr>
               <td>Croissance salariale w<sub>r</sub></td><td>{fmtPct(d.w_r)}</td><td><Kind k="S" /></td>
-              <td>SMPT (salaire moyen par tête) — moyenne INSEE (institut national de la statistique) 2014–2024 ; le 2024–2026 a été plus haut (~0,5–0,7%) post-inflation, mais la BdF Avril 2026 voit ~0,2% réel attendu pour 2026.</td>
+              <td>SMPT (salaire moyen par tête) — moyenne INSEE 2014–2024 ; le 2024–2026 a été plus haut (~0,5–0,7%) post-inflation, mais la BdF Avril 2026 voit ~0,2% réel attendu pour 2026.</td>
             </tr>
             <tr>
               <td>r_f_portfolio</td><td>{fmtPct(d.r_f_portfolio)}</td><td><Kind k="S" /></td>
-              <td>Rendement réel du portefeuille 60/40 institutionnel diversifié — médiane historique OCDE (Organisation de coopération et de développement économiques). Utilisé par eq 36 (rendement fonds) et eq 58 (écart de rendement, « spread »).</td>
+              <td>Rendement réel du portefeuille 60/40 institutionnel diversifié — médiane historique OCDE. Utilisé par eq 36 (rendement fonds) et eq 58 (écart de rendement, « spread »).</td>
             </tr>
             <tr>
               <td>r_f_annuity</td><td>{fmtPct(d.r_f_annuity)}</td><td><Kind k="S" /></td>
-              <td>Rendement réel de la dette souveraine indexée (OATi&nbsp;: obligation assimilable du Trésor, indexée sur l'inflation). 0,5–1,5% en 2024–2026. Utilisé par eq 53 pour tarifer l'annuité indexée du pot capi. Distinct de r_f_portfolio&nbsp;: une annuité indexée doit être couverte au taux auquel l'État peut couvrir l'obligation, pas au rendement diversifié.</td>
+              <td>Rendement réel de la dette souveraine indexée (OATi). 0,5–1,5% en 2024–2026. Utilisé par eq 53 pour tarifer l'annuité indexée du pot capi. Distinct de r_f_portfolio&nbsp;: une annuité indexée doit être couverte au taux auquel l'État peut couvrir l'obligation, pas au rendement diversifié.</td>
             </tr>
             <tr>
               <td>r_c</td><td>{fmtPct(d.r_c)}</td><td><Kind k="S" /></td>
@@ -70,7 +70,7 @@ export default function HypothesesPage() {
             </tr>
             <tr>
               <td>r_d_base</td><td>{fmtPct(d.r_d_base)}</td><td><Kind k="S" /></td>
-              <td>OAT 10&nbsp;ans (obligation souveraine française à 10&nbsp;ans) ~3,4–3,7% début 2026 (BdF). 3,5% est une projection prudente conditionnelle à un plan crédible de réforme.</td>
+              <td>OAT 10&nbsp;ans ~3,4–3,7% début 2026 (BdF). 3,5% est une projection prudente conditionnelle à un plan crédible de réforme.</td>
             </tr>
             <tr>
               <td>existingDebt</td><td>{fmtN(d.existingDebt)} Md€</td><td><Kind k="S" /></td>
@@ -82,7 +82,7 @@ export default function HypothesesPage() {
             </tr>
             <tr>
               <td>R0</td><td>{d.R0} M</td><td><Kind k="S" /></td>
-              <td>Retraités droits directs — DREES (direction des statistiques sociales du ministère) Édition 2025, projeté à fin 2026.</td>
+              <td>Retraités droits directs — DREES Édition 2025, projeté à fin 2026.</td>
             </tr>
           </tbody>
         </table>
@@ -127,7 +127,7 @@ export default function HypothesesPage() {
             <tr><td>retirementAgeFloor / Ceil</td><td>{d.retirementAgeFloor} / {d.retirementAgeCeil}</td><td><Kind k="M" /></td>
               <td>Bornes dures (clamp eq 12d).</td></tr>
             <tr><td>lifeExpAt65_Y0</td><td>{d.lifeExpAt65_Y0} ans</td><td><Kind k="S" /></td>
-              <td>INSEE 2024 (19,7+23,4)/2 = 21,55 ; projeté +3 ans à Y0=2027 au taux COR (Conseil d'orientation des retraites). Non réglable utilisateur (à recalculer si Y0 change).</td></tr>
+              <td>INSEE 2024 (19,7+23,4)/2 = 21,55 ; projeté +3 ans à Y0=2027 au taux COR. Non réglable utilisateur (à recalculer si Y0 change).</td></tr>
             <tr><td>lifeExpAt65_per_decade</td><td>{d.lifeExpAt65_per_decade} ans/décennie</td><td><Kind k="S" /></td>
               <td>COR juin 2025, scénario central ; gain ≈4,2 ans sur 4,6 décennies.</td></tr>
             <tr><td>LIFE_EXP_INDEXATION_FRACTION</td><td>0,5</td><td><Kind k="M" /></td>
@@ -176,7 +176,7 @@ export default function HypothesesPage() {
             <tr><td>S0_irDeduction</td><td>{d.S0_irDeduction} Md€</td><td><Kind k="S" /></td>
               <td>Suppression abattement IR 10% (Contre-Budget 2026). Côté prestation (legacy uniquement).</td></tr>
             <tr><td>S0_csg</td><td>{d.S0_csg} Md€</td><td><Kind k="S" /></td>
-              <td>Restauration CSG/CRDS (contributions sociales) à taux plein (Contre-Budget 2026). Côté recette (tous retraités), eq 22.</td></tr>
+              <td>Restauration CSG/CRDS à taux plein (Contre-Budget 2026). Côté recette (tous retraités), eq 22.</td></tr>
           </tbody>
         </table>
 
@@ -325,6 +325,22 @@ export default function HypothesesPage() {
             <tr><td>Position nette finale</td><td>{fmtN(liveKPIs.netPosition)} Md€</td></tr>
             <tr><td>Insuffisance capi cumulée</td><td>{fmtN(liveKPIs.totalCapiShortfall)} Md€</td></tr>
             <tr><td>Économies pension S₀ (t=0, pré-phasing)</td><td>{liveKPIs.S0.toFixed(2)} Md€/an</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      {/* --- Glossaire des sigles --- */}
+      <section className="hyp-section">
+        <h2>Glossaire des sigles</h2>
+        <table className="hyp-table">
+          <tbody>
+            <tr><td><strong>COR</strong></td><td>Conseil d'orientation des retraites</td></tr>
+            <tr><td><strong>CSG / CRDS</strong></td><td>Contribution sociale généralisée / Contribution au remboursement de la dette sociale — prélèvements sociaux sur les revenus, y compris les pensions</td></tr>
+            <tr><td><strong>DREES</strong></td><td>Direction de la recherche, des études, de l'évaluation et des statistiques (ministère des Solidarités)</td></tr>
+            <tr><td><strong>INSEE</strong></td><td>Institut national de la statistique et des études économiques</td></tr>
+            <tr><td><strong>OAT</strong></td><td>Obligation assimilable du Trésor — la dette souveraine française</td></tr>
+            <tr><td><strong>OATi</strong></td><td>OAT indexée sur l'inflation</td></tr>
+            <tr><td><strong>OCDE</strong></td><td>Organisation de coopération et de développement économiques</td></tr>
           </tbody>
         </table>
       </section>
