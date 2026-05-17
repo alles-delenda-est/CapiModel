@@ -41,16 +41,12 @@ export default function IntroPage({ navigateTo }) {
     const params = PRESETS.v1_default.params
     const results = runSimulation(params)
     const kpis = extractKPIs(results)
-    // Peak capi pot in real euros — more representative than final, which
-    // depletes under v1_default (no tauK, low r_c). The intent: show what
-    // the capi system *accumulates* at its high-water mark.
-    const peakKRow = results.reduce((acc, r) => r.K_t > acc.K_t ? r : acc, results[0])
-    const inflationDeflator = Math.pow(1.02, peakKRow.t)
-    kpis.peakCapiReal = peakKRow.K_t / inflationDeflator
-    kpis.peakCapiYear = peakKRow.year
     // Counterfactual debt at horizon end — for context callout
     const cfRows = runSimulation(buildCounterfactualParams(params))
     kpis.counterfactualFinalDebt = cfRows[cfRows.length - 1].D_t
+    // Final-year tag for the "Pot capi (fin)" KPI subtitle. Engine Y0 = 2027,
+    // horizon = 70 yrs, so this is Y0 + N - 1.
+    kpis.finalYear = results[results.length - 1].year
     return { params, results, kpis }
   }, [])
 
@@ -125,7 +121,7 @@ export default function IntroPage({ navigateTo }) {
           <div className="cc-chart-header">
             <div>
               <div className="cc-eyebrow">Projection · Dette de transition</div>
-              <h2 className="cc-h2">Une bosse, puis le reflux</h2>
+              <h2 className="cc-h2">Une bosse, puis une décrue</h2>
             </div>
             <div className="cc-chart-meta">
               Md€ · scénario central
@@ -215,12 +211,12 @@ export default function IntroPage({ navigateTo }) {
             <div className="cc-kpi-sub">Coût total de la transition</div>
           </div>
           <div className="cc-kpi-cell">
-            <div className="cc-kpi-label">Pot capi (pic réel)</div>
+            <div className="cc-kpi-label">Pot capi (fin)</div>
             <div className="cc-kpi-value-row">
-              <span className="cc-kpi-value">{fmt(k.peakCapiReal, 0)}</span>
+              <span className="cc-kpi-value">{fmt(k.finalCapiReal, 0)}</span>
               <span className="cc-kpi-unit">Md€</span>
             </div>
-            <div className="cc-kpi-sub">€ constants 2026 · en {k.peakCapiYear}</div>
+            <div className="cc-kpi-sub">€ constants 2027 · en {k.finalYear}</div>
           </div>
           <div className="cc-kpi-cell">
             <div className="cc-kpi-label" title="Écart entre le rendement du fonds legacy et le coût réel de la dette souveraine. Positif = le fonds gagne plus qu'il ne coûte à financer.">Spread minimum</div>
@@ -305,7 +301,7 @@ export default function IntroPage({ navigateTo }) {
           </div>
           <div className="cc-risk">
             <h3>Le rendement capi</h3>
-            <p>L'hypothèse de base à 3 % réel est dans la fourchette historique conservatrice. Les fonds souverains comparables (Norvège, Singapour) affichent au-delà de 6 %.</p>
+            <p>L'hypothèse de base à 4,5 % réel est dans la fourchette historique conservatrice d'un mandat diversifié 60/40. Les fonds souverains comparables (Norvège, Singapour) affichent au-delà de 6 %.</p>
           </div>
         </div>
       </section>

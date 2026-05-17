@@ -113,11 +113,11 @@ The current French pension system is partly sustained by earmarked fiscal transf
 **Transfer formula:** `fiscalTransfer_t = fiscalTransferBase × legacyFrac_t`, where `legacyFrac_t = min(1, legacyRetirees_t / retireeIdx_t)`. As the legacy transitional cohort dies off, `legacyFrac_t → 0` and transfers taper to zero. `fiscalTransferBase` defaults to 40 Md€/yr (approximate DREES combined CSG/FSV/État pension-system transfers, COR 2024).
 
 **Three transfer modes** (`fiscalTransferMode`):
-- `'full'` *(UI default)*: transfers included; residual deficits still covered by D_t borrowing
-- `'no-debt'`: transfers included, but no new D_t borrowing; residual fiscal gap tracked as `fiscalGap_t` (off-balance-sheet)
-- `'none'` *(engine DEFAULT_CONFIG)*: no transfers (kept for test-fixture backward-compatibility)
+- `'none'` *(UI default and engine `DEFAULT_CONFIG`)*: no transfers — État/FSV inflows are netted from the revenue stream so the true PAYG deficit shows up directly in `D_t`. Also preserves bit-identical test-fixture backward-compatibility.
+- `'full'`: transfers included; residual deficits still covered by `D_t` borrowing.
+- `'no-debt'`: transfers included, but no new `D_t` borrowing; residual fiscal gap tracked as `fiscalGap_t` (off-balance-sheet).
 
-All six app-facing presets (`v1_default`, `v1_optimiste`, `v1_stress`, `equinoxeOnly`, `labourHousingOnly`, `equinoxeAndLabour`) use `fiscalTransferMode: 'full'`.
+All six app-facing presets (`v1_default`, `v1_optimiste`, `v1_stress`, `equinoxeOnly`, `labourHousingOnly`, `equinoxeAndLabour`) spread `UI_CONFIG`, which inherits `fiscalTransferMode: 'none'` from `DEFAULT_CONFIG`. The user can flip the canonical Diversification toggle in the Simulateur to compare against `'full'` or `'no-debt'`.
 
 ---
 
@@ -166,47 +166,54 @@ A 4.5 % real expected return on a long-horizon public fund is defensible as a di
 - **Fiscal transfers** (`fiscalTransfer_t`) — ~40 Md€/yr CSG/FSV/État transfers, tapering to zero as `legacyFrac_t → 0`; three modes: full, no-debt, none.
 - **K_retirees_bal tracking** — separate retirees' accumulated pot inside the balanced cascade; prevents cross-subsidisation between worker savings and pension payouts.
 - **Canonical mode switches** — Diversification / Mode Chilien / Mode Suédois toggles in the Modes canoniques UI panel.
+- **Introduction page** (`#/intro`) — Direction-D landing aimed at general-public readers: hero, read-only sidebar of central-scenario parameters, debt-trajectory chart with peak-debt marker, 4-cell KPI strip (peak debt, cumulative interest, final capi pot in real €, minimum spread), `Approfondir` row linking to the deeper pages, four cardinal virtues and four major risks. All KPI and chart values are computed live from `runSimulation(PRESETS.v1_default.params)` and `extractKPIs` — the page does not embed pre-computed numbers, so engine drift surfaces immediately. See `tests/introPage-data.test.js` for the contract.
 - **Simplified view** (`#/simple`) — 3 scenarios, 5 sliders, narrative cards for lay audiences.
 - **Hypotheses page** (`#/hypotheses`) — every §3 parameter with default, kind, and rationale.
 - **232 tests** — unit invariants, fiscal-transfer invariants, recognition bond invariants (coupon service + issuance), reference-trace regression against `tests/fixtures/v1.1-default-trace.json`, and 1000-config property-based suite (all passing).
 
 ---
 
-## Default scenario results (`v1_default` preset, v2.1 balanced cascade)
+## Default scenario results (`v1_default` preset, v2.1 balanced cascade, `fiscalTransferMode: 'none'`)
 
-The balanced cascade with fiscal transfers maintains a clean trajectory under default parameters: the 75 % surplus sweep cap keeps debt repayment from crowding out the capi bonus, and the actuarial bonus cap prevents late-horizon payout decline after legacy-cohort phase-out. All values from the live engine at current HEAD.
+Under the UI default — balanced cascade *without* fiscal transfers — the model surfaces a real but bounded transition deficit: peak `D_t ≈ 7 600 Md€` reached in 2064, with debt declining but not reaching zero by horizon end. The actuarial bonus cap and 75 % surplus sweep cap shape the descent. All values from the live engine at current `HEAD`; reproducible via `node scripts/intropage-snapshot.mjs`.
 
 | KPI | Value | Notes |
 |---|---|---|
-| Peak sovereign transition debt | **0 Md€** | Deficit covered structurally by cascade |
-| Debt-free year (transition) | **2033** | Transition debt never materially accumulates |
-| Cumulative interest cost (70 yr) | **0 Md€** | No debt → no interest |
-| Capitalisation pot, real (2027 €), Y69 | **~12 600 Md€** | `K_t[69] / (1+π)^69` |
-| Capitalisation pot, nominal, Y69 | **49 420 Md€** | `K_t[69]` |
+| Peak sovereign transition debt | **7 573 Md€** (2064) | Real deficit shows through with transfers disabled |
+| Debt-free year (transition) | **never** | `D_t` declines to ~5 000 Md€ by Y69 but stays positive |
+| Final transition debt `D_t[69]` | **4 997 Md€** | Tail not cleared within the 70-yr horizon |
+| Cumulative interest cost (70 yr) | **13 874 Md€** | Endogenous-rate compounding on a 5–7 k Md€ stock |
+| Capitalisation pot, nominal, Y69 | **132 500 Md€** | `K_t[69]` |
+| Capitalisation pot, real (2027 €), Y69 | **33 791 Md€** | `K_t[69] / (1+π)^69` |
 | Final legacy fund balance | **1 360 Md€** | `F_t[69]` |
-| Cumulative capi state guarantee calls | **0 Md€** | `CK_t[69]` |
-| Sovereign rate range | **3.50 %** (flat) | No debt → no spread premium |
+| Cumulative capi state guarantee calls | **0 Md€** | `CK_t[69]` — floor structurally covered |
+| Sovereign rate range | **3.50 % → 4.99 %** | Endogenous premium rises with combined debt/GDP |
 | Équinoxe brackets effect at t=0 | **17.68 Md€/yr** | Pre-phasing |
 | CSG/CRDS restoration at t=0 | **5.00 Md€/yr** | Pre-phasing |
-| Peak combined debt `D_ext + D` | **16 908 Md€** (2096) | Background sovereign debt dominates |
-| `capiAssetShare_t` at Y69 | **0.875** | Accounting identity (contributions/K_t) |
+| Peak combined debt `D_ext + D` | **24 310 Md€** (2096) | Background sovereign debt dominates |
+| `capiAssetShare_t` at Y69 | **0.339** | Accounting identity (contributions/K_t) |
+| Minimum spread `σ_t` | **+1.51 %** | Always positive — carry diagnostic stays in the safe band |
 
 *`D^{ext}_t` grows with GDP throughout — the peak combined-debt figure reflects background sovereign debt growth, not transition failure.*
 
+*Note for users comparing prior versions of this document:* earlier revisions reported peak `D_t = 0` and `K_t Y69 ≈ 49 420 Md€`. Those figures assumed `fiscalTransferMode: 'full'`, which was at one point the documented UI default but was reverted in code to `'none'` (see presets.js `UI_CONFIG`). Flipping the Diversification toggle to *Avec dette (full)* in the Simulateur reproduces the older numbers.
+
 ---
 
-## Preset summary (v2.1 balanced cascade, fiscalTransferMode: 'full')
+## Preset summary (v2.1 balanced cascade, `fiscalTransferMode: 'none'`)
 
-| Preset | Peak D_t | Debt-free | CI total | K_t Y69 | Disposition |
-|---|---|---|---|---|---|
-| `v1_default` | 0 Md€ | 2033 | 0 Md€ | 49 420 Md€ | Clean |
-| `v1_optimiste` | 0 Md€ | 2033 | 0 Md€ | 90 037 Md€ | Clean |
-| `v1_stress` | 3 002 Md€ | 2033 | 4 717 Md€ | 20 025 Md€ | Manageable |
-| `equinoxeOnly` | 1 199 210 Md€ | 2033¹ | 1 184 078 Md€ | 275 Md€ | Catastrophic (pedagogical) |
-| `labourHousingOnly` | 1 549 Md€ | 2033 | 1 122 Md€ | 33 983 Md€ | Manageable |
-| `equinoxeAndLabour` | 0 Md€ | 2033 | 0 Md€ | 2 993 Md€ | Clean |
+All values from the live engine at current `HEAD` (re-extracted via `node scripts/intropage-snapshot.mjs`). K_t Y69 is nominal Md€.
 
-¹ Transition debt clears in 2033 because Équinoxe savings rapidly close the PAYG gap, but without the capi pot to provide a cross-subsidy buffer, accumulated interest dominates.
+| Preset | Peak D_t (yr) | Debt-free | CI total | K_t Y69 nominal | Min spread | Disposition |
+|---|---|---|---|---|---|---|
+| `v1_default` | 7 573 (2064) | never | 13 874 | 132 500 | +1.51 % | Manageable |
+| `v1_optimiste` | 4 007 (2057) | never | 6 327 | 187 356 | +3.18 % | Manageable |
+| `v1_stress` | 19 670 415 (2096) | never | 19 687 955 | 70 743 | −15.50 % | Catastrophic |
+| `equinoxeOnly` | 15 679 (2096) | never | 12 416 | 0 | +1.47 % | Catastrophic (pedagogical) |
+| `labourHousingOnly` | 3 639 712 (2096) | never | 3 662 539 | 118 799 | −13.50 % | Catastrophic |
+| `equinoxeAndLabour` | 49 (2060) | 2033 | 20 | 0 | +3.00 % | Clean |
+
+The 'catastrophic' / 'manageable' / 'clean' labels refer to cash-flow and debt-stock solvency only — not the five-dimension assessment described in `THEORY.md`. Negative `minSpread` rows indicate the endogenous borrowing rate exceeded the portfolio's real return at some point during the horizon, i.e. carry inverted.
 
 ---
 
