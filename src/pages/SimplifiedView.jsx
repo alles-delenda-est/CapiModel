@@ -359,7 +359,7 @@ export default function SimplifiedView({ navigateTo }) {
             <p className="sv-kpi-explain">
               Le montant maximum que l'État devrait emprunter pour
               financer la transition. Pour comparaison, la dette publique
-              française actuelle est d'environ 3200Md€.
+              française actuelle est d'environ 3&nbsp;200&nbsp;Md€.
             </p>
           </div>
 
@@ -451,8 +451,8 @@ export default function SimplifiedView({ navigateTo }) {
           <p className="sv-chart-explain">
             Les pensions de l'ancien système (en rouge) diminuent à mesure
             que les retraités actuels partent, tandis que le nouveau système
-            par capitalisation (en vert) prend le relais. La ligne pointillée
-            montre le total des pensions versées.
+            de retraite par capitalisation (en vert) prend le relais. La ligne
+            pointillée montre le total des pensions versées.
           </p>
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData} margin={{ bottom: 20 }}>

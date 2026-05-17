@@ -5,7 +5,7 @@ const TABS = [
   { id: 'simple', label: 'Version simple' },
   { id: 'walkthrough', label: 'Parcours' },
   { id: 'simulateur', label: 'Simulateur' },
-  { id: 'hypotheses', label: 'Hypotheses & Sources' },
+  { id: 'hypotheses', label: 'Hypothèses et sources' },
 ]
 
 export default function Navigation({ currentPage, navigateTo }) {
