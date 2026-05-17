@@ -28,7 +28,7 @@ const PILLARS = [
   { num: 'I',   title: 'La Justice',
     body: "Acter la justice intergénérationnelle. Chaque génération assume sa propre retraite — fini de faire payer aux actifs des promesses non provisionnées." },
   { num: 'II',  title: 'La Sobriété',
-    body: "Indexation prudente, courbe Équinoxe sur les pensions élevées, fin de l'abattement forfaitaire. Le système doit redevenir soutenable." },
+    body: "Indexation prudente, courbe Équinoxe sur les pensions élevées, fin de l'abattement forfaitaire (avantage fiscal de 10% sur toutes les pensions). Le système doit redevenir soutenable." },
   { num: 'III', title: 'Le Courage',
     body: "Libéraliser le marché du travail pour générer les cotisations dont nous avons besoin — sans casser le filet social, parmi les plus complets au monde." },
   { num: 'IV',  title: 'La Prudence',
@@ -124,7 +124,7 @@ export default function IntroPage({ navigateTo }) {
               <h2 className="cc-h2">Une bosse, puis une décrue</h2>
             </div>
             <div className="cc-chart-meta">
-              Md€ · scénario central v2.1
+              Md€ · scénario central
             </div>
           </div>
 
@@ -219,7 +219,7 @@ export default function IntroPage({ navigateTo }) {
             <div className="cc-kpi-sub">€ constants 2027 · en {k.finalYear}</div>
           </div>
           <div className="cc-kpi-cell">
-            <div className="cc-kpi-label">Spread minimum</div>
+            <div className="cc-kpi-label" title="Écart entre le rendement du fonds legacy et le coût réel de la dette souveraine. Positif = le fonds gagne plus qu'il ne coûte à financer.">Spread minimum</div>
             <div className="cc-kpi-value-row">
               <span className={`cc-kpi-value ${k.minSpread > 0 ? 'is-ok' : 'is-bad'}`}>
                 {fmt(k.minSpread * 100, 2)}

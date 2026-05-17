@@ -169,8 +169,8 @@ export default function IndividualPerspectivePanel({
           l’agrégat E^trans du moteur suppose une mortalité uniforme sur les
           cohortes de transition (taille survivante au prorata de R^capi&nbsp;;
           cf. spec §5.6.1, construction de réconciliation et «&nbsp;Mortality-bias
-          caveat&nbsp;»). Une mortalité différenciée par génération est reportée
-          à v1.2.
+          caveat&nbsp;»). Une mortalité différenciée par génération est
+          reportée à une version future.
         </p>
       )}
 
