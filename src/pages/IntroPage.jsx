@@ -1,278 +1,491 @@
-import { useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ResponsiveContainer,
 } from 'recharts'
-import { runSimulation, buildCounterfactualParams } from '../simulation-engine.js'
-import { extractKPIs, PRESETS } from '../presets.js'
+import { runSimulation, DEFAULT_CONFIG } from '../simulation-engine.js'
+import { LADDER_RUNGS } from './IntroLadderRungs.js'
 import './IntroPage.css'
 
 // French number formatter
-const fmt = (n, decimals = 0) =>
+const fmt = (n, d = 0) =>
   new Intl.NumberFormat('fr-FR', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+    minimumFractionDigits: d,
+    maximumFractionDigits: d,
   }).format(n)
+const fmtSigned = (n, d = 0) => (n > 0 ? '+' : '') + fmt(n, d)
 
-// Read-only parameter display — mirrors the active preset's most important knobs.
-// These are not editable here; the full simulator page exposes the live controls.
-const PRESET_DISPLAY = [
-  { key: 'cutoffAge', label: 'Âge cutoff cohorte',     unit: 'ans', dp: 0 },
-  { key: 'r_c',       label: 'Rendement capi (réel)',   unit: '%',   mul: 100, dp: 1 },
-  { key: 'w_r',       label: 'Croissance salariale',    unit: '%',   mul: 100, dp: 1 },
-  { key: 'rho',       label: 'Liquidation HLM / an',    unit: '%',   mul: 100, dp: 1 },
-  { key: 'employmentRateTarget', label: 'Cible plein-emploi', unit: '%', mul: 100, dp: 1 },
-]
+// Mirror of UI_CONFIG from src/presets.js — we don't import it directly
+// because the engine DEFAULT_CONFIG is already complete; UI_CONFIG only
+// overrides cashFlowMode and GE knee/floor to keep the ladder's
+// counterfactual + capi modes co-calibrated with the rest of the UI.
+const UI_BASE = {
+  ...DEFAULT_CONFIG,
+  cashFlowMode: 'balanced',
+  geKneeRatio: 3.0,
+  geFloorRatio: 8.0,
+}
+
+// ------------------------------------------------------------------
+// runRung — runs the engine for one rung and derives the chart series
+// + headline KPIs. Applies the optional "Grèce-style" pedagogical
+// collapse overlay if rung.greekCollapse is set.
+// ------------------------------------------------------------------
+function runRung(rung) {
+  const params = { ...UI_BASE, ...rung.paramOverrides }
+  const rows = runSimulation(params)
+
+  let series = rows.map(r => {
+    const totalRetireesM = r.retireeIdx * params.R0
+    const totalPensionMdE =
+      (r.legacyExp_t ?? 0)
+      + (r.transitionalPaygExp_t ?? 0)
+      + (r.ndcPaygPension_t ?? 0)
+      + (r.capiPayout_t ?? 0)
+    const perRetireeRealMo = totalRetireesM > 1e-6
+      ? (totalPensionMdE / totalRetireesM) / r.I_factor_t * 1000 / 12
+      : 0
+    const soldeExclTransfersMdE = (r.netFlow_t ?? 0) - (r.fiscalTransfer_t ?? 0)
+    return {
+      year: r.year,
+      perRetireeRealMo,
+      soldeExclTransfersMdE,
+      debtMdE: r.D_t,
+      debtTotalMdE: (r.D_t ?? 0) + (r.D_ext_t ?? 0),
+      gdpMdE: r.GDP_t,
+      debtRatioPct: r.debtRatio_t,
+      rDeffective: r.r_d_t,
+      fiscalTransferMdE: r.fiscalTransfer_t ?? 0,
+      borrowedMdE: r.borrowed_t ?? 0,
+    }
+  })
+
+  // Pedagogical overlay (see IntroLadderRungs.js for rung-level flag):
+  //   - GE penalty (étape 1 only): once total debt crosses 150 % of GDP,
+  //     an additional 4 % compound annual growth is added to D_t each year
+  //     — modelling the "fiscal irresponsibility spiral" beyond what the
+  //     engine's endogenous rate already captures.
+  //   - Collapse trigger: debt-to-GDP > 3× for étape 1, > 5× for the others
+  //     (the others never reach it in practice).
+  //   - After collapse: debt capped at the trigger level (forced
+  //     restructuring), 50 % real pension cut phased over 3 yr, solde
+  //     forced to ~0 (austerity equilibrium).
+  let collapse = null
+  if (rung.greekCollapse) {
+    const isEtape1 = rung.id === 'actuel'
+    const greekTriggerPct = isEtape1 ? 300 : 500
+    const geThresholdPct  = isEtape1 ? 150 : Infinity
+    const geAccelPerYear  = 0.04
+
+    let accel = 1
+    for (let i = 0; i < series.length; i++) {
+      if (series[i].debtRatioPct > geThresholdPct) {
+        accel *= 1 + geAccelPerYear
+      }
+      if (accel !== 1) {
+        series[i] = {
+          ...series[i],
+          debtMdE:       series[i].debtMdE       * accel,
+          debtTotalMdE:  series[i].debtTotalMdE  * accel,
+          debtRatioPct:  series[i].debtRatioPct  * accel,
+        }
+      }
+    }
+
+    const collapseIdx = series.findIndex(
+      s => s.debtRatioPct > greekTriggerPct || s.rDeffective >= 0.195,
+    )
+    if (collapseIdx > 0) {
+      const collapseYear = series[collapseIdx].year
+      const capDebt      = series[collapseIdx].debtMdE
+      const capDebtRatio = series[collapseIdx].debtRatioPct
+      for (let i = collapseIdx; i < series.length; i++) {
+        const tSinceCollapse = i - collapseIdx
+        const cutPhase = Math.min(1, tSinceCollapse / 3)
+        series[i] = {
+          ...series[i],
+          perRetireeRealMo: series[i].perRetireeRealMo * (1 - 0.5 * cutPhase),
+          debtMdE: capDebt * (1 - 0.1 * cutPhase),
+          debtRatioPct: capDebtRatio * (1 - 0.1 * cutPhase),
+          soldeExclTransfersMdE: series[i].soldeExclTransfersMdE
+            + Math.abs(series[i].soldeExclTransfersMdE) * cutPhase,
+        }
+      }
+      collapse = { year: collapseYear, idx: collapseIdx, debtRatioPct: capDebtRatio }
+    }
+  }
+
+  // Year-2050 snapshot (t=23) for the headline KPI strip
+  const midIdx  = Math.min(23, series.length - 1)
+  const lastIdx = series.length - 1
+  const peakDebt = Math.max(...series.map(s => s.debtMdE))
+  const k = {
+    pension2050:    series[midIdx].perRetireeRealMo,
+    solde2050:      series[midIdx].soldeExclTransfersMdE,
+    transfers2050:  series[midIdx].fiscalTransferMdE,
+    debtFinal:      series[lastIdx].debtMdE,
+    peakDebt,
+    peakDebtYear:   series.find(s => s.debtMdE === peakDebt)?.year,
+    peakTransfers:  Math.max(...series.map(s => s.fiscalTransferMdE)),
+    collapse,
+  }
+  return { rung, params, rows, series, k }
+}
+
+// ------------------------------------------------------------------
+// MultiPanel — one stacked chart panel, with all rungs as ghost lines
+// up to `activeIdx`; the active rung is emphasised.
+// ------------------------------------------------------------------
+function MultiPanel({ runs, activeIdx, dataKey, title, unit, fmtFn, height = 130, refLine }) {
+  const merged = useMemo(() => {
+    if (!runs[0]) return []
+    return runs[0].series.map((r, i) => {
+      const out = { year: r.year }
+      runs.forEach((run, j) => { out['rung' + j] = run.series[i][dataKey] })
+      return out
+    })
+  }, [runs, dataKey])
+
+  return (
+    <div className="cc-chart-block">
+      <div className="cc-chart-block-h">
+        <span className="cc-chart-block-title">{title}</span>
+        <span className="cc-chart-block-unit">{unit}</span>
+      </div>
+      <div style={{ width: '100%', height }}>
+        <ResponsiveContainer>
+          <LineChart data={merged} margin={{ top: 6, right: 12, bottom: 16, left: 38 }}>
+            <CartesianGrid stroke="rgba(14,26,43,0.06)" strokeDasharray="2 4" vertical={false} />
+            <XAxis dataKey="year"
+              axisLine={{ stroke: 'rgba(14,26,43,0.2)' }} tickLine={false}
+              tick={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fill: '#98a4b7', letterSpacing: '0.04em' }}
+              ticks={[2030, 2050, 2070, 2090]}
+            />
+            <YAxis axisLine={false} tickLine={false} width={44}
+              tick={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fill: '#98a4b7', letterSpacing: '0.04em' }}
+              tickFormatter={fmtFn}
+            />
+            {refLine !== undefined && (
+              <ReferenceLine y={refLine} stroke="#0e1a2b" strokeOpacity={0.25} strokeDasharray="2 3" />
+            )}
+            <Tooltip
+              contentStyle={{ background: '#fafaf7', border: '1px solid rgba(14,26,43,0.1)', borderRadius: 0, fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#0e1a2b', boxShadow: 'none', padding: '8px 10px' }}
+              labelStyle={{ color: '#6b7a8f', fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}
+              formatter={(v, name, payload) => {
+                const idx = parseInt(payload.dataKey.replace('rung', ''), 10)
+                return [fmtFn ? fmtFn(v) : fmt(v, 0), runs[idx].rung.short]
+              }}
+              labelFormatter={l => 'Année ' + l}
+            />
+            {runs.map((run, j) => {
+              if (j > activeIdx) return null
+              const isActive = j === activeIdx
+              return (
+                <Line key={j} type="monotone" dataKey={'rung' + j}
+                  stroke={run.rung.color}
+                  strokeWidth={isActive ? 2.5 : 1.2}
+                  strokeOpacity={isActive ? 1 : 0.35}
+                  dot={false}
+                  activeDot={isActive ? { r: 4, fill: run.rung.color, stroke: '#0e1a2b', strokeWidth: 1 } : false}
+                  isAnimationActive={false}
+                />
+              )
+            })}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
+// Three-panel chart group, shared between Stepper and Scrolly modes
+function ChartGroup({ runs, activeIdx }) {
+  return (
+    <>
+      <MultiPanel runs={runs} activeIdx={activeIdx}
+        dataKey="perRetireeRealMo"
+        title="Pension moyenne par retraité (€/mois, réel 2027)"
+        unit="€/mois"
+        fmtFn={v => fmt(Math.round(v))}
+        height={130}
+      />
+      <MultiPanel runs={runs} activeIdx={activeIdx}
+        dataKey="soldeExclTransfersMdE"
+        title="Solde du système (hors transferts du budget général)"
+        unit="Md€/an"
+        fmtFn={v => (v >= 0 ? '+' : '') + Math.round(v)}
+        height={130}
+        refLine={0}
+      />
+      <MultiPanel runs={runs} activeIdx={activeIdx}
+        dataKey="debtMdE"
+        title="Dette publique cumulée (régime retraites)"
+        unit="Md€"
+        fmtFn={v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : Math.round(v).toString()}
+        height={130}
+      />
+    </>
+  )
+}
+
+// ------------------------------------------------------------------
+// LadderStepper — interactive 5-button rail at the top, one panel
+// with the active rung's commentary + KPI strip + chart group.
+// ------------------------------------------------------------------
+function LadderStepper({ runs, activeIdx, setActiveIdx }) {
+  const active = runs[activeIdx]
+  const k = active.k
+
+  return (
+    <section className="cc-ladder cc-ladder--stepper">
+      <div className="cc-ladder-rail">
+        {runs.map((run, j) => (
+          <button
+            key={run.rung.id}
+            className={'cc-rung-btn ' + (j === activeIdx ? 'is-active' : '')}
+            onClick={() => setActiveIdx(j)}
+            style={{
+              borderBottom: j === activeIdx ? `3px solid ${run.rung.color}` : '3px solid transparent',
+            }}
+          >
+            <span className="cc-rung-btn-num">{String(run.rung.num).padStart(2, '0')}</span>
+            <span className="cc-rung-btn-label">{run.rung.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="cc-ladder-stage">
+        <div className="cc-stage-side">
+          <div className="cc-eyebrow" style={{ color: active.rung.color }}>
+            Étape {active.rung.num} sur 5
+          </div>
+          <h2>{active.rung.headline}</h2>
+          <p className="cc-stage-summary">{active.rung.summary}</p>
+
+          <div className="cc-stage-kpis">
+            <div className="cc-stage-kpi">
+              <div className="cc-stage-kpi-label">Transferts du budget général en 2050</div>
+              <div>
+                <span className="cc-stage-kpi-value">{fmt(Math.round(k.transfers2050))}</span>
+                <span className="cc-stage-kpi-unit">Md€/an</span>
+              </div>
+              <div className="cc-stage-kpi-sub">
+                {k.transfers2050 > 1
+                  ? 'Le budget général comble encore le déficit'
+                  : (k.peakDebt > 500
+                      ? 'Le déficit bascule vers la dette plutôt que le budget général'
+                      : 'Le système est autonome')}
+              </div>
+            </div>
+            <div className="cc-stage-kpi">
+              <div className="cc-stage-kpi-label">Solde hors transferts en 2050</div>
+              <div>
+                <span className="cc-stage-kpi-value">{fmtSigned(Math.round(k.solde2050))}</span>
+                <span className="cc-stage-kpi-unit">Md€/an</span>
+              </div>
+              <div className="cc-stage-kpi-sub">
+                Recettes propres − dépenses (hors dotations du budget général)
+              </div>
+            </div>
+            <div className="cc-stage-kpi">
+              <div className="cc-stage-kpi-label">
+                {k.peakDebt > 2 * Math.max(k.debtFinal, 1) ? "Dette au pic" : "Dette en fin d'horizon"}
+              </div>
+              <div>
+                <span className="cc-stage-kpi-value">
+                  {fmt(Math.round(k.peakDebt > 2 * Math.max(k.debtFinal, 1) ? k.peakDebt : k.debtFinal))}
+                </span>
+                <span className="cc-stage-kpi-unit">Md€</span>
+              </div>
+              <div className="cc-stage-kpi-sub">
+                {k.collapse
+                  ? `Restructuration forcée en ${k.collapse.year} (dette à ${Math.round(k.collapse.debtRatioPct)} % du PIB)`
+                  : (k.peakDebt > 100
+                      ? `Pic ${fmt(Math.round(k.peakDebt))} Md€ en ${k.peakDebtYear} · fin ${fmt(Math.round(k.debtFinal))} Md€`
+                      : 'Dette de transition négligeable')}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="cc-stage-charts">
+          <ChartGroup runs={runs} activeIdx={activeIdx} />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ------------------------------------------------------------------
+// LadderScrolly — 5 stacked text steps + sticky chart group.
+// IntersectionObserver drives activeIdx as the user scrolls.
+// ------------------------------------------------------------------
+function LadderScrolly({ runs, activeIdx, setActiveIdx }) {
+  const stepRefs = useRef([])
+
+  useEffect(() => {
+    const observers = []
+    stepRefs.current.forEach((el, idx) => {
+      if (!el) return
+      const observer = new IntersectionObserver(
+        entries => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting && entry.intersectionRatio > 0.3) {
+              setActiveIdx(idx)
+            }
+          })
+        },
+        { threshold: [0.3, 0.5, 0.7], rootMargin: '-20% 0% -40% 0%' },
+      )
+      observer.observe(el)
+      observers.push(observer)
+    })
+    return () => observers.forEach(o => o.disconnect())
+  }, [setActiveIdx])
+
+  return (
+    <section className="cc-ladder cc-ladder--scrolly">
+      <div className="cc-scrolly-text">
+        {runs.map((run, j) => (
+          <div
+            key={run.rung.id}
+            ref={el => (stepRefs.current[j] = el)}
+            className={'cc-scrolly-step ' + (j === activeIdx ? 'is-active' : '')}
+            style={{ borderLeftColor: j === activeIdx ? run.rung.color : undefined }}
+          >
+            <div className="cc-scrolly-step-num" style={{ color: j === activeIdx ? run.rung.color : undefined }}>
+              {String(run.rung.num).padStart(2, '0')} · {run.rung.label}
+            </div>
+            <h2>{run.rung.headline}</h2>
+            <p>{run.rung.summary}</p>
+
+            <div className="cc-scrolly-step-kpis">
+              <div>
+                <div className="cc-scrolly-step-kpi-label">Transferts du budget général / 2050</div>
+                <div>
+                  <span className="cc-scrolly-step-kpi-value">{fmt(Math.round(run.k.transfers2050))}</span>
+                  <span className="cc-scrolly-step-kpi-unit">Md€</span>
+                </div>
+              </div>
+              <div>
+                <div className="cc-scrolly-step-kpi-label">Solde hors transferts / 2050</div>
+                <div>
+                  <span className="cc-scrolly-step-kpi-value">{fmtSigned(Math.round(run.k.solde2050))}</span>
+                  <span className="cc-scrolly-step-kpi-unit">Md€</span>
+                </div>
+              </div>
+              <div>
+                <div className="cc-scrolly-step-kpi-label">
+                  {run.k.collapse ? 'Dette au choc' : (run.k.peakDebt > 2 * Math.max(run.k.debtFinal, 1) ? 'Dette au pic' : 'Dette finale')}
+                </div>
+                <div>
+                  <span className="cc-scrolly-step-kpi-value">
+                    {fmt(Math.round(run.k.peakDebt > 2 * Math.max(run.k.debtFinal, 1) ? run.k.peakDebt : run.k.debtFinal))}
+                  </span>
+                  <span className="cc-scrolly-step-kpi-unit">Md€</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="cc-scrolly-sticky">
+        <ChartGroup runs={runs} activeIdx={activeIdx} />
+      </div>
+    </section>
+  )
+}
 
 const PILLARS = [
   { num: 'I',   title: 'La Justice',
     body: "Acter la justice intergénérationnelle. Chaque génération assume sa propre retraite — fini de faire payer aux actifs des promesses non provisionnées." },
   { num: 'II',  title: 'La Sobriété',
-    body: "Indexation prudente, courbe Équinoxe sur les pensions élevées, fin de l'abattement forfaitaire (avantage fiscal de 10% sur toutes les pensions). Le système doit redevenir soutenable." },
+    body: "Indexation prudente, courbe Équinoxe sur les pensions élevées, fin de l'abattement forfaitaire. Le système doit redevenir soutenable." },
   { num: 'III', title: 'Le Courage',
     body: "Libéraliser le marché du travail pour générer les cotisations dont nous avons besoin — sans casser le filet social, parmi les plus complets au monde." },
   { num: 'IV',  title: 'La Prudence',
     body: "Liquider progressivement le parc HLM pour financer les droits acquis, et remplacer les logements par des subventions ciblées aux ménages qui en ont besoin." },
 ]
 
+const RISKS = [
+  { t: 'La dette',
+    b: "Le modèle « cantonne » la dette de transition dans une structure lisible. Il repose sur l'hypothèse, jusqu'ici vraie, que le rendement de la capitalisation dépasse le coût de cette dette." },
+  { t: "Le coût d'emprunt endogène",
+    b: "Plus l'État emprunte, plus les marchés exigent un taux élevé. Le modèle utilise un taux endogène à 3 paliers calibré sur l'expérience française, italienne et américaine." },
+  { t: 'La liquidation HLM',
+    b: "5 % du parc HLM/an alimente le fonds legacy. Le modèle applique une décote conservatrice plafonnée à 30 % pour absorber l'effet volume." },
+  { t: 'Le rendement capi',
+    b: "L'hypothèse de base à 3 % réel est dans la fourchette historique conservatrice. Les fonds souverains comparables (Norvège, Singapour) affichent au-delà de 6 %." },
+]
+
+// ------------------------------------------------------------------
+// IntroPage — top-level page component. Hero + mode switch + ladder
+// + pillars + risks + footer.
+// ------------------------------------------------------------------
 export default function IntroPage({ navigateTo }) {
-  // Run baseline scenario for the hero chart and KPI strip
-  const baseline = useMemo(() => {
-    const params = PRESETS.v1_default.params
-    const results = runSimulation(params)
-    const kpis = extractKPIs(results)
-    // Counterfactual debt at horizon end — for context callout
-    const cfRows = runSimulation(buildCounterfactualParams(params))
-    kpis.counterfactualFinalDebt = cfRows[cfRows.length - 1].D_t
-    // Final-year tag for the "Pot capi (fin)" KPI subtitle. Engine Y0 = 2027,
-    // horizon = 70 yrs, so this is Y0 + N - 1.
-    kpis.finalYear = results[results.length - 1].year
-    return { params, results, kpis }
+  const runs = useMemo(() => LADDER_RUNGS.map(runRung), [])
+  const [mode, setMode] = useState('stepper') // 'stepper' | 'scrolly'
+  const [activeIdx, setActiveIdx] = useState(0)
+
+  // Allow ?mode=stepper|scrolly in the hash to pre-select a view
+  // (lets external embedders pin one mode per iframe).
+  useEffect(() => {
+    const m = new URLSearchParams(window.location.hash.slice(1)).get('mode')
+    if (m === 'stepper' || m === 'scrolly') setMode(m)
   }, [])
-
-  const k = baseline.kpis
-  const params = baseline.params
-
-  // Chart data: reform debt trajectory only. Counterfactual is too large
-  // to co-plot on a linear axis (470 000 Md€ vs. 1 700 Md€ peak); it lives
-  // as a callout below the chart instead.
-  const chartData = useMemo(() => {
-    return baseline.results.map(r => ({ year: r.year, capi: r.D_t }))
-  }, [baseline.results])
-
-  // Build the read-only knob list from the active preset
-  const knobs = useMemo(() => {
-    return PRESET_DISPLAY.map(d => {
-      const raw = params[d.key]
-      if (raw === undefined || raw === null) return null
-      const val = d.mul ? raw * d.mul : raw
-      return { ...d, display: val.toFixed(d.dp) }
-    }).filter(Boolean)
-  }, [params])
 
   return (
     <div className="cabclair">
-
-      {/* ====== Hero ====== */}
       <section className="cc-hero">
-        <div className="cc-hero-text">
-          <div className="cc-eyebrow">I · Le diagnostic</div>
+        <div>
+          <div className="cc-eyebrow">Le diagnostic · en cinq étapes</div>
           <h1 className="cc-h1">
             La France peut s'en sortir.
-            <span className="cc-h1-accent"> Voici comment.</span>
+            <span className="cc-h1-accent"> Voici l'échelle.</span>
           </h1>
           <p className="cc-lede">
-            Un simulateur de la transition vers un système de retraite par
-            capitalisation — chiffré, transparent, réversible. Les chiffres
-            ci-dessous proviennent du scénario central&nbsp;; ouvrez le
-            simulateur pour faire varier toutes les hypothèses.
+            Cinq scénarios pour comprendre comment sortir le système de retraite
+            de sa dépendance au budget général. À chaque étape, on ajoute un
+            levier — et on voit ce qu'il coûte, ce qu'il rapporte, et où la
+            dette atterrit.
           </p>
-          <div className="cc-cta-row">
-            <button className="cc-btn cc-btn-primary" onClick={() => navigateTo('simulateur')}>
-              Ouvrir le simulateur →
-            </button>
-            <button className="cc-btn cc-btn-ghost" onClick={() => navigateTo('hypotheses')}>
-              Lire les hypothèses
-            </button>
+          <div className="cc-mode-switch">
+            <button
+              className={mode === 'stepper' ? 'is-active' : ''}
+              onClick={() => setMode('stepper')}
+            >Lecture pas-à-pas</button>
+            <button
+              className={mode === 'scrolly' ? 'is-active' : ''}
+              onClick={() => setMode('scrolly')}
+            >Lecture en scroll</button>
           </div>
         </div>
 
-        <aside className="cc-knobs" aria-label="Paramètres du scénario central">
-          <div className="cc-eyebrow cc-knobs-title">Paramètres · scénario central</div>
-          {knobs.map((knob, i) => (
-            <div key={knob.key} className={`cc-knob ${i === knobs.length - 1 ? 'is-last' : ''}`}>
-              <div className="cc-knob-row">
-                <span className="cc-knob-label">{knob.label}</span>
-                <span className="cc-knob-value">
-                  {knob.display}<span className="cc-knob-unit"> {knob.unit}</span>
-                </span>
-              </div>
-            </div>
-          ))}
-          <button className="cc-knobs-cta" onClick={() => navigateTo('simulateur')}>
-            Faire varier ces paramètres →
-          </button>
+        <aside className="cc-hero-aside">
+          <div className="cc-eyebrow">Les cinq étapes</div>
+          <ol>
+            {LADDER_RUNGS.map(r => (
+              <li key={r.id}><strong>{r.label}</strong> — {r.short === 'Actuel' ? 'le système par répartition actuel, sous perfusion'
+                : r.short === 'Équinoxe' ? 'rééquilibrer côté prestations'
+                : r.short === 'Suède' ? 'compte notionnel + équilibrage automatique + petit pilier capi'
+                : r.short === 'Chili' ? 'capitalisation totale, dette de transition explicite'
+                : 'capitalisation totale, transition financée sans dette'}</li>
+            ))}
+          </ol>
         </aside>
       </section>
 
-      {/* ====== Chart panel ====== */}
-      <section className="cc-chart-section">
-        <div className="cc-chart-card">
-          <div className="cc-chart-header">
-            <div>
-              <div className="cc-eyebrow">Projection · Dette de transition</div>
-              <h2 className="cc-h2">Une bosse, puis une décrue</h2>
-            </div>
-            <div className="cc-chart-meta">
-              Md€ · scénario central
-            </div>
-          </div>
+      {mode === 'stepper'
+        ? <LadderStepper runs={runs} activeIdx={activeIdx} setActiveIdx={setActiveIdx} />
+        : <LadderScrolly runs={runs} activeIdx={activeIdx} setActiveIdx={setActiveIdx} />
+      }
 
-          <div className="cc-chart-wrap">
-            <ResponsiveContainer width="100%" height={340}>
-              <LineChart data={chartData} margin={{ top: 16, right: 56, bottom: 32, left: 8 }}>
-                <CartesianGrid stroke="rgba(14,26,43,0.08)" strokeDasharray="2 4" vertical={false} />
-                <XAxis
-                  dataKey="year"
-                  axisLine={{ stroke: 'rgba(14,26,43,0.25)' }}
-                  tickLine={false}
-                  tick={{ fontFamily: 'JetBrains Mono, IBM Plex Mono, monospace', fontSize: 10, fill: '#6b7a8f', letterSpacing: '0.05em' }}
-                  ticks={[2030, 2045, 2060, 2075, 2090]}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  width={64}
-                  tick={{ fontFamily: 'JetBrains Mono, IBM Plex Mono, monospace', fontSize: 10, fill: '#6b7a8f', letterSpacing: '0.05em' }}
-                  tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(1)} k Md€` : `${Math.round(v)} Md€`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: '#fafaf7',
-                    border: '1px solid rgba(14,26,43,0.1)',
-                    borderRadius: 0,
-                    fontFamily: 'Inter, sans-serif',
-                    fontSize: 12,
-                    color: '#0e1a2b',
-                    boxShadow: 'none',
-                  }}
-                  labelStyle={{ color: '#6b7a8f', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}
-                  formatter={(v) => [`${fmt(v)} Md€`, 'Dette']}
-                  labelFormatter={l => `Année ${l}`}
-                />
-                {k.peakDebtYear && (
-                  <ReferenceLine x={k.peakDebtYear}
-                    stroke="#b85c3c" strokeDasharray="3 3" strokeWidth={1}
-                    label={{ value: `Pic ${k.peakDebtYear}`, position: 'top', fontSize: 10, fill: '#b85c3c', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.1em' }}
-                  />
-                )}
-                {k.debtFreeYear && (
-                  <ReferenceLine x={k.debtFreeYear}
-                    stroke="#c9a961" strokeDasharray="3 3" strokeWidth={1}
-                    label={{ value: `Remb. ${k.debtFreeYear}`, position: 'top', fontSize: 10, fill: '#c9a961', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.1em' }}
-                  />
-                )}
-                <Line type="monotone" dataKey="capi"
-                  name="Dette de transition"
-                  stroke="#c9a961" strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{ r: 4, fill: '#c9a961', stroke: '#0e1a2b', strokeWidth: 1 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="cc-chart-footnote">
-            <span className="cc-chart-footnote-dot" aria-hidden />
-            Sans réforme&nbsp;: dette publique projetée à <strong>≈ {fmt(Math.round(k.counterfactualFinalDebt / 1000) * 1000)} Md€</strong> en 2096
-            (×{Math.round(k.counterfactualFinalDebt / Math.max(k.peakDebt, 1))} la trajectoire ci-dessus).
-          </div>
-        </div>
-      </section>
-
-      {/* ====== KPI strip ====== */}
-      <section className="cc-kpi-section">
-        <div className="cc-eyebrow cc-kpi-title">L'essentiel sur 70 ans</div>
-        <div className="cc-kpi-grid">
-          <div className="cc-kpi-cell">
-            <div className="cc-kpi-label">Dette pic</div>
-            <div className="cc-kpi-value-row">
-              <span className="cc-kpi-value">{fmt(k.peakDebt, 0)}</span>
-              <span className="cc-kpi-unit">Md€</span>
-            </div>
-            <div className="cc-kpi-sub">Atteinte en {k.peakDebtYear}</div>
-          </div>
-          <div className="cc-kpi-cell">
-            <div className="cc-kpi-label">Intérêts cumulés</div>
-            <div className="cc-kpi-value-row">
-              <span className="cc-kpi-value">{fmt(k.totalInterest, 0)}</span>
-              <span className="cc-kpi-unit">Md€</span>
-            </div>
-            <div className="cc-kpi-sub">Coût total de la transition</div>
-          </div>
-          <div className="cc-kpi-cell">
-            <div className="cc-kpi-label">Pot capi (fin)</div>
-            <div className="cc-kpi-value-row">
-              <span className="cc-kpi-value">{fmt(k.finalCapiReal, 0)}</span>
-              <span className="cc-kpi-unit">Md€</span>
-            </div>
-            <div className="cc-kpi-sub">€ constants 2027 · en {k.finalYear}</div>
-          </div>
-          <div className="cc-kpi-cell">
-            <div className="cc-kpi-label" title="Écart entre le rendement du fonds legacy et le coût réel de la dette souveraine. Positif = le fonds gagne plus qu'il ne coûte à financer.">Spread minimum</div>
-            <div className="cc-kpi-value-row">
-              <span className={`cc-kpi-value ${k.minSpread > 0 ? 'is-ok' : 'is-bad'}`}>
-                {fmt(k.minSpread * 100, 2)}
-              </span>
-              <span className="cc-kpi-unit">%</span>
-            </div>
-            <div className="cc-kpi-sub">{k.minSpread > 0 ? 'Toujours positif' : 'Passe en négatif — danger'}</div>
-          </div>
-        </div>
-      </section>
-
-      {/* ====== Approfondir ====== */}
-      <section className="cc-deep-section">
-        <div className="cc-eyebrow cc-deep-title">Approfondir</div>
-        <div className="cc-deep-grid">
-          <a className="cc-deep-card" href="#/simple" onClick={(e) => { e.preventDefault(); navigateTo('simple') }}>
-            <div className="cc-deep-inner">
-              <span className="cc-deep-num">01</span>
-              <div>
-                <div className="cc-deep-t">Et pour moi ?</div>
-                <div className="cc-deep-sub">Version simple — l'impact en trois scénarios</div>
-              </div>
-            </div>
-            <span className="cc-deep-arrow">→</span>
-          </a>
-          <a className="cc-deep-card" href="#/simulateur" onClick={(e) => { e.preventDefault(); navigateTo('simulateur') }}>
-            <div className="cc-deep-inner">
-              <span className="cc-deep-num">02</span>
-              <div>
-                <div className="cc-deep-t">Je veux le tester</div>
-                <div className="cc-deep-sub">Simulateur complet — toutes les hypothèses</div>
-              </div>
-            </div>
-            <span className="cc-deep-arrow">→</span>
-          </a>
-          <a className="cc-deep-card" href="#/hypotheses" onClick={(e) => { e.preventDefault(); navigateTo('hypotheses') }}>
-            <div className="cc-deep-inner">
-              <span className="cc-deep-num">03</span>
-              <div>
-                <div className="cc-deep-t">Analyser les hypothèses</div>
-                <div className="cc-deep-sub">Méthodologie, sources, code ouvert</div>
-              </div>
-            </div>
-            <span className="cc-deep-arrow">→</span>
-          </a>
-        </div>
-      </section>
-
-      {/* ====== Pillars ====== */}
       <section className="cc-pillars-section">
-        <div className="cc-eyebrow cc-pillars-title">II · Quatre vertus cardinales</div>
+        <div className="cc-eyebrow">Quatre vertus cardinales</div>
+        <h2 className="cc-h2">Ce qui guide la réforme</h2>
         <div className="cc-pillars-grid">
-          {PILLARS.map((p) => (
+          {PILLARS.map(p => (
             <div key={p.num} className="cc-pillar">
               <div className="cc-pillar-num">{p.num}</div>
               <h3 className="cc-pillar-title">{p.title}</h3>
@@ -282,33 +495,22 @@ export default function IntroPage({ navigateTo }) {
         </div>
       </section>
 
-      {/* ====== Risks ====== */}
       <section className="cc-risks-section">
-        <div className="cc-eyebrow">III · Les risques majeurs</div>
-        <h2 className="cc-h2 cc-risks-h2">Ce que le modèle suppose, et ce qui pourrait le faire dérailler</h2>
+        <div className="cc-eyebrow">Les risques majeurs</div>
+        <h2 className="cc-h2">Ce que le modèle suppose, et ce qui pourrait le faire dérailler</h2>
         <div className="cc-risks-grid">
-          <div className="cc-risk">
-            <h3>La dette</h3>
-            <p>Le modèle « cantonne » la dette de transition dans une structure lisible. Il repose sur l'hypothèse, jusqu'ici vraie, que le rendement de la capitalisation dépasse le coût de cette dette.</p>
-          </div>
-          <div className="cc-risk">
-            <h3>Le coût d'emprunt endogène</h3>
-            <p>Plus l'État emprunte, plus les marchés exigent un taux élevé. Le modèle utilise un taux endogène à 3 paliers calibré sur l'expérience française, italienne et américaine.</p>
-          </div>
-          <div className="cc-risk">
-            <h3>La liquidation HLM</h3>
-            <p>5 % du parc HLM/an alimente le fonds legacy. Le modèle applique une décote conservatrice plafonnée à 30 % pour absorber l'effet volume.</p>
-          </div>
-          <div className="cc-risk">
-            <h3>Le rendement capi</h3>
-            <p>L'hypothèse de base à 4,5 % réel est dans la fourchette historique conservatrice d'un mandat diversifié 60/40. Les fonds souverains comparables (Norvège, Singapour) affichent au-delà de 6 %.</p>
-          </div>
+          {RISKS.map((r, i) => (
+            <div key={i} className="cc-risk">
+              <h3>{r.t}</h3>
+              <p>{r.b}</p>
+            </div>
+          ))}
         </div>
       </section>
 
       <footer className="cc-footer">
         <span>Capi · Mai 2026</span>
-        <span>Sources · OCDE, INSEE, COR · cdc_legacy_fund_model.md</span>
+        <span>Sources · OCDE, INSEE, COR · v1.2 engine</span>
       </footer>
     </div>
   )
