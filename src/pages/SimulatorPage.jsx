@@ -579,6 +579,13 @@ function PovTab({ params, rows, cfRows, collapse, rung }) {
           <strong>{fmtSigned(gain)} €/mois</strong>.
         </div>
       )}
+      {collapse && !cfHaircutActive && (
+        <div className="sim-callout" style={{ marginBottom: 16, background: 'var(--bg-soft)', borderLeft: '3px solid var(--ink-3)' }}>
+          <strong>Sans réforme, restructuration prévue vers {collapse.collapseYear}.</strong>{' '}
+          Faites glisser le curseur au-delà de {collapse.collapseYear - (params.retirementAgeBase ?? 64)} pour
+          voir l'impact sur les générations concernées par la coupe de 50 %.
+        </div>
+      )}
 
       <div className="sim-pov-cohort-row">
         <div>
@@ -591,7 +598,7 @@ function PovTab({ params, rows, cfRows, collapse, rung }) {
           </div>
         </div>
         <div className="sim-pov-cohort-control">
-          <input type="range" min="1960" max="2005" step="1"
+          <input type="range" min="1960" max="2012" step="1"
             value={birthYear}
             onChange={e => setBirthYear(parseInt(e.target.value, 10))} />
         </div>
