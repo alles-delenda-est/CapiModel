@@ -554,8 +554,25 @@ function equinoxePhaseFactor(t, cfg) {
 // Deterministic 70-year simulation. Returns an array of yearly result rows.
 // Spec evaluation order is preserved exactly (§5.1 → §5.14). Every non-trivial
 // line carries the originating equation reference.
+// Maps demoProfile values to actuarial demoScenario equivalents.
+// Under parametric mode demoProfile is used directly; under actuarial mode
+// demoProfile is a no-op unless we translate it here (PR #34 A.2).
+const PROFILE_TO_SCENARIO = {
+  realistic:   'cor_high',
+  cor_central: 'cor_central',
+  reformed:    'cor_low',
+}
+
 export function runSimulation(userConfig = {}) {
-  const cfg = { ...DEFAULT_CONFIG, ...userConfig };
+  let cfg = { ...DEFAULT_CONFIG, ...userConfig };
+
+  // When in actuarial mode, translate demoProfile → demoScenario so that
+  // rung overrides (e.g. demoProfile:'realistic') and the conditions-slider
+  // stress override (demoProfile:'realistic') actually affect the simulation.
+  if (cfg.demoMode === 'actuarial' && PROFILE_TO_SCENARIO[cfg.demoProfile]) {
+    cfg = { ...cfg, demoScenario: PROFILE_TO_SCENARIO[cfg.demoProfile] }
+  }
+
   const rows = [];
 
   // ---- State stocks (§2) ----
