@@ -103,7 +103,7 @@ export const LADDER_RUNGS = [
     label: 'Rééquilibrage Équinoxe',
     short: 'Équinoxe',
     headline: 'On rééquilibre : moins de pression sur le budget général',
-    summary: "Le rééquilibrage proposé par Équinoxe réduit progressivement les pensions élevées, supprime l'abattement de 10 %, et restaure la CSG/CRDS à taux plein, sans toucher aux petites retraites. Ce rééquilibrage suffit pour que la France reste solvable, mais les retraites restent structurellement dépendantes des transferts du budget général.",
+    summary: "Le rééquilibrage proposé par Équinoxe réduit progressivement les pensions élevées, supprime l'abattement de 10 %, et restaure la CSG/CRDS à taux plein, sans toucher aux petites retraites. Ce rééquilibrage suffit pour que la France reste solvable, pour l'instant, mais les retraites restent structurellement dépendantes des transferts du budget général et de la démographie.",
     closestPreset: 'equinoxeOnly',
     color: '#c9a961',
     greekCollapse: false,
