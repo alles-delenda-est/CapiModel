@@ -3,8 +3,9 @@ import { useState, useEffect, useCallback } from 'react'
 const PAGES = new Set(['intro', 'simple', 'walkthrough', 'simulateur', 'hypotheses'])
 
 function parseHash() {
-  const hash = window.location.hash.replace(/^#\/?/, '')
-  return PAGES.has(hash) ? hash : 'simulateur'
+  const raw = window.location.hash.replace(/^#\/?/, '')
+  const path = raw.split('?')[0]
+  return PAGES.has(path) ? path : 'simulateur'
 }
 
 export default function useHashNavigation(defaultPage = 'simulateur') {
@@ -24,7 +25,13 @@ export default function useHashNavigation(defaultPage = 'simulateur') {
       console.warn(`useHashNavigation: unknown page "${page}"`)
       return
     }
-    window.location.hash = `#/${page}`
+    // Preserve query string when navigating to the same page; clear it on a
+    // different page (per-page state should not leak across).
+    const currentPath = parseHash()
+    const currentSearch = window.location.hash.includes('?')
+      ? window.location.hash.slice(window.location.hash.indexOf('?'))
+      : ''
+    window.location.hash = `#/${page}${page === currentPath ? currentSearch : ''}`
   }, [])
 
   return { currentPage, navigateTo }
