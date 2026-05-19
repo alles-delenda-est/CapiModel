@@ -520,35 +520,41 @@ function ParamsTab({ params, setTweak, mode }) {
 }
 
 // ============================ Et pour vous tab ============================
-function PovTab({ params, rows, baselineRows, collapse, rung }) {
+function PovTab({ params, rows, cfRows, collapse, rung }) {
   const [birthYear, setBirthYear] = useState(1985)
   const raw = useMemo(() => {
     try {
-      return computeIndividualPerspective(params, rows, baselineRows, birthYear)
+      // cfRows = rung 1 (status quo) rows, used as the universal "sans réforme"
+      // baseline so the comparison is always against the actual no-reform path.
+      return computeIndividualPerspective(params, rows, cfRows, birthYear)
     } catch (e) {
       return null
     }
-  }, [params, rows, baselineRows, birthYear])
+  }, [params, rows, cfRows, birthYear])
   if (!raw) return <div className="sim-pov"><p>Impossible de calculer.</p></div>
 
-  // Apply the Greek-collapse haircut when the individual retires after the
-  // restructuring event. Same 50 % cut phased in over 3 years as the overlay.
-  const haircutActive = rung?.greekCollapse && collapse && raw.retirementYear >= collapse.collapseYear
+  // Reform-side haircut: only on rung 1 where the "reform" IS the status quo.
+  const reformHaircutActive = rung?.greekCollapse && collapse && raw.retirementYear >= collapse.collapseYear
+  // CF-side haircut: on ALL rungs — the no-reform path leads to collapse.
+  const cfHaircutActive = collapse && raw.retirementYear >= collapse.collapseYear
+
   const data = useMemo(() => {
-    if (!haircutActive) return raw
+    if (!reformHaircutActive && !cfHaircutActive) return raw
     const tSince   = raw.retirementYear - collapse.collapseYear
-    const cutPhase = Math.min(1, tSince / 3)
-    const factor   = 1 - 0.5 * cutPhase
-    return {
-      ...raw,
-      monthlyPensionLegacy: Math.round(raw.monthlyPensionLegacy * factor),
-      monthlyCapiAnnuity:   Math.round(raw.monthlyCapiAnnuity   * factor),
-      monthlyPensionTotal:  Math.round(raw.monthlyPensionTotal   * factor),
-      monthlyPensionCF:     Math.round(raw.monthlyPensionCF      * factor),
-      monthlyGain:          Math.round(raw.monthlyGain            * factor),
+    const factor   = 1 - 0.5 * Math.min(1, tSince / 3)
+    let { monthlyPensionLegacy, monthlyCapiAnnuity, monthlyPensionTotal, monthlyPensionCF } = raw
+    if (reformHaircutActive) {
+      monthlyPensionLegacy = Math.round(monthlyPensionLegacy * factor)
+      monthlyCapiAnnuity   = Math.round(monthlyCapiAnnuity   * factor)
+      monthlyPensionTotal  = Math.round(monthlyPensionTotal   * factor)
     }
+    if (cfHaircutActive) {
+      monthlyPensionCF = Math.round(monthlyPensionCF * factor)
+    }
+    return { ...raw, monthlyPensionLegacy, monthlyCapiAnnuity, monthlyPensionTotal,
+             monthlyPensionCF, monthlyGain: monthlyPensionTotal - monthlyPensionCF }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [raw, haircutActive])
+  }, [raw, reformHaircutActive, cfHaircutActive])
 
   const gain = data.monthlyGain
   return (
@@ -558,11 +564,19 @@ function PovTab({ params, rows, baselineRows, collapse, rung }) {
         Estimation indicative pour un cotisant médian — calculée à partir des hypothèses actives.
       </p>
 
-      {haircutActive && (
+      {reformHaircutActive && (
         <div className="sim-callout sim-callout-warn" style={{ marginBottom: 16 }}>
           <strong>Retraite après la restructuration ({collapse.collapseYear}) :</strong>{' '}
           en l'absence de réforme, vous subiriez la coupe de 50 % des pensions appliquée
-          sur 3 ans après {collapse.collapseYear}. Les chiffres ci-dessous en tiennent compte.
+          sur 3 ans. Les chiffres ci-dessous en tiennent compte.
+        </div>
+      )}
+      {cfHaircutActive && !reformHaircutActive && (
+        <div className="sim-callout sim-callout-warn" style={{ marginBottom: 16 }}>
+          <strong>Comparaison honnête — sans réforme, restructuration vers {collapse.collapseYear} :</strong>{' '}
+          la pension « sans réforme » ci-dessous inclut la coupe de 50 % que le scénario
+          du statu quo entraînerait pour votre génération. Votre gain net réel est donc{' '}
+          <strong>{fmtSigned(gain)} €/mois</strong>.
         </div>
       )}
 
@@ -852,13 +866,21 @@ export default function SimulatorPage({ navigateTo }) {
   const k       = useMemo(() => extractKPIs(rows), [rows])
   const baselineRows = useMemo(() => runSimulation(buildCounterfactualParams(params)), [params])
 
-  // Detect the Greek-collapse year (rung 1 only) so PovTab can apply the
-  // same pension haircut that the charts show. Uses the exported constants
-  // directly to avoid re-running the full overlay on chart-shaped data.
-  const greekCollapse = useMemo(() => {
-    if (!activeRung?.greekCollapse) return null
+  // Rung 1 (status quo) rows — used as the universal "sans réforme" baseline
+  // in Et pour vous across ALL rungs, so the CF pension always reflects the
+  // actual no-reform trajectory (including the Greek collapse).
+  // Recomputes only when conditions change, not on rung/tweak changes.
+  const statusQuoParams = useMemo(() => buildParams(0, conditions, {}), [conditions])
+  const statusQuoRows   = useMemo(() => runSimulation(statusQuoParams), [statusQuoParams])
+
+  // Collapse detection on the status quo trajectory. Serves two roles:
+  //   • PovTab CF side (all rungs): haircut monthlyPensionCF when individual
+  //     retires after the collapse year → honest comparison for reform rungs.
+  //   • PovTab reform side (rung 1 only, via rung.greekCollapse flag): same
+  //     haircut on monthlyPensionTotal since the "reform" IS the status quo.
+  const statusQuoCollapse = useMemo(() => {
     let accel = 1
-    for (const r of rows) {
+    for (const r of statusQuoRows) {
       if (r.debtRatio_t > GREEK_GE_THRESHOLD_PCT_GDP) accel *= (1 + GREEK_GE_ACCEL_PER_YEAR)
       const adjustedRatio = r.debtRatio_t * accel
       if (adjustedRatio > GREEK_COLLAPSE_TRIGGER_PCT || r.r_d_t >= GREEK_R_D_RESTRUCTURE_TRIGGER) {
@@ -866,7 +888,7 @@ export default function SimulatorPage({ navigateTo }) {
       }
     }
     return null
-  }, [rows, activeRung])
+  }, [statusQuoRows])
 
   const downloadCsv = () => {
     const header = Object.keys(rows[0]).join(',')
@@ -945,7 +967,7 @@ export default function SimulatorPage({ navigateTo }) {
         {tab === 'charts' && <ChartsTab rows={rows} params={params} rung={activeRung} />}
         {tab === 'params' && <ParamsTab params={params} setTweak={setTweak} mode={paramMode} />}
         {tab === 'kpis'   && <KpisTab k={k} />}
-        {tab === 'pov'    && <PovTab params={params} rows={rows} baselineRows={baselineRows} collapse={greekCollapse} rung={activeRung} />}
+        {tab === 'pov'    && <PovTab params={params} rows={rows} cfRows={statusQuoRows} collapse={statusQuoCollapse} rung={activeRung} />}
         {tab === 'diagnostics' && paramMode === 'advanced' && (
           <DiagnosticsTab params={params} rows={rows} baseRows={baselineRows} />
         )}
