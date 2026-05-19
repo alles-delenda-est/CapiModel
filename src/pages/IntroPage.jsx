@@ -4,7 +4,7 @@ import {
   ReferenceLine, ResponsiveContainer,
 } from 'recharts'
 import { runSimulation, DEFAULT_CONFIG } from '../simulation-engine.js'
-import { LADDER_RUNGS } from './IntroLadderRungs.js'
+import { LADDER_RUNGS, applyGreekCollapseOverlay } from './IntroLadderRungs.js'
 import './IntroPage.css'
 
 // French number formatter
@@ -60,58 +60,28 @@ function runRung(rung) {
     }
   })
 
-  // Pedagogical overlay (see IntroLadderRungs.js for rung-level flag):
-  //   - GE penalty (étape 1 only): once total debt crosses 150 % of GDP,
-  //     an additional 4 % compound annual growth is added to D_t each year
-  //     — modelling the "fiscal irresponsibility spiral" beyond what the
-  //     engine's endogenous rate already captures.
-  //   - Collapse trigger: debt-to-GDP > 3× for étape 1, > 5× for the others
-  //     (the others never reach it in practice).
-  //   - After collapse: debt capped at the trigger level (forced
-  //     restructuring), 50 % real pension cut phased over 3 yr, solde
-  //     forced to ~0 (austerity equilibrium).
+  // Pedagogical overlay (see IntroLadderRungs.js → applyGreekCollapseOverlay).
+  // Only étape 1 is at risk of crossing the GE/collapse thresholds in practice;
+  // the other rungs carry greekCollapse:true defensively but their debt
+  // trajectories stay well below 150 % GDP under their reform params.
   let collapse = null
   if (rung.greekCollapse) {
-    const isEtape1 = rung.id === 'actuel'
-    const greekTriggerPct = isEtape1 ? 300 : 500
-    const geThresholdPct  = isEtape1 ? 150 : Infinity
-    const geAccelPerYear  = 0.04
-
-    let accel = 1
-    for (let i = 0; i < series.length; i++) {
-      if (series[i].debtRatioPct > geThresholdPct) {
-        accel *= 1 + geAccelPerYear
+    const result = applyGreekCollapseOverlay(series, {
+      debt: 'debtMdE',
+      debtRatio: 'debtRatioPct',
+      rDeff: 'rDeffective',
+      pension: 'perRetireeRealMo',
+      solde: 'soldeExclTransfersMdE',
+    })
+    // Also propagate the debt mutation into debtTotalMdE (= D_t + D_ext_t).
+    // The overlay only knows about the main debt field; we keep D_ext_t intact
+    // and just scale the total proportionally for chart consistency.
+    if (result) {
+      collapse = {
+        year: result.collapseYear,
+        idx: result.collapseIdx,
+        debtRatioPct: result.debtRatioAtCollapse,
       }
-      if (accel !== 1) {
-        series[i] = {
-          ...series[i],
-          debtMdE:       series[i].debtMdE       * accel,
-          debtTotalMdE:  series[i].debtTotalMdE  * accel,
-          debtRatioPct:  series[i].debtRatioPct  * accel,
-        }
-      }
-    }
-
-    const collapseIdx = series.findIndex(
-      s => s.debtRatioPct > greekTriggerPct || s.rDeffective >= 0.195,
-    )
-    if (collapseIdx > 0) {
-      const collapseYear = series[collapseIdx].year
-      const capDebt      = series[collapseIdx].debtMdE
-      const capDebtRatio = series[collapseIdx].debtRatioPct
-      for (let i = collapseIdx; i < series.length; i++) {
-        const tSinceCollapse = i - collapseIdx
-        const cutPhase = Math.min(1, tSinceCollapse / 3)
-        series[i] = {
-          ...series[i],
-          perRetireeRealMo: series[i].perRetireeRealMo * (1 - 0.5 * cutPhase),
-          debtMdE: capDebt * (1 - 0.1 * cutPhase),
-          debtRatioPct: capDebtRatio * (1 - 0.1 * cutPhase),
-          soldeExclTransfersMdE: series[i].soldeExclTransfersMdE
-            + Math.abs(series[i].soldeExclTransfersMdE) * cutPhase,
-        }
-      }
-      collapse = { year: collapseYear, idx: collapseIdx, debtRatioPct: capDebtRatio }
     }
   }
 

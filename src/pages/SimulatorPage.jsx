@@ -9,7 +9,8 @@ import {
   computeIndividualPerspective,
 } from '../simulation-engine.js'
 import { extractKPIs } from '../presets.js'
-import { LADDER_RUNGS } from './IntroLadderRungs.js'
+import { LADDER_RUNGS, applyGreekCollapseOverlay } from './IntroLadderRungs.js'
+import useSimulatorHashState from '../hooks/useSimulatorHashState.js'
 import './SimulatorPage.css'
 
 // French number formatter
@@ -87,28 +88,69 @@ const tooltipProps = {
 }
 
 // ============================ Charts tab ============================
-function ChartsTab({ rows, params }) {
-  const chartData = useMemo(() => rows.map(r => {
-    const totalRet = Math.max(1e-6, r.retireeIdx * params.R0)
-    const totalPensionMdE = (r.legacyExp_t ?? 0) + (r.transitionalPaygExp_t ?? 0)
-      + (r.ndcPaygPension_t ?? 0) + (r.capiPayout_t ?? 0)
-    const perRetReal = (totalPensionMdE / totalRet) / r.I_factor_t * 1000 / 12
-    return {
-      year: r.year,
-      debt: r.D_t,
-      legacyExp: r.legacyExp_t,
-      transPayg: r.transitionalPaygExp_t ?? 0,
-      ndcPayg: r.ndcPaygPension_t ?? 0,
-      capiPayout: r.capiPayout_t,
-      soldeExclBG: (r.netFlow_t ?? 0) - (r.fiscalTransfer_t ?? 0),
-      fiscalTransfer: r.fiscalTransfer_t ?? 0,
-      perRetReal,
-      capiPot: r.K_t,
-    }
-  }), [rows, params])
+function ChartsTab({ rows, params, rung }) {
+  const { chartData, collapse } = useMemo(() => {
+    const data = rows.map(r => {
+      const totalRet = Math.max(1e-6, r.retireeIdx * params.R0)
+      const totalPensionMdE = (r.legacyExp_t ?? 0) + (r.transitionalPaygExp_t ?? 0)
+        + (r.ndcPaygPension_t ?? 0) + (r.capiPayout_t ?? 0)
+      const perRetReal = (totalPensionMdE / totalRet) / r.I_factor_t * 1000 / 12
+      return {
+        year: r.year,
+        debt: r.D_t,
+        debtRatio: r.debtRatio_t,
+        rDeff: r.r_d_t,
+        legacyExp: r.legacyExp_t,
+        transPayg: r.transitionalPaygExp_t ?? 0,
+        ndcPayg: r.ndcPaygPension_t ?? 0,
+        capiPayout: r.capiPayout_t,
+        soldeExclBG: (r.netFlow_t ?? 0) - (r.fiscalTransfer_t ?? 0),
+        fiscalTransfer: r.fiscalTransfer_t ?? 0,
+        perRetReal,
+        capiPot: r.K_t,
+      }
+    })
+    // Greek-collapse pedagogical overlay — mirrors IntroPage rung 1. Per the
+    // PR #34 review (point F), only the no-reform scenario (rung 'actuel')
+    // gets the overlay; reform rungs show pure engine output.
+    const c = rung?.greekCollapse
+      ? applyGreekCollapseOverlay(data, {
+          debt: 'debt', debtRatio: 'debtRatio', rDeff: 'rDeff',
+          pension: 'perRetReal', solde: 'soldeExclBG',
+        })
+      : null
+    return { chartData: data, collapse: c }
+  }, [rows, params, rung])
+
+  // Average fiscal transfer over the horizon (rounded). Used by the per-rung
+  // caption below the solde chart.
+  const avgFiscalTransfer = useMemo(() => {
+    if (chartData.length === 0) return 0
+    const sum = chartData.reduce((s, r) => s + (r.fiscalTransfer ?? 0), 0)
+    return Math.round(sum / chartData.length)
+  }, [chartData])
+  const transferMode = params?.fiscalTransferMode ?? 'none'
 
   return (
     <div className="sim-charts-grid">
+      {rung?.greekCollapse && (
+        <div className="sim-callout sim-callout-warn is-wide">
+          <strong>Scénario sans réforme — événement pédagogique :</strong>{' '}
+          au-delà de 150 % du PIB, une accélération de 4 %/an est appliquée à la dette
+          pour modéliser le coût croissant du refinancement. À 300 % du PIB (ou r_d ≥ 19,5 %),
+          un événement de <em>restructuration forcée</em> plafonne la dette et déclenche une
+          coupe nominale de 50 % des pensions, étalée sur 3 ans. <strong>Aucun pays n'a soutenu une dette
+          supérieure à 300 % du PIB sans restructuration</strong> (cf. Reinhart &amp; Rogoff,
+          <em> This Time Is Different</em>).
+          {collapse && (
+            <div style={{ marginTop: 6, fontWeight: 600 }}>
+              Restructuration déclenchée en {collapse.collapseYear}
+              {' '}(dette à {Math.round(collapse.debtRatioAtCollapse)} % du PIB).
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="sim-chart-card is-wide">
         <div className="sim-chart-h">
           <h3>Dette publique cumulée</h3>
@@ -149,6 +191,11 @@ function ChartsTab({ rows, params }) {
               dot={false} isAnimationActive={false} name="Solde" />
           </LineChart>
         </ResponsiveContainer>
+        <p className="sim-chart-caption">
+          {transferMode === 'none'
+            ? <>≈ <strong>40 Md€/an</strong> du budget général libérés pour dépenser sur l'éducation et la santé (transferts CSG/FSV/État supprimés sous cette réforme).</>
+            : <>≈ <strong>{avgFiscalTransfer} Md€/an</strong> en moyenne du budget général alloués aux retraites pendant la transition (transferts CSG/FSV/État maintenus).</>}
+        </p>
       </div>
 
       <div className="sim-chart-card">
@@ -752,6 +799,15 @@ export default function SimulatorPage({ navigateTo }) {
   }, [])
   const resetTweaks = useCallback(() => setTweaks({}), [])
 
+  // Round-trip rung/conditions/tab/mode through the URL hash so links like
+  // #/simulateur?rung=4&conditions=stress&tab=kpis are shareable and survive
+  // reload. Tweaks are intentionally NOT encoded (free-form bag of engine
+  // overrides; would bloat the URL).
+  useSimulatorHashState(
+    { rungIdx, conditions, tab, paramMode },
+    { setRungIdx, setConditions, setTab, setParamMode },
+  )
+
   // If the user leaves Avancé mode while the Diagnostics tab is active,
   // fall back to Graphiques.
   useEffect(() => {
@@ -839,7 +895,7 @@ export default function SimulatorPage({ navigateTo }) {
       </div>
 
       <main className="sim-content">
-        {tab === 'charts' && <ChartsTab rows={rows} params={params} />}
+        {tab === 'charts' && <ChartsTab rows={rows} params={params} rung={activeRung} />}
         {tab === 'params' && <ParamsTab params={params} setTweak={setTweak} mode={paramMode} />}
         {tab === 'kpis'   && <KpisTab k={k} />}
         {tab === 'pov'    && <PovTab params={params} rows={rows} baselineRows={baselineRows} />}
