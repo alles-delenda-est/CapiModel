@@ -9,7 +9,11 @@ import {
   computeIndividualPerspective,
 } from '../simulation-engine.js'
 import { extractKPIs } from '../presets.js'
-import { LADDER_RUNGS, applyGreekCollapseOverlay } from './IntroLadderRungs.js'
+import {
+  LADDER_RUNGS, applyGreekCollapseOverlay,
+  GREEK_GE_THRESHOLD_PCT_GDP, GREEK_GE_ACCEL_PER_YEAR,
+  GREEK_COLLAPSE_TRIGGER_PCT, GREEK_R_D_RESTRUCTURE_TRIGGER,
+} from './IntroLadderRungs.js'
 import useSimulatorHashState from '../hooks/useSimulatorHashState.js'
 import './SimulatorPage.css'
 
@@ -516,16 +520,35 @@ function ParamsTab({ params, setTweak, mode }) {
 }
 
 // ============================ Et pour vous tab ============================
-function PovTab({ params, rows, baselineRows }) {
+function PovTab({ params, rows, baselineRows, collapse, rung }) {
   const [birthYear, setBirthYear] = useState(1985)
-  const data = useMemo(() => {
+  const raw = useMemo(() => {
     try {
       return computeIndividualPerspective(params, rows, baselineRows, birthYear)
     } catch (e) {
       return null
     }
   }, [params, rows, baselineRows, birthYear])
-  if (!data) return <div className="sim-pov"><p>Impossible de calculer.</p></div>
+  if (!raw) return <div className="sim-pov"><p>Impossible de calculer.</p></div>
+
+  // Apply the Greek-collapse haircut when the individual retires after the
+  // restructuring event. Same 50 % cut phased in over 3 years as the overlay.
+  const haircutActive = rung?.greekCollapse && collapse && raw.retirementYear >= collapse.collapseYear
+  const data = useMemo(() => {
+    if (!haircutActive) return raw
+    const tSince   = raw.retirementYear - collapse.collapseYear
+    const cutPhase = Math.min(1, tSince / 3)
+    const factor   = 1 - 0.5 * cutPhase
+    return {
+      ...raw,
+      monthlyPensionLegacy: Math.round(raw.monthlyPensionLegacy * factor),
+      monthlyCapiAnnuity:   Math.round(raw.monthlyCapiAnnuity   * factor),
+      monthlyPensionTotal:  Math.round(raw.monthlyPensionTotal   * factor),
+      monthlyPensionCF:     Math.round(raw.monthlyPensionCF      * factor),
+      monthlyGain:          Math.round(raw.monthlyGain            * factor),
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raw, haircutActive])
 
   const gain = data.monthlyGain
   return (
@@ -534,6 +557,14 @@ function PovTab({ params, rows, baselineRows }) {
       <p className="sim-pov-sub">
         Estimation indicative pour un cotisant médian — calculée à partir des hypothèses actives.
       </p>
+
+      {haircutActive && (
+        <div className="sim-callout sim-callout-warn" style={{ marginBottom: 16 }}>
+          <strong>Retraite après la restructuration ({collapse.collapseYear}) :</strong>{' '}
+          en l'absence de réforme, vous subiriez la coupe de 50 % des pensions appliquée
+          sur 3 ans après {collapse.collapseYear}. Les chiffres ci-dessous en tiennent compte.
+        </div>
+      )}
 
       <div className="sim-pov-cohort-row">
         <div>
@@ -821,6 +852,22 @@ export default function SimulatorPage({ navigateTo }) {
   const k       = useMemo(() => extractKPIs(rows), [rows])
   const baselineRows = useMemo(() => runSimulation(buildCounterfactualParams(params)), [params])
 
+  // Detect the Greek-collapse year (rung 1 only) so PovTab can apply the
+  // same pension haircut that the charts show. Uses the exported constants
+  // directly to avoid re-running the full overlay on chart-shaped data.
+  const greekCollapse = useMemo(() => {
+    if (!activeRung?.greekCollapse) return null
+    let accel = 1
+    for (const r of rows) {
+      if (r.debtRatio_t > GREEK_GE_THRESHOLD_PCT_GDP) accel *= (1 + GREEK_GE_ACCEL_PER_YEAR)
+      const adjustedRatio = r.debtRatio_t * accel
+      if (adjustedRatio > GREEK_COLLAPSE_TRIGGER_PCT || r.r_d_t >= GREEK_R_D_RESTRUCTURE_TRIGGER) {
+        return { collapseYear: r.year, debtRatioAtCollapse: Math.round(adjustedRatio) }
+      }
+    }
+    return null
+  }, [rows, activeRung])
+
   const downloadCsv = () => {
     const header = Object.keys(rows[0]).join(',')
     const lines = rows.map(r =>
@@ -898,7 +945,7 @@ export default function SimulatorPage({ navigateTo }) {
         {tab === 'charts' && <ChartsTab rows={rows} params={params} rung={activeRung} />}
         {tab === 'params' && <ParamsTab params={params} setTweak={setTweak} mode={paramMode} />}
         {tab === 'kpis'   && <KpisTab k={k} />}
-        {tab === 'pov'    && <PovTab params={params} rows={rows} baselineRows={baselineRows} />}
+        {tab === 'pov'    && <PovTab params={params} rows={rows} baselineRows={baselineRows} collapse={greekCollapse} rung={activeRung} />}
         {tab === 'diagnostics' && paramMode === 'advanced' && (
           <DiagnosticsTab params={params} rows={rows} baseRows={baselineRows} />
         )}
