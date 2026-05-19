@@ -135,13 +135,13 @@ function ChartsTab({ rows, params, rung }) {
     <div className="sim-charts-grid">
       {rung?.greekCollapse && (
         <div className="sim-callout sim-callout-warn is-wide">
-          <strong>Scénario sans réforme — événement pédagogique :</strong>{' '}
-          au-delà de 150 % du PIB, une accélération de 4 %/an est appliquée à la dette
-          pour modéliser le coût croissant du refinancement. À 300 % du PIB (ou r_d ≥ 19,5 %),
-          un événement de <em>restructuration forcée</em> plafonne la dette et déclenche une
-          coupe nominale de 50 % des pensions, étalée sur 3 ans. <strong>Aucun pays n'a soutenu une dette
-          supérieure à 300 % du PIB sans restructuration</strong> (cf. Reinhart &amp; Rogoff,
-          <em> This Time Is Different</em>).
+          <strong>Scénario sans réforme — présentation pédagogique :</strong>{' '}
+          au-delà de 150 % du PIB, et dans l'absence de réforme crédible engagée,
+          les taux d'intérêt grimpent de 4 %/an. À 300 % du PIB, un événement de{' '}
+          <em>restructuration forcée</em> plafonne la dette et déclenche une coupe nominale
+          de 50 % des pensions, étalée sur 3 ans.{' '}
+          <strong>Aucun pays n'a soutenu une dette supérieure à 300 % du PIB sans
+          restructuration</strong> (cf. Reinhart &amp; Rogoff, <em>This Time Is Different</em>).
           {collapse && (
             <div style={{ marginTop: 6, fontWeight: 600 }}>
               Restructuration déclenchée en {collapse.collapseYear}
