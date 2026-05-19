@@ -880,7 +880,7 @@ export default function SimulatorPage({ navigateTo }) {
           <button className={'sim-tab ' + (tab === 'charts' ? 'is-on' : '')} onClick={() => setTab('charts')}>Graphiques</button>
           <button className={'sim-tab ' + (tab === 'params' ? 'is-on' : '')} onClick={() => setTab('params')}>Paramètres</button>
           <button className={'sim-tab ' + (tab === 'kpis' ? 'is-on' : '')}   onClick={() => setTab('kpis')}>Indicateurs</button>
-          <button className={'sim-tab ' + (tab === 'pov' ? 'is-on' : '')}    onClick={() => setTab('pov')}>Et pour vous</button>
+          <button className={'sim-tab sim-tab-pov ' + (tab === 'pov' ? 'is-on' : '')} onClick={() => setTab('pov')}>Et pour vous</button>
           {paramMode === 'advanced' && (
             <button className={'sim-tab ' + (tab === 'diagnostics' ? 'is-on' : '')} onClick={() => setTab('diagnostics')}>
               Diagnostics
