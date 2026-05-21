@@ -125,22 +125,22 @@ function MultiPanel({ runs, activeIdx, dataKey, title, unit, fmtFn, height = 130
       <div style={{ width: '100%', height }}>
         <ResponsiveContainer>
           <LineChart data={merged} margin={{ top: 6, right: 12, bottom: 16, left: 38 }}>
-            <CartesianGrid stroke="rgba(14,26,43,0.06)" strokeDasharray="2 4" vertical={false} />
+            <CartesianGrid stroke="rgba(5,193,173,0.08)" strokeDasharray="2 4" vertical={false} />
             <XAxis dataKey="year"
-              axisLine={{ stroke: 'rgba(14,26,43,0.2)' }} tickLine={false}
-              tick={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fill: '#98a4b7', letterSpacing: '0.04em' }}
+              axisLine={{ stroke: 'rgba(5,193,173,0.25)' }} tickLine={false}
+              tick={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fill: '#7a8898', letterSpacing: '0.04em' }}
               ticks={[2030, 2050, 2070, 2090]}
             />
             <YAxis axisLine={false} tickLine={false} width={44}
-              tick={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fill: '#98a4b7', letterSpacing: '0.04em' }}
+              tick={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fill: '#7a8898', letterSpacing: '0.04em' }}
               tickFormatter={fmtFn}
             />
             {refLine !== undefined && (
-              <ReferenceLine y={refLine} stroke="#0e1a2b" strokeOpacity={0.25} strokeDasharray="2 3" />
+              <ReferenceLine y={refLine} stroke="#e8edf5" strokeOpacity={0.25} strokeDasharray="2 3" />
             )}
             <Tooltip
-              contentStyle={{ background: '#fafaf7', border: '1px solid rgba(14,26,43,0.1)', borderRadius: 0, fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#0e1a2b', boxShadow: 'none', padding: '8px 10px' }}
-              labelStyle={{ color: '#6b7a8f', fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}
+              contentStyle={{ background: '#12182a', border: '1px solid rgba(5,193,173,0.2)', borderRadius: 0, fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#f2f5fb', boxShadow: 'none', padding: '8px 10px' }}
+              labelStyle={{ color: '#c8d2e2', fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}
               formatter={(v, name, payload) => {
                 const idx = parseInt(payload.dataKey.replace('rung', ''), 10)
                 return [fmtFn ? fmtFn(v) : fmt(v, 0), runs[idx].rung.short]
@@ -156,7 +156,7 @@ function MultiPanel({ runs, activeIdx, dataKey, title, unit, fmtFn, height = 130
                   strokeWidth={isActive ? 2.5 : 1.2}
                   strokeOpacity={isActive ? 1 : 0.35}
                   dot={false}
-                  activeDot={isActive ? { r: 4, fill: run.rung.color, stroke: '#0e1a2b', strokeWidth: 1 } : false}
+                  activeDot={isActive ? { r: 4, fill: run.rung.color, stroke: '#f2f5fb', strokeWidth: 1 } : false}
                   isAnimationActive={false}
                 />
               )

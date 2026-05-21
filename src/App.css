@@ -1,27 +1,27 @@
 :root {
-  /* Modern Luxury palette — Hermès-inspired bone + sienna */
-  --bg-primary: #F7F5F2;          /* warm bone */
-  --bg-card: #FFFFFF;
-  --bg-tile: #FFFFFF;
+  /* Parti Libéral Français — dark navy + teal + gold */
+  --bg-primary: #0f1524;
+  --bg-card: #12182a;
+  --bg-tile: #12182a;
 
-  --accent-sienna: #D35400;
-  --accent-sienna-light: #E67E22;
+  --accent-sienna: #05c1ad;
+  --accent-sienna-light: #07d4be;
 
   /* Legacy token names remapped so child CSS keeps working */
-  --color-primary: #D35400;        /* sienna for emphasis, link, accents */
-  --color-primary-light: #E67E22;
-  --color-success: #2F7D53;        /* muted green */
-  --color-warning: #B7791F;        /* muted amber */
-  --color-danger: #A63A24;         /* deeper sienna-red */
-  --color-neutral: #595959;
+  --color-primary: #05c1ad;
+  --color-primary-light: #07d4be;
+  --color-success: #05c1ad;
+  --color-warning: #e9c53d;
+  --color-danger: #e05c4e;
+  --color-neutral: #b8c1d1;
 
-  --text-primary: #1C1C1C;         /* deep charcoal */
-  --text-main: #1C1C1C;
-  --text-secondary: #595959;
-  --text-muted: #595959;
+  --text-primary: #f2f5fb;
+  --text-main: #f2f5fb;
+  --text-secondary: #c8d2e2;
+  --text-muted: #c8d2e2;
 
-  --border-color: rgba(28, 28, 28, 0.12);
-  --border-ultra-thin: rgba(28, 28, 28, 0.1);
+  --border-color: rgba(5, 193, 173, 0.15);
+  --border-ultra-thin: rgba(5, 193, 173, 0.10);
 
   --radius: 2px;                    /* near-sharp */
 
@@ -52,7 +52,7 @@ body {
 
 /* Header */
 .header {
-  background: var(--bg-primary);
+  background: linear-gradient(135deg, #013340 0%, #016b63 100%);
   color: var(--text-primary);
   padding: 2.5rem 2rem 2rem;
   border-radius: 0;
