@@ -52,7 +52,7 @@ body {
 
 /* Header */
 .header {
-  background: var(--bg-soft);
+  background: linear-gradient(135deg, #013340 0%, #016b63 100%);
   color: var(--text-primary);
   padding: 2.5rem 2rem 2rem;
   border-radius: 0;

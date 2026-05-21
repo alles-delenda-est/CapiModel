@@ -18,6 +18,7 @@
   --teal: #05c1ad;
   --violet: #9b72f0;
   --ink-deep: #0a0f1e;
+  --teal-pale: #7eccc4;
 }
 
 * { box-sizing: border-box; }
@@ -153,10 +154,10 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   margin-bottom: 6px;
 }
 .cc-rung-btn-label {
-  font-size: 14px; font-weight: 500; color: var(--ink-1); line-height: 1.25;
+  font-size: 14px; font-weight: 500; color: var(--teal-pale); line-height: 1.25;
 }
 .cc-ladder--stepper .cc-rung-btn.is-active .cc-rung-btn-label {
-  font-weight: 600;
+  font-weight: 600; color: var(--ink-1);
 }
 
 /* Stepper: stage card */
@@ -267,7 +268,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
   letter-spacing: 0.16em;
-  color: var(--ink-3);
+  color: var(--teal-pale);
   margin-bottom: 10px;
   display: block;
 }
