@@ -139,8 +139,8 @@ function MultiPanel({ runs, activeIdx, dataKey, title, unit, fmtFn, height = 130
               <ReferenceLine y={refLine} stroke="#e8edf5" strokeOpacity={0.25} strokeDasharray="2 3" />
             )}
             <Tooltip
-              contentStyle={{ background: '#12182a', border: '1px solid rgba(5,193,173,0.2)', borderRadius: 0, fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#e8edf5', boxShadow: 'none', padding: '8px 10px' }}
-              labelStyle={{ color: '#b8c1d1', fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}
+              contentStyle={{ background: '#12182a', border: '1px solid rgba(5,193,173,0.2)', borderRadius: 0, fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#f2f5fb', boxShadow: 'none', padding: '8px 10px' }}
+              labelStyle={{ color: '#c8d2e2', fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}
               formatter={(v, name, payload) => {
                 const idx = parseInt(payload.dataKey.replace('rung', ''), 10)
                 return [fmtFn ? fmtFn(v) : fmt(v, 0), runs[idx].rung.short]
@@ -156,7 +156,7 @@ function MultiPanel({ runs, activeIdx, dataKey, title, unit, fmtFn, height = 130
                   strokeWidth={isActive ? 2.5 : 1.2}
                   strokeOpacity={isActive ? 1 : 0.35}
                   dot={false}
-                  activeDot={isActive ? { r: 4, fill: run.rung.color, stroke: '#e8edf5', strokeWidth: 1 } : false}
+                  activeDot={isActive ? { r: 4, fill: run.rung.color, stroke: '#f2f5fb', strokeWidth: 1 } : false}
                   isAnimationActive={false}
                 />
               )

@@ -15,10 +15,10 @@
   --color-danger: #e05c4e;
   --color-neutral: #b8c1d1;
 
-  --text-primary: #e8edf5;
-  --text-main: #e8edf5;
-  --text-secondary: #b8c1d1;
-  --text-muted: #b8c1d1;
+  --text-primary: #f2f5fb;
+  --text-main: #f2f5fb;
+  --text-secondary: #c8d2e2;
+  --text-muted: #c8d2e2;
 
   --border-color: rgba(5, 193, 173, 0.15);
   --border-ultra-thin: rgba(5, 193, 173, 0.10);
@@ -52,7 +52,7 @@ body {
 
 /* Header */
 .header {
-  background: var(--bg-primary);
+  background: var(--bg-soft);
   color: var(--text-primary);
   padding: 2.5rem 2rem 2rem;
   border-radius: 0;

@@ -67,7 +67,7 @@ function buildParams(rungIdx, conditionsKey, tweaks) {
 const axisTickStyle = {
   fontFamily: 'JetBrains Mono, monospace',
   fontSize: 10,
-  fill: '#b8c1d1',
+  fill: '#c8d2e2',
   letterSpacing: '0.04em',
 }
 const tooltipProps = {
@@ -77,12 +77,12 @@ const tooltipProps = {
     borderRadius: 0,
     fontFamily: 'Inter, sans-serif',
     fontSize: 12,
-    color: '#e8edf5',
+    color: '#f2f5fb',
     boxShadow: 'none',
     padding: '8px 10px',
   },
   labelStyle: {
-    color: '#b8c1d1',
+    color: '#c8d2e2',
     fontFamily: 'JetBrains Mono, monospace',
     fontSize: 10,
     letterSpacing: '0.1em',
@@ -592,7 +592,7 @@ function PovTab({ params, rows, cfRows, collapse, rung }) {
           <div className="sim-pov-cohort-label">Année de naissance</div>
           <div style={{ fontSize: 24, fontFamily: 'Playfair Display, serif', fontWeight: 600 }}>
             {birthYear}
-            <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: '#b8c1d1', marginLeft: 12, letterSpacing: '0.08em' }}>
+            <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: '#c8d2e2', marginLeft: 12, letterSpacing: '0.08em' }}>
               {data.ageInY0} ans en 2027
             </span>
           </div>
@@ -784,17 +784,17 @@ function DiagnosticsTab({ params, rows, baseRows }) {
           <ScatterChart margin={{ top: 16, right: 24, bottom: 48, left: 24 }}>
             <CartesianGrid stroke="rgba(5,193,173,0.08)" strokeDasharray="2 4" />
             <XAxis type="number" dataKey="peakDebt" name="Dette max"
-              label={{ value: 'Dette de transition max (k Md€)', position: 'insideBottom', offset: -28, fontSize: 11, fill: '#b8c1d1' }}
+              label={{ value: 'Dette de transition max (k Md€)', position: 'insideBottom', offset: -28, fontSize: 11, fill: '#c8d2e2' }}
               tick={axisTickStyle} tickFormatter={v => fmt(v, 1)} />
             <YAxis type="number" dataKey="avgRatio" name="Ratio actuariel"
-              label={{ value: 'Paiement / rente actuarielle (%)', angle: -90, position: 'insideLeft', dx: -8, fontSize: 11, fill: '#b8c1d1' }}
+              label={{ value: 'Paiement / rente actuarielle (%)', angle: -90, position: 'insideLeft', dx: -8, fontSize: 11, fill: '#c8d2e2' }}
               tick={axisTickStyle} tickFormatter={v => v.toFixed(0) + '%'} />
             <Tooltip cursor={{ strokeDasharray: '3 3' }}
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null
                 const d = payload[0].payload
                 return (
-                  <div style={{ background: '#12182a', border: '1px solid rgba(5,193,173,0.2)', padding: '8px 10px', fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#e8edf5' }}>
+                  <div style={{ background: '#12182a', border: '1px solid rgba(5,193,173,0.2)', padding: '8px 10px', fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#f2f5fb' }}>
                     <div><b>κ (K-cap balayage)</b> = {d.kappa}</div>
                     <div><b>φ (plancher annuité)</b> = {d.phi}</div>
                     <div><b>Dette max</b> = {fmt(d.peakDebt, 1)} k Md€</div>
