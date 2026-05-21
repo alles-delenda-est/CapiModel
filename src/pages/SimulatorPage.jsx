@@ -612,7 +612,9 @@ function PovTab({ params, rows, cfRows, collapse, rung }) {
             <span className="sim-pov-out-unit">€/mois</span>
           </div>
           <div className="sim-pov-out-sub">
-            Dont {fmt(data.monthlyPensionLegacy)} € par répartition · {fmt(data.monthlyCapiAnnuity)} € par capitalisation
+            {data.monthlyCapiAnnuity > 0
+              ? <>Dont {fmt(data.monthlyPensionLegacy)} € répartition · {fmt(data.monthlyCapiAnnuity)} € capitalisation</>
+              : <>Intégralement par répartition</>}
           </div>
         </div>
         <div>
@@ -860,10 +862,13 @@ export default function SimulatorPage({ navigateTo }) {
     { setRungIdx, setConditions, setTab, setParamMode },
   )
 
-  // If the user leaves Avancé mode while the Diagnostics tab is active,
-  // fall back to Graphiques.
+  // In simple mode only Graphiques and Et pour vous tabs exist; fall back from
+  // any hidden tab to Graphiques. In advanced mode the only extra guard is the
+  // Diagnostics tab (shown only in Avancé).
   useEffect(() => {
-    if (paramMode !== 'advanced' && tab === 'diagnostics') {
+    if (paramMode === 'simple' && tab !== 'charts' && tab !== 'pov') {
+      setTab('charts')
+    } else if (paramMode !== 'advanced' && tab === 'diagnostics') {
       setTab('charts')
     }
   }, [paramMode, tab])
@@ -954,8 +959,12 @@ export default function SimulatorPage({ navigateTo }) {
       <div className="sim-tabs-wrap">
         <div className="sim-tabs">
           <button className={'sim-tab ' + (tab === 'charts' ? 'is-on' : '')} onClick={() => setTab('charts')}>Graphiques</button>
-          <button className={'sim-tab ' + (tab === 'params' ? 'is-on' : '')} onClick={() => setTab('params')}>Paramètres</button>
-          <button className={'sim-tab ' + (tab === 'kpis' ? 'is-on' : '')}   onClick={() => setTab('kpis')}>Indicateurs</button>
+          {paramMode === 'advanced' && (
+            <button className={'sim-tab ' + (tab === 'params' ? 'is-on' : '')} onClick={() => setTab('params')}>Paramètres</button>
+          )}
+          {paramMode === 'advanced' && (
+            <button className={'sim-tab ' + (tab === 'kpis' ? 'is-on' : '')} onClick={() => setTab('kpis')}>Indicateurs</button>
+          )}
           <button className={'sim-tab sim-tab-pov ' + (tab === 'pov' ? 'is-on' : '')} onClick={() => setTab('pov')}>Et pour vous</button>
           {paramMode === 'advanced' && (
             <button className={'sim-tab ' + (tab === 'diagnostics' ? 'is-on' : '')} onClick={() => setTab('diagnostics')}>
@@ -971,6 +980,17 @@ export default function SimulatorPage({ navigateTo }) {
       </div>
 
       <main className="sim-content">
+        {tab === 'charts' && paramMode === 'simple' && (
+          <div className="sim-inline-section">
+            <ParamsTab params={params} setTweak={setTweak} mode="simple" />
+          </div>
+        )}
+        {tab === 'charts' && paramMode === 'simple' && (
+          <div className="sim-inline-section sim-inline-kpis">
+            <div className="sim-inline-section-header">Indicateurs clés</div>
+            <KpisTab k={k} />
+          </div>
+        )}
         {tab === 'charts' && <ChartsTab rows={rows} params={params} rung={activeRung} />}
         {tab === 'params' && <ParamsTab params={params} setTweak={setTweak} mode={paramMode} />}
         {tab === 'kpis'   && <KpisTab k={k} />}
