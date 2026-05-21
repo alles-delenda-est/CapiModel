@@ -81,7 +81,7 @@ export const LADDER_RUNGS = [
     headline: 'Aujourd\u2019hui : un système par répartition sous perfusion',
     summary: "Avec la démographie actuelle, notre système par répartition suppose des transferts permanents du budget général (donc des autres taxes — CSG, FSV, TVA \u2248 40 Md€/an) pour boucler ses fins de mois, et cela ne suffit même pas car le budget de l'État est déficitaire pour cette raison. Sans réforme, la dépendance s'aggrave avec le vieillissement, et la dette avec, jusqu'à ce que nous nous retrouvions dans la même situation que les Grecs. Pour rappel, ils ont dû couper les dépenses de l'État à l'os. Avec les paramètres budgétaires de la France, seules de grosses coupes des retraites pourraient suffire.",
     closestPreset: 'derived (counterfactual + transferts BG actuels)',
-    color: '#b85c3c',
+    color: '#e05c4e',
     greekCollapse: true,
     paramOverrides: {
       useEquinoxe: false,
@@ -105,7 +105,7 @@ export const LADDER_RUNGS = [
     headline: 'On rééquilibre : moins de pression sur le budget général',
     summary: "Le rééquilibrage proposé par Équinoxe réduit progressivement les pensions élevées, supprime l'abattement de 10 %, et restaure la CSG/CRDS à taux plein, sans toucher aux petites retraites. Ce rééquilibrage suffit pour que la France reste solvable, pour l'instant, mais les retraites restent structurellement dépendantes des transferts du budget général et de la démographie.",
     closestPreset: 'equinoxeOnly',
-    color: '#c9a961',
+    color: '#e9c53d',
     greekCollapse: false,
     paramOverrides: {
       useEquinoxe: true,
@@ -130,7 +130,7 @@ export const LADDER_RUNGS = [
     headline: 'Suède : équilibrage automatique + petit pilier capi',
     summary: "Cette proposition de réforme est inspirée du système suédois Inkomstpension (pension par revenu) + Premiepension (pension de prime), dernières « grandes réformes » dans un pays européen (1999). Dans ce modèle, nous restons dans un système par répartition, mais avec un compte notionnel par cotisant, complété par un petit pilier de capitalisation (contribution de 4 % des salaires, que les individus peuvent supplémenter). Le mécanisme d'équilibrage automatique (ABM) coupe l'indexation des pensions lorsque les ressources du système passent en-dessous des décaissements, gardant le système solvable sans recourir à la dette. Cette solution élimine le conflit intergénérationnel parce que les retraités et les actifs partagent les fruits de la croissance économique.",
     closestPreset: 'v1_default + swedenMode (canonical toggle)',
-    color: '#0d9488',
+    color: '#05c1ad',
     greekCollapse: false,
     paramOverrides: {
       useEquinoxe: true,
@@ -157,7 +157,7 @@ export const LADDER_RUNGS = [
     headline: 'Chili : capitalisation totale + obligations de reconnaissance',
     summary: "Notre deuxième alternative est de suivre le modèle chilien. Ici, les cotisations basculent intégralement vers la capitalisation. Les droits acquis sont convertis en obligations indexées sur l'inflation, qui se remboursent à mesure que chaque cotisant prend sa retraite. La dette de transition est explicite et lisible — mais elle est massive si on ne la finance pas.",
     closestPreset: 'v1_default + chileMode (canonical toggle)',
-    color: '#7c3aed',
+    color: '#9b72f0',
     greekCollapse: false,
     paramOverrides: {
       useEquinoxe: true,
@@ -186,7 +186,7 @@ export const LADDER_RUNGS = [
     headline: 'Chili financé : la dette de transition est visible et remboursée par le fonds',
     summary: "Même bascule que le Mode Chilien, mais le déficit de transition est affiché honnêtement comme dette publique (pic ~1 200 Md€ vers 2047, ~137 % du PIB). Les transferts du budget général déjà existants (CSG, FSV, TVA ≈ 40 Md€/an) continuent de couvrir une partie du solde. La dette restante est remboursée par un prélèvement de 2,5 %/an sur le fonds capitalisé (tauK), prélevé uniquement sur la croissance au-delà du plancher de solvabilité — les pensions ne sont jamais amputées. La dette est soldée vers 2060 et le fonds reste autonome jusqu'à la fin de l'horizon.",
     closestPreset: 'v1_default + chileMode + fiscalTransferMode:full',
-    color: '#1e293b',
+    color: '#b8c1d1',
     greekCollapse: false,
     paramOverrides: {
       useEquinoxe: true,

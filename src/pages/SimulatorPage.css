@@ -3,30 +3,30 @@
    tool-like density, less Playfair, more JetBrains Mono micro-labels. */
 
 :root {
-  --bg-warm: #fafaf7;
-  --bg-card: #ffffff;
-  --bg-soft: #f3f0e8;
-  --bg-shade: #ece8dc;
-  --ink-1: #0e1a2b;
-  --ink-2: #2a3645;
-  --ink-3: #6b7a8f;
-  --ink-4: #98a4b7;
-  --ink-5: #c4ccd9;
-  --rule: rgba(14, 26, 43, 0.08);
-  --rule-strong: rgba(14, 26, 43, 0.18);
-  --rule-deep:  rgba(14, 26, 43, 0.32);
-  --gold:   #c9a961;
-  --copper: #b85c3c;
-  --teal:   #0d9488;
-  --violet: #7c3aed;
-  --ink-deep: #1e293b;
-  --ok-green: #1f7a3a;
-  --bad-red:  #b9342a;
-  --rung-1: #b85c3c;
-  --rung-2: #c9a961;
-  --rung-3: #0d9488;
-  --rung-4: #7c3aed;
-  --rung-5: #1e293b;
+  --bg-warm:  #0f1524;
+  --bg-card:  #12182a;
+  --bg-soft:  #003340;
+  --bg-shade: #001e2a;
+  --ink-1: #e8edf5;
+  --ink-2: #c8d0e0;
+  --ink-3: #b8c1d1;
+  --ink-4: #7a8898;
+  --ink-5: #3a4456;
+  --rule:       rgba(5, 193, 173, 0.12);
+  --rule-strong: rgba(5, 193, 173, 0.25);
+  --rule-deep:   rgba(5, 193, 173, 0.40);
+  --gold:   #e9c53d;
+  --copper: #05c1ad;
+  --teal:   #05c1ad;
+  --violet: #9b72f0;
+  --ink-deep: #0a0f1e;
+  --ok-green: #05c1ad;
+  --bad-red:  #e05c4e;
+  --rung-1: #e05c4e;
+  --rung-2: #e9c53d;
+  --rung-3: #05c1ad;
+  --rung-4: #9b72f0;
+  --rung-5: #b8c1d1;
 }
 
 * { box-sizing: border-box; }
@@ -362,8 +362,8 @@ body {
 }
 .sim-callout.is-wide { grid-column: 1 / -1; }
 .sim-callout-warn {
-  background: #fff8e1;
-  border-left: 3px solid #c9a961;
+  background: rgba(233, 197, 61, 0.08);
+  border-left: 3px solid #e9c53d;
 }
 .sim-callout em { font-style: italic; color: var(--ink-2); }
 

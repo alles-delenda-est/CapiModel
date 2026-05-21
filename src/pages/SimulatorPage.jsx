@@ -67,22 +67,22 @@ function buildParams(rungIdx, conditionsKey, tweaks) {
 const axisTickStyle = {
   fontFamily: 'JetBrains Mono, monospace',
   fontSize: 10,
-  fill: '#6b7a8f',
+  fill: '#b8c1d1',
   letterSpacing: '0.04em',
 }
 const tooltipProps = {
   contentStyle: {
-    background: '#fafaf7',
-    border: '1px solid rgba(14,26,43,0.1)',
+    background: '#12182a',
+    border: '1px solid rgba(5,193,173,0.2)',
     borderRadius: 0,
     fontFamily: 'Inter, sans-serif',
     fontSize: 12,
-    color: '#0e1a2b',
+    color: '#e8edf5',
     boxShadow: 'none',
     padding: '8px 10px',
   },
   labelStyle: {
-    color: '#6b7a8f',
+    color: '#b8c1d1',
     fontFamily: 'JetBrains Mono, monospace',
     fontSize: 10,
     letterSpacing: '0.1em',
@@ -162,15 +162,15 @@ function ChartsTab({ rows, params, rung }) {
         </div>
         <ResponsiveContainer width="100%" height={260}>
           <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
-            <CartesianGrid stroke="rgba(14,26,43,0.06)" strokeDasharray="2 4" vertical={false} />
-            <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(14,26,43,0.2)' }}
+            <CartesianGrid stroke="rgba(5,193,173,0.08)" strokeDasharray="2 4" vertical={false} />
+            <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(5,193,173,0.2)' }}
               tick={axisTickStyle} ticks={[2030, 2045, 2060, 2075, 2090]} />
             <YAxis tickLine={false} axisLine={false} width={60} tick={axisTickStyle}
               tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : Math.round(v)} />
             <Tooltip {...tooltipProps}
               formatter={v => [fmt(v) + ' Md€', 'Dette']}
               labelFormatter={l => 'Année ' + l} />
-            <Line type="monotone" dataKey="debt" stroke="#c9a961" strokeWidth={2.5}
+            <Line type="monotone" dataKey="debt" stroke="#e9c53d" strokeWidth={2.5}
               dot={false} isAnimationActive={false} name="Dette" />
           </LineChart>
         </ResponsiveContainer>
@@ -183,15 +183,15 @@ function ChartsTab({ rows, params, rung }) {
         </div>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 24, left: 8 }}>
-            <CartesianGrid stroke="rgba(14,26,43,0.06)" strokeDasharray="2 4" vertical={false} />
-            <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(14,26,43,0.2)' }}
+            <CartesianGrid stroke="rgba(5,193,173,0.08)" strokeDasharray="2 4" vertical={false} />
+            <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(5,193,173,0.2)' }}
               tick={axisTickStyle} ticks={[2030, 2050, 2070, 2090]} />
             <YAxis tickLine={false} axisLine={false} width={48} tick={axisTickStyle}
               tickFormatter={v => (v >= 0 ? '+' : '') + Math.round(v)} />
-            <ReferenceLine y={0} stroke="#0e1a2b" strokeOpacity={0.25} strokeDasharray="2 3" />
+            <ReferenceLine y={0} stroke="#e8edf5" strokeOpacity={0.25} strokeDasharray="2 3" />
             <Tooltip {...tooltipProps} formatter={v => [fmtSigned(Math.round(v)) + ' Md€', 'Solde']}
               labelFormatter={l => 'Année ' + l} />
-            <Line type="monotone" dataKey="soldeExclBG" stroke="#0d9488" strokeWidth={2}
+            <Line type="monotone" dataKey="soldeExclBG" stroke="#05c1ad" strokeWidth={2}
               dot={false} isAnimationActive={false} name="Solde" />
           </LineChart>
         </ResponsiveContainer>
@@ -209,14 +209,14 @@ function ChartsTab({ rows, params, rung }) {
         </div>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 24, left: 8 }}>
-            <CartesianGrid stroke="rgba(14,26,43,0.06)" strokeDasharray="2 4" vertical={false} />
-            <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(14,26,43,0.2)' }}
+            <CartesianGrid stroke="rgba(5,193,173,0.08)" strokeDasharray="2 4" vertical={false} />
+            <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(5,193,173,0.2)' }}
               tick={axisTickStyle} ticks={[2030, 2050, 2070, 2090]} />
             <YAxis tickLine={false} axisLine={false} width={56} tick={axisTickStyle}
               tickFormatter={v => fmt(Math.round(v))} />
             <Tooltip {...tooltipProps} formatter={v => [fmt(Math.round(v)) + ' €/mo', 'Pension']}
               labelFormatter={l => 'Année ' + l} />
-            <Line type="monotone" dataKey="perRetReal" stroke="#b85c3c" strokeWidth={2}
+            <Line type="monotone" dataKey="perRetReal" stroke="#e9c53d" strokeWidth={2}
               dot={false} isAnimationActive={false} name="Pension" />
           </LineChart>
         </ResponsiveContainer>
@@ -229,18 +229,18 @@ function ChartsTab({ rows, params, rung }) {
         </div>
         <ResponsiveContainer width="100%" height={260}>
           <AreaChart data={chartData} margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
-            <CartesianGrid stroke="rgba(14,26,43,0.06)" strokeDasharray="2 4" vertical={false} />
-            <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(14,26,43,0.2)' }}
+            <CartesianGrid stroke="rgba(5,193,173,0.08)" strokeDasharray="2 4" vertical={false} />
+            <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(5,193,173,0.2)' }}
               tick={axisTickStyle} ticks={[2030, 2045, 2060, 2075, 2090]} />
             <YAxis tickLine={false} axisLine={false} width={56} tick={axisTickStyle}
               tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : Math.round(v)} />
             <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} iconType="square" />
             <Tooltip {...tooltipProps} formatter={v => [fmt(Math.round(v)) + ' Md€', '']}
               labelFormatter={l => 'Année ' + l} />
-            <Area type="monotone" dataKey="legacyExp"  stackId="1" stroke="#ef4444" fill="#fca5a5" name="Legacy (système actuel)" />
-            <Area type="monotone" dataKey="transPayg"  stackId="1" stroke="#d97706" fill="#fde68a" name="Transitionnels" />
-            <Area type="monotone" dataKey="ndcPayg"    stackId="1" stroke="#7c3aed" fill="#ddd6fe" name="NDC (Suède)" />
-            <Area type="monotone" dataKey="capiPayout" stackId="1" stroke="#059669" fill="#86efac" name="Capitalisation" />
+            <Area type="monotone" dataKey="legacyExp"  stackId="1" stroke="#e05c4e" fill="rgba(224,92,78,0.30)" name="Legacy (système actuel)" />
+            <Area type="monotone" dataKey="transPayg"  stackId="1" stroke="#e9c53d" fill="rgba(233,197,61,0.30)" name="Transitionnels" />
+            <Area type="monotone" dataKey="ndcPayg"    stackId="1" stroke="#9b72f0" fill="rgba(155,114,240,0.30)" name="NDC (Suède)" />
+            <Area type="monotone" dataKey="capiPayout" stackId="1" stroke="#05c1ad" fill="rgba(5,193,173,0.30)" name="Capitalisation" />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -592,7 +592,7 @@ function PovTab({ params, rows, cfRows, collapse, rung }) {
           <div className="sim-pov-cohort-label">Année de naissance</div>
           <div style={{ fontSize: 24, fontFamily: 'Playfair Display, serif', fontWeight: 600 }}>
             {birthYear}
-            <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: '#6b7a8f', marginLeft: 12, letterSpacing: '0.08em' }}>
+            <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: '#b8c1d1', marginLeft: 12, letterSpacing: '0.08em' }}>
               {data.ageInY0} ans en 2027
             </span>
           </div>
@@ -695,17 +695,17 @@ function DiagnosticsTab({ params, rows, baseRows }) {
             </div>
             <ResponsiveContainer width="100%" height={260}>
               <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
-                <CartesianGrid stroke="rgba(14,26,43,0.06)" strokeDasharray="2 4" vertical={false} />
-                <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(14,26,43,0.2)' }}
+                <CartesianGrid stroke="rgba(5,193,173,0.08)" strokeDasharray="2 4" vertical={false} />
+                <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(5,193,173,0.2)' }}
                   tick={axisTickStyle} ticks={[2030, 2045, 2060, 2075, 2090]} />
                 <YAxis tickLine={false} axisLine={false} width={60} tick={axisTickStyle}
                   tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : Math.round(v)} />
                 <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} iconType="square" />
                 <Tooltip {...tooltipProps} formatter={v => [fmt(Math.round(v)) + ' Md€', '']}
                   labelFormatter={l => 'Année ' + l} />
-                <Area type="monotone" dataKey="bondStock" stroke="#c9a961" fill="#fef3c7" strokeWidth={2}
+                <Area type="monotone" dataKey="bondStock" stroke="#e9c53d" fill="rgba(233,197,61,0.20)" strokeWidth={2}
                   name="Stock obligations BR_t" dot={false} />
-                <Line type="monotone" dataKey="cumRepayFund" stroke="#0d9488" strokeWidth={2}
+                <Line type="monotone" dataKey="cumRepayFund" stroke="#05c1ad" strokeWidth={2}
                   name="Fonds de remboursement cumulé" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -721,16 +721,16 @@ function DiagnosticsTab({ params, rows, baseRows }) {
             </div>
             <ResponsiveContainer width="100%" height={260}>
               <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
-                <CartesianGrid stroke="rgba(14,26,43,0.06)" strokeDasharray="2 4" vertical={false} />
-                <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(14,26,43,0.2)' }}
+                <CartesianGrid stroke="rgba(5,193,173,0.08)" strokeDasharray="2 4" vertical={false} />
+                <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(5,193,173,0.2)' }}
                   tick={axisTickStyle} ticks={[2030, 2045, 2060, 2075, 2090]} />
                 <YAxis tickLine={false} axisLine={false} width={56} tick={axisTickStyle}
                   tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : Math.round(v)} />
                 <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} iconType="square" />
                 <Tooltip {...tooltipProps} formatter={v => [fmt(Math.round(v)) + ' Md€', '']}
                   labelFormatter={l => 'Année ' + l} />
-                <Bar dataKey="bondIssuance"   fill="#7c3aed" name="Émission initiale (t=0)" />
-                <Bar dataKey="bondRedemption" fill="#c9a961" name="Rachat annuel" />
+                <Bar dataKey="bondIssuance"   fill="#9b72f0" name="Émission initiale (t=0)" />
+                <Bar dataKey="bondRedemption" fill="#e9c53d" name="Rachat annuel" />
               </ComposedChart>
             </ResponsiveContainer>
             <div className="sim-chart-card-foot">
@@ -748,25 +748,25 @@ function DiagnosticsTab({ params, rows, baseRows }) {
           </div>
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
-              <CartesianGrid stroke="rgba(14,26,43,0.06)" strokeDasharray="2 4" vertical={false} />
-              <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(14,26,43,0.2)' }}
+              <CartesianGrid stroke="rgba(5,193,173,0.08)" strokeDasharray="2 4" vertical={false} />
+              <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(5,193,173,0.2)' }}
                 tick={axisTickStyle} ticks={[2030, 2045, 2060, 2075, 2090]} />
               <YAxis yAxisId="left" tickLine={false} axisLine={false} width={48} tick={axisTickStyle}
                 domain={[Math.floor((params.swedenABMFloor ?? 0.5) * 100), 100]}
                 tickFormatter={v => v + '%'} />
               <YAxis yAxisId="right" orientation="right" tickLine={false} axisLine={false} width={56}
                 tick={axisTickStyle} tickFormatter={v => Math.round(v)} />
-              <ReferenceLine yAxisId="left" y={100} stroke="#0d9488" strokeDasharray="3 3" strokeOpacity={0.5}
-                label={{ value: 'Sans coupe', position: 'right', fontSize: 10, fill: '#0d9488' }} />
+              <ReferenceLine yAxisId="left" y={100} stroke="#05c1ad" strokeDasharray="3 3" strokeOpacity={0.5}
+                label={{ value: 'Sans coupe', position: 'right', fontSize: 10, fill: '#05c1ad' }} />
               <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} iconType="square" />
               <Tooltip {...tooltipProps}
                 formatter={(v, name) => name === 'Coupe annuelle'
                   ? [fmt(Math.round(v)) + ' Md€', name]
                   : [fmt(v, 1) + ' %', name]}
                 labelFormatter={l => 'Année ' + l} />
-              <Area yAxisId="left" type="monotone" dataKey="abmFactorPct" stroke="#0d9488" fill="#a7f3d0"
+              <Area yAxisId="left" type="monotone" dataKey="abmFactorPct" stroke="#05c1ad" fill="rgba(5,193,173,0.25)"
                 strokeWidth={2} name="Indexation effective (%)" dot={false} />
-              <Bar yAxisId="right" dataKey="abmCut" fill="#b85c3c" name="Coupe annuelle" />
+              <Bar yAxisId="right" dataKey="abmCut" fill="#e05c4e" name="Coupe annuelle" />
             </ComposedChart>
           </ResponsiveContainer>
           <div className="sim-chart-card-foot">
@@ -782,19 +782,19 @@ function DiagnosticsTab({ params, rows, baseRows }) {
         </div>
         <ResponsiveContainer width="100%" height={380}>
           <ScatterChart margin={{ top: 16, right: 24, bottom: 48, left: 24 }}>
-            <CartesianGrid stroke="rgba(14,26,43,0.06)" strokeDasharray="2 4" />
+            <CartesianGrid stroke="rgba(5,193,173,0.08)" strokeDasharray="2 4" />
             <XAxis type="number" dataKey="peakDebt" name="Dette max"
-              label={{ value: 'Dette de transition max (k Md€)', position: 'insideBottom', offset: -28, fontSize: 11, fill: '#6b7a8f' }}
+              label={{ value: 'Dette de transition max (k Md€)', position: 'insideBottom', offset: -28, fontSize: 11, fill: '#b8c1d1' }}
               tick={axisTickStyle} tickFormatter={v => fmt(v, 1)} />
             <YAxis type="number" dataKey="avgRatio" name="Ratio actuariel"
-              label={{ value: 'Paiement / rente actuarielle (%)', angle: -90, position: 'insideLeft', dx: -8, fontSize: 11, fill: '#6b7a8f' }}
+              label={{ value: 'Paiement / rente actuarielle (%)', angle: -90, position: 'insideLeft', dx: -8, fontSize: 11, fill: '#b8c1d1' }}
               tick={axisTickStyle} tickFormatter={v => v.toFixed(0) + '%'} />
             <Tooltip cursor={{ strokeDasharray: '3 3' }}
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null
                 const d = payload[0].payload
                 return (
-                  <div style={{ background: '#fafaf7', border: '1px solid rgba(14,26,43,0.1)', padding: '8px 10px', fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#0e1a2b' }}>
+                  <div style={{ background: '#12182a', border: '1px solid rgba(5,193,173,0.2)', padding: '8px 10px', fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#e8edf5' }}>
                     <div><b>κ (K-cap balayage)</b> = {d.kappa}</div>
                     <div><b>φ (plancher annuité)</b> = {d.phi}</div>
                     <div><b>Dette max</b> = {fmt(d.peakDebt, 1)} k Md€</div>
