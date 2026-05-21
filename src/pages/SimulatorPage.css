@@ -669,3 +669,29 @@ body {
   .sim-pov-cohort-control input[type="range"] { width: 100%; }
   .sim-pov-output { grid-template-columns: 1fr; gap: 16px; }
 }
+
+/* ============ Inline params + KPIs (simple mode, charts tab) ============ */
+.sim-inline-section {
+  border-bottom: 1px solid var(--rule);
+  padding: 20px 24px;
+}
+.sim-inline-kpis { background: var(--bg-soft); }
+.sim-inline-section-header {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 14px;
+}
+/* Inside the inline KPI section the grid can be smaller */
+.sim-inline-kpis .sim-kpis {
+  grid-template-columns: repeat(4, 1fr);
+}
+@media (max-width: 900px) {
+  .sim-inline-kpis .sim-kpis { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 720px) {
+  .sim-inline-section { padding: 16px; }
+  .sim-inline-kpis .sim-kpis { grid-template-columns: 1fr 1fr; }
+}

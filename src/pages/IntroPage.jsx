@@ -384,9 +384,11 @@ const RISKS = [
   { t: "Le coût d'emprunt endogène",
     b: "Plus l'État emprunte, plus les marchés exigent un taux élevé. Le modèle utilise un taux endogène à 3 paliers calibré sur l'expérience française, italienne et américaine." },
   { t: 'La liquidation HLM',
-    b: "5 % du parc HLM/an alimente le fonds legacy. Le modèle applique une décote conservatrice plafonnée à 30 % pour absorber l'effet volume." },
+    b: "5 % du parc HLM/an alimente le fonds de transition (la structure qui porte les droits acquis pendant la bascule). Le modèle applique une décote conservatrice plafonnée à 30 % pour absorber l'effet volume." },
   { t: 'Le rendement capi',
     b: "L'hypothèse de base à 3 % réel est dans la fourchette historique conservatrice. Les fonds souverains comparables (Norvège, Singapour) affichent au-delà de 6 %." },
+  { t: 'Le changement de régime ~2069',
+    b: "Les graphiques montrent une inflexion vers 2069 : c'est la fin de la période de transition. Le dernier cotisant avec des droits PAYG partiels (né en 2005, entré dans le marché du travail en 2027) part à la retraite à 64 ans. Après cette date, tous les nouveaux retraités sont en capitalisation pure." },
 ]
 
 // ------------------------------------------------------------------
@@ -395,7 +397,7 @@ const RISKS = [
 // ------------------------------------------------------------------
 export default function IntroPage({ navigateTo }) {
   const runs = useMemo(() => LADDER_RUNGS.map(runRung), [])
-  const [mode, setMode] = useState('stepper') // 'stepper' | 'scrolly'
+  const [mode, setMode] = useState('scrolly') // 'stepper' | 'scrolly'
   const [activeIdx, setActiveIdx] = useState(0)
 
   // Allow ?mode=stepper|scrolly in the hash to pre-select a view
@@ -420,6 +422,15 @@ export default function IntroPage({ navigateTo }) {
             levier — et on voit ce qu'il coûte, ce qu'il rapporte, et où la
             dette atterrit.
           </p>
+          <div className="cc-deficit-callout">
+            <span className="cc-deficit-label">Le déficit aujourd'hui</span>
+            <span className="cc-deficit-amount">≈ 40 Md€/an</span>
+            <span className="cc-deficit-note">
+              Le système de retraite reçoit chaque année une subvention directe du
+              budget de l'État (CSG dédiée, FSV, TVA sociale). Ce sont vos impôts
+              qui comblent le trou — pas seulement les cotisations.
+            </span>
+          </div>
           <div className="cc-mode-switch">
             <button
               className={mode === 'stepper' ? 'is-active' : ''}
@@ -436,7 +447,7 @@ export default function IntroPage({ navigateTo }) {
           <div className="cc-eyebrow">Les cinq étapes</div>
           <ol>
             {LADDER_RUNGS.map(r => (
-              <li key={r.id}><strong>{r.label}</strong> — {r.short === 'Actuel' ? 'le système par répartition actuel, sous perfusion'
+              <li key={r.id}><strong>{r.label}</strong> — {r.short === 'Sans réforme' ? 'le système par répartition actuel, sous perfusion'
                 : r.short === 'Équinoxe' ? 'rééquilibrer côté prestations'
                 : r.short === 'Suède' ? 'compte notionnel + équilibrage automatique + petit pilier capi'
                 : r.short === 'Chili' ? 'capitalisation totale, dette de transition explicite'

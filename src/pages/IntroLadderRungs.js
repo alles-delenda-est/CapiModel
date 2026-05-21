@@ -77,7 +77,7 @@ export const LADDER_RUNGS = [
     id: 'actuel',
     num: 1,
     label: 'Système actuel',
-    short: 'Actuel',
+    short: 'Sans réforme',
     headline: 'Aujourd\u2019hui : un système par répartition sous perfusion',
     summary: "Avec la démographie actuelle, notre système par répartition suppose des transferts permanents du budget général (donc des autres taxes — CSG, FSV, TVA \u2248 40 Md€/an) pour boucler ses fins de mois, et cela ne suffit même pas car le budget de l'État est déficitaire pour cette raison. Sans réforme, la dépendance s'aggrave avec le vieillissement, et la dette avec, jusqu'à ce que nous nous retrouvions dans la même situation que les Grecs. Pour rappel, ils ont dû couper les dépenses de l'État à l'os. Avec les paramètres budgétaires de la France, seules de grosses coupes des retraites pourraient suffire.",
     closestPreset: 'derived (counterfactual + transferts BG actuels)',
