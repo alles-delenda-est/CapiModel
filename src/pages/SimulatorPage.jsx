@@ -323,6 +323,16 @@ function NumInput({ value, onChange, step = 0.01, unit, min, max, mul = 1, dp = 
   )
 }
 
+function SliderInput({ value, onChange, min = 0, max = 300, step = 10, unit = 'Md€/an' }) {
+  return (
+    <div className="sim-slider-input">
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={e => onChange(parseFloat(e.target.value))} />
+      <span className="sim-slider-value">{Math.round(value)} <span className="unit">{unit}</span></span>
+    </div>
+  )
+}
+
 function ParamGroup({ title, description, enabled, onToggle, children, alwaysOn }) {
   const [open, setOpen] = useState(false)
   return (
@@ -493,6 +503,27 @@ function ParamsTab({ params, setTweak, mode }) {
             ]} />
         </div>
       </ParamGroup>
+
+      {getEff('chileMode') && !(getEff('tauK') > 0) && (
+        <ParamGroup
+          title="Injection de capital emprunté"
+          description="L'État emprunte ce montant chaque année et l'investit directement dans le fonds. Augmente simultanément la dette et le fonds — le pari : r_capi > r_dette sur la durée."
+          enabled={(getEff('leveragedInjection') ?? 0) > 0}
+          onToggle={v => setTweak('leveragedInjection', v ? 50 : 0)}
+        >
+          <div className="sim-param-row">
+            <label>
+              Injection annuelle
+              <span className="sim-param-row-tip">Md€/an · empruntés et investis dans le fonds</span>
+            </label>
+            <SliderInput
+              value={getEff('leveragedInjection') ?? 0}
+              onChange={v => setTweak('leveragedInjection', v)}
+              min={0} max={300} step={10} unit="Md€/an"
+            />
+          </div>
+        </ParamGroup>
+      )}
 
       {mode === 'advanced' && (
         <ParamGroup

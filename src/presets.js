@@ -153,6 +153,36 @@ const equinoxeAndLabour = {
   },
 };
 
+/**
+ * pureCapi — Immediate full capitalisation for all active workers (cutoffAge 65).
+ * Accrued PAYG rights → recognition bonds. All cotisations → capi fund from t=0.
+ * No fiscal transfers, no tauK levy. Transition debt grows freely until capi
+ * payout organically displaces it. The central bet: r_capi > r_dette for 50+ yrs.
+ */
+const pureCapi = {
+  label: 'Capitalisation pure',
+  description: 'Bascule totale immédiate (cutoffAge 65). Droits acquis → obligations de reconnaissance. Cotisations intégralement vers le fonds. Aucun transfert fiscal, aucun prélèvement. La dette se rembourse organiquement quand le rendement du fonds dépasse le taux de la dette.',
+  params: {
+    ...UI_CONFIG,
+    useEquinoxe: true,
+    equinoxePhasing: 'phased-10y',
+    enableCapi: true,
+    chileMode: true,
+    swedenMode: false,
+    cutoffAge: 65,
+    hlmDiscount: true,
+    delta: 0.3,
+    rho: 0.05,
+    T_hlm: 20,
+    tauK: 0,
+    lambda: 0,
+    thetaBuffer: 0.01,
+    employmentRateTarget: 0.69,
+    fiscalTransferMode: 'none',
+    demoProfile: 'realistic',
+  },
+};
+
 export const PRESETS = {
   v1_default,
   v1_optimiste,
@@ -160,6 +190,7 @@ export const PRESETS = {
   equinoxeOnly,
   labourHousingOnly,
   equinoxeAndLabour,
+  pureCapi,
   // chileMode is a canonical toggle in the simulator UI, not a preset.
 };
 

@@ -28,6 +28,7 @@
   --rung-3: #05c1ad;
   --rung-4: #9b72f0;
   --rung-5: #c8d2e2;
+  --rung-6: #22d3ee;
 }
 
 * { box-sizing: border-box; }
@@ -475,6 +476,38 @@ body {
   font-size: 10px;
   letter-spacing: 0.08em;
 }
+
+.sim-slider-input {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+}
+.sim-slider-input input[type="range"] {
+  flex: 1;
+  -webkit-appearance: none; appearance: none;
+  height: 3px;
+  background: var(--rule-strong);
+  outline: none;
+  border-radius: 0;
+  cursor: pointer;
+}
+.sim-slider-input input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  background: var(--teal);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.sim-slider-input input[type="range"]::-moz-range-thumb {
+  width: 14px; height: 14px;
+  background: var(--teal);
+  border-radius: 50%;
+  cursor: pointer; border: 0;
+}
+.sim-slider-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: 0.06em;
+  color: var(--ink-1); white-space: nowrap; min-width: 80px; text-align: right;
+}
+.sim-slider-value .unit { color: var(--ink-3); margin-left: 3px; font-size: 9px; }
 
 .sim-param-seg {
   display: inline-flex; border: 1px solid var(--rule-strong);
