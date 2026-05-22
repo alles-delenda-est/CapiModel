@@ -246,6 +246,11 @@ export const DEFAULT_CONFIG = {
   // Floor caps the haircut so pensions never fall below `swedenABMFloor × pre-cut`.
   swedenABM: true,
   swedenABMFloor: 0.50,
+
+  // §5.X Leveraged injection (PR pure-capi): state borrows this amount each year
+  // and invests it directly in the capi fund. Adds symmetrically to D_t and K inflow.
+  // Units: Md€/yr (nominal). Only meaningful with chileMode and tauK=0.
+  leveragedInjection: 0,
 };
 
 // =================== Pure helpers ===================
@@ -1070,6 +1075,12 @@ export function runSimulation(userConfig = {}) {
     if (levy_t > 0) D_t = Math.max(0, D_t - levy_t);                           // (44)
     const netCapiFlow_t = C_s_capi_t + emplrToCap_t - levy_t;                   // (45)
 
+    // §5.X Leveraged injection: borrowed capital invested directly in capi fund.
+    // Adds to D_t (new borrowing) and to K inflow symmetrically.
+    const leveragedInjection_t = cfg.leveragedInjection ?? 0
+    D_t += leveragedInjection_t
+    const netCapiFlowFull_t = netCapiFlow_t + leveragedInjection_t
+
     // ---------- §5.12 Capi accumulation & GE penalty ----------
     // GE feedback (v1.2): tauK lowers K_t/GDP_t → lower gePenalty_t → higher r_c_eff_t.
     // This first-order offset is automatically captured here since capiToGdp uses
@@ -1165,7 +1176,7 @@ export function runSimulation(userConfig = {}) {
     // Must happen before §5.12 uses capiAssetShare_t so the running sum reflects
     // contributions that entered K_t this period (netCapiFlow_t was already added
     // to K_t implicitly via K_avail_t below).
-    sumCapiContrib += netCapiFlow_t;
+    sumCapiContrib += netCapiFlowFull_t;
 
     // capiAssetShare_t (53a):
     //   overlapping — accounting identity: cumulative net capi contributions / K_open_t.
@@ -1175,7 +1186,7 @@ export function runSimulation(userConfig = {}) {
     if (effectiveCashFlowMode === 'balanced') {
       // K_avail must be computed early in balanced mode so the share denominator
       // is internally consistent. Compute it here; the cascade reuses it.
-      K_avail_t = K_t * (1 + r_cn_eff_t) + netCapiFlow_t;                        // (50″)
+      K_avail_t = K_t * (1 + r_cn_eff_t) + netCapiFlowFull_t;                        // (50″)
       capiAssetShare_t = computeCapiAssetShareBalanced({
         K_avail_t,
         sumCapiContrib,
@@ -1207,7 +1218,7 @@ export function runSimulation(userConfig = {}) {
 
       // K_avail: full nominal return (real + inflation) + new contributions.
       // Unlike Stage 1, floor is paid from here so GE-penalty years are safe.
-      K_avail_t = K_t * (1 + r_cn_eff_t) + netCapiFlow_t;                      // (50′)
+      K_avail_t = K_t * (1 + r_cn_eff_t) + netCapiFlowFull_t;                      // (50′)
 
       // Floor: full pot-based annuity drawn from K_avail (not from cascade budget).
       // annuityRate_t ≈ 5.59%/yr ensures every capi retiree receives their actuarially
@@ -1405,12 +1416,12 @@ export function runSimulation(userConfig = {}) {
       fundReturnCapi_t     = realReturn_t;
       capiLegacyXSub_t     = 0;
       capiContribXSub_t    = 0;
-      capiReinvest_t       = Math.max(0, K_t - K_open_t - netCapiFlow_t);
+      capiReinvest_t       = Math.max(0, K_t - K_open_t - netCapiFlowFull_t);
       // ======== END BALANCED CASCADE ========
 
     } else {
       // ======== §5.12 / §5.13 LEGACY WATERFALL (v1.3) ========
-      K_avail_t = K_t * (1 + r_cn_eff_t) + netCapiFlow_t;                      // (50)
+      K_avail_t = K_t * (1 + r_cn_eff_t) + netCapiFlowFull_t;                      // (50)
 
       // In swedenMode the funded pillar (PPM) only covers sigma_capi_t of each
       // reform-cohort retiree's pension; the NDC PAYG side (ndcPaygPension_t,
@@ -1506,7 +1517,7 @@ export function runSimulation(userConfig = {}) {
       borrowed_t,
       // §5.11 levy
       T_lambda_eff, levyActivation, levyPhaseOut, levyFactor,
-      grossLevy_t, levy_t, netCapiFlow_t,
+      grossLevy_t, levy_t, netCapiFlow_t, leveragedInjection_t,
       // §5.12 capi accumulation
       capiToGdp_t, gePenalty_t, r_c_eff_t, r_cn_eff_t, K_avail_t,
       // §5.13 payouts
