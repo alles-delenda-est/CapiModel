@@ -208,7 +208,7 @@ export default function TransitionWalkthrough({ navigateTo }) {
       changeHeadline: 'Aucune réforme',
       narrative: `Le système par répartition est maintenu tel quel. La courbe démographique réaliste retient un pic des retraités à ${DEMOGRAPHIC_PROFILES.realistic.peakMult.toFixed(2)}× le niveau de 2027 et un plateau à ${DEMOGRAPHIC_PROFILES.realistic.longRunMult.toFixed(2)}×, plus défavorable que les projections du COR (1,30× / 1,25×). Le ratio de dépendance change de ${fmtPctPP(sims[0].depRatioChange)} entre 2027 et 2070 — au-delà de la projection COR centrale (+42% vers +48% selon la source).`,
       chart1Subtitle: 'Le statu quo : la faillite inévitable',
-      chartExplain1: 'Les pensions versées (zone rouge) croissent avec le nombre de retraités. Le financement courant, c-à-d les cotisations (ligne bleue), suit la masse salariale. L’écart entre les deux grandit, le recours à la dette avec lui.',
+      chartExplain1: 'Les retraites versées (zone rouge) croissent avec le nombre de retraités. Le financement courant, c-à-d les cotisations (ligne bleue), suit la masse salariale. L’écart entre les deux grandit, le recours à la dette avec lui.',
       chartExplain2: 'Sans réforme et avec une démographie défavorable, la dette publique (zones bleues + ambre) explose. Afin de rester lisible, ce graphique s’arrête dès que la dette atteint 500% du PIB, un record absolu à ma connaissance, et de très loin. Bien avant d’arriver là la France ne pourrait plus payer les retraites.',
       debtLabel: 'Trajectoire dette actuelle',
     },
@@ -216,10 +216,10 @@ export default function TransitionWalkthrough({ navigateTo }) {
       id: 'equinoxe',
       label: 'Équinoxe',
       title: 'Rééquilibrage Équinoxe (3 composantes)',
-      changeHeadline: 'Réduction progressive des pensions élevées + restauration CSG/CRDS',
-      narrative: 'Le rééquilibrage Équinoxe consiste en trois composantes : (1) des baisses progressives sur les pensions au-dessus de 1 800 €/mois (plafonné à 20% au-delà de 4 000 €) — ~17,7 Md€/an d’économies ; (2) abolition de l’abattement IR de 10% — ~5 Md€/an ; (3) restauration de la CSG/CRDS taux plein sur tous les retraités — ~5 Md€/an de recette fiscale. Total t=0 : ~22,7 Md€/an d’économies côté prestation + ~5 Md€/an de recette côté impôt.',
+      changeHeadline: 'Réduction progressive des retraites élevées + restauration CSG/CRDS',
+      narrative: 'Le rééquilibrage Équinoxe consiste en trois composantes : (1) des baisses progressives sur les retraites au-dessus de 1 800 €/mois (plafonné à 20% au-delà de 4 000 €) — ~17,7 Md€/an d’économies ; (2) abolition de l’abattement IR de 10% — ~5 Md€/an ; (3) restauration de la CSG/CRDS taux plein sur tous les retraités — ~5 Md€/an de recette fiscale. Total t=0 : ~22,7 Md€/an d’économies côté prestation + ~5 Md€/an de recette côté impôt.',
       chart1Subtitle: 'Réformer le modèle actuel : retarder (de peu) l’échéance',
-      chartExplain1: 'La zone des pensions (rouge) diminue par rapport au statu quo (grisée) grâce au rééquilibrage Équinoxe. Le financement (bleu) augmente légèrement avec les recettes additionnelles de CSG/CRDS.',
+      chartExplain1: 'La zone des retraites (rouge) diminue par rapport au statu quo (grisée) grâce au rééquilibrage Équinoxe. Le financement (bleu) augmente légèrement avec les recettes additionnelles de CSG/CRDS.',
       chartExplain2: 'Néanmoins, la facture reste hors de nos moyens. Ce graphique aussi s’arrête dès que la dette atteint 500% du PIB.',
       debtLabel: 'Trajectoire dette avec Équinoxe',
     },
@@ -395,7 +395,7 @@ export default function TransitionWalkthrough({ navigateTo }) {
       {/* Chart 1: Pension flows */}
       <section className="tw-section">
         <div className="tw-chart-block">
-          <h3>Pensions versées vs. financement</h3>
+          <h3>Retraites versées vs. financement</h3>
           {STAGES[currentStage].chart1Subtitle && (
             <div className="tw-chart-subtitle">{STAGES[currentStage].chart1Subtitle}</div>
           )}
@@ -421,7 +421,7 @@ export default function TransitionWalkthrough({ navigateTo }) {
                     <Area key={`le_${i}`} type="monotone" dataKey={`legacyExp_${i}`} stackId={`pensions_${i}`}
                       fill="#dc2626" fillOpacity={o * 0.35} stroke="#dc2626" strokeOpacity={o}
                       strokeWidth={isCurrent ? 2 : 1} dot={false} isAnimationActive={false}
-                      name={isCurrent ? 'Pensions legacy' : undefined}
+                      name={isCurrent ? 'Retraites (répartition)' : undefined}
                       legendType={isCurrent ? 'plainline' : 'none'} />
                   )
                 }
@@ -430,7 +430,7 @@ export default function TransitionWalkthrough({ navigateTo }) {
                     <Area key={`cp_${i}`} type="monotone" dataKey={`capiPayout_${i}`} stackId={`pensions_${i}`}
                       fill="#34d399" fillOpacity={o * 0.35} stroke="#059669" strokeOpacity={o}
                       strokeWidth={isCurrent ? 2 : 1} dot={false} isAnimationActive={false}
-                      name={isCurrent ? 'Pensions capi' : undefined}
+                      name={isCurrent ? 'Retraites (capitalisation)' : undefined}
                       legendType={isCurrent ? 'plainline' : 'none'} />
                   )
                 }

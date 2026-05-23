@@ -143,7 +143,7 @@ function ChartsTab({ rows, params, rung }) {
           au-delà de 150 % du PIB, et dans l'absence de réforme crédible engagée,
           les taux d'intérêt grimpent de 4 %/an. À 300 % du PIB, un événement de{' '}
           <em>restructuration forcée</em> plafonne la dette et déclenche une coupe nominale
-          de 50 % des pensions, étalée sur 3 ans.{' '}
+          de 50 % des retraites, étalée sur 3 ans.{' '}
           <strong>Aucun pays n'a soutenu une dette supérieure à 300 % du PIB sans
           restructuration</strong> (cf. Reinhart &amp; Rogoff, <em>This Time Is Different</em>).
           {collapse && (
@@ -158,7 +158,7 @@ function ChartsTab({ rows, params, rung }) {
       <div className="sim-chart-card is-wide">
         <div className="sim-chart-h">
           <h3>Dette publique cumulée</h3>
-          <span className="sim-chart-h-unit">Md€</span>
+          <span className="sim-chart-h-unit">Md€ · nominal, €courants</span>
         </div>
         <ResponsiveContainer width="100%" height={260}>
           <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
@@ -204,7 +204,7 @@ function ChartsTab({ rows, params, rung }) {
 
       <div className="sim-chart-card">
         <div className="sim-chart-h">
-          <h3>Pension moyenne par retraité</h3>
+          <h3>Retraite moyenne par retraité</h3>
           <span className="sim-chart-h-unit">€/mois, réel 2027</span>
         </div>
         <ResponsiveContainer width="100%" height={220}>
@@ -214,10 +214,10 @@ function ChartsTab({ rows, params, rung }) {
               tick={axisTickStyle} ticks={[2030, 2050, 2070, 2090]} />
             <YAxis tickLine={false} axisLine={false} width={56} tick={axisTickStyle}
               tickFormatter={v => fmt(Math.round(v))} />
-            <Tooltip {...tooltipProps} formatter={v => [fmt(Math.round(v)) + ' €/mo', 'Pension']}
+            <Tooltip {...tooltipProps} formatter={v => [fmt(Math.round(v)) + ' €/mo', 'Retraite']}
               labelFormatter={l => 'Année ' + l} />
             <Line type="monotone" dataKey="perRetReal" stroke="#e9c53d" strokeWidth={2}
-              dot={false} isAnimationActive={false} name="Pension" />
+              dot={false} isAnimationActive={false} name="Retraite" />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -266,7 +266,7 @@ function KpisTab({ k }) {
     },
     { label: 'Économies Équinoxe (t=0)', value: fmt(k.S0, 0), unit: 'Md€/an', sub: 'Effet annuel à régime' },
     { label: 'PV dépenses legacy', value: fmt(k.pvLegacyTotal, 0), unit: 'Md€', sub: 'Valeur actualisée 70 ans' },
-    { label: 'PV pensions capi', value: fmt(k.pvCapiPayoutTotal, 0), unit: 'Md€', sub: 'Valeur actualisée 70 ans' },
+    { label: 'PV retraites capi', value: fmt(k.pvCapiPayoutTotal, 0), unit: 'Md€', sub: 'Valeur actualisée 70 ans' },
   ]
   return (
     <div className="sim-kpis">
@@ -360,7 +360,7 @@ function ParamsTab({ params, setTweak, mode }) {
     <div className="sim-params">
       <ParamGroup
         title="Rééquilibrage Équinoxe"
-        description="Réduction progressive des pensions élevées, restauration CSG/CRDS, fin de l'abattement forfaitaire."
+        description="Réduction progressive des retraites élevées, restauration CSG/CRDS, fin de l'abattement forfaitaire."
         enabled={getEff('useEquinoxe')}
         onToggle={v => setTweak('useEquinoxe', v)}
       >
@@ -507,14 +507,14 @@ function ParamsTab({ params, setTweak, mode }) {
       {getEff('chileMode') && !(getEff('tauK') > 0) && (
         <ParamGroup
           title="Injection de capital emprunté"
-          description="L'État emprunte ce montant chaque année et l'investit directement dans le fonds. Augmente simultanément la dette et le fonds — le pari : r_capi > r_dette sur la durée."
+          description="L'État emprunte ce montant chaque année et l'investit directement dans le fonds capitalisé. La dette et le fonds augmentent simultanément — le pari est que le rendement du fonds dépasse le taux d'emprunt sur la durée."
           enabled={(getEff('leveragedInjection') ?? 0) > 0}
           onToggle={v => setTweak('leveragedInjection', v ? 50 : 0)}
         >
           <div className="sim-param-row">
             <label>
               Injection annuelle
-              <span className="sim-param-row-tip">Md€/an · empruntés et investis dans le fonds</span>
+              <span className="sim-param-row-tip">empruntés et investis dans le fonds</span>
             </label>
             <SliderInput
               value={getEff('leveragedInjection') ?? 0}
@@ -598,14 +598,14 @@ function PovTab({ params, rows, cfRows, collapse, rung }) {
       {reformHaircutActive && (
         <div className="sim-callout sim-callout-warn" style={{ marginBottom: 16 }}>
           <strong>Retraite après la restructuration ({collapse.collapseYear}) :</strong>{' '}
-          en l'absence de réforme, vous subiriez la coupe de 50 % des pensions appliquée
+          en l'absence de réforme, vous subiriez la coupe de 50 % des retraites appliquée
           sur 3 ans. Les chiffres ci-dessous en tiennent compte.
         </div>
       )}
       {cfHaircutActive && !reformHaircutActive && (
         <div className="sim-callout sim-callout-warn" style={{ marginBottom: 16 }}>
           <strong>Comparaison honnête — sans réforme, restructuration vers {collapse.collapseYear} :</strong>{' '}
-          la pension « sans réforme » ci-dessous inclut la coupe de 50 % que le scénario
+          la retraite « sans réforme » ci-dessous inclut la coupe de 50 % que le scénario
           du statu quo entraînerait pour votre génération. Votre gain net réel est donc{' '}
           <strong>{fmtSigned(gain)} €/mois</strong>.
         </div>
@@ -637,7 +637,7 @@ function PovTab({ params, rows, cfRows, collapse, rung }) {
 
       <div className="sim-pov-output">
         <div>
-          <div className="sim-pov-out-label">Pension mensuelle (réforme)</div>
+          <div className="sim-pov-out-label">Retraite mensuelle (réforme)</div>
           <div>
             <span className="sim-pov-out-value">{fmt(data.monthlyPensionTotal)}</span>
             <span className="sim-pov-out-unit">€/mois</span>
@@ -649,7 +649,7 @@ function PovTab({ params, rows, cfRows, collapse, rung }) {
           </div>
         </div>
         <div>
-          <div className="sim-pov-out-label">Pension sans réforme</div>
+          <div className="sim-pov-out-label">Retraite sans réforme</div>
           <div>
             <span className="sim-pov-out-value">{fmt(data.monthlyPensionCF)}</span>
             <span className="sim-pov-out-unit">€/mois</span>
@@ -776,7 +776,7 @@ function DiagnosticsTab({ params, rows, baseRows }) {
       {isSweden && (
         <div className="sim-chart-card is-wide">
           <div className="sim-chart-h">
-            <h3>Équilibrage automatique (ABM) — indexation effective des pensions</h3>
+            <h3>Équilibrage automatique (ABM) — indexation effective des retraites</h3>
             <span className="sim-chart-h-unit">% · Mode Suédois</span>
           </div>
           <ResponsiveContainer width="100%" height={260}>
@@ -862,7 +862,7 @@ function DiagnosticsTab({ params, rows, baseRows }) {
           </div>
           <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '8px 0 0', lineHeight: 1.55 }}>
             <strong>Mode Chilien</strong> (rung 4 ou 5) ajoute deux graphiques : stock d'obligations vs fonds de remboursement et émissions/rachats annuels.<br/>
-            <strong>Mode Suédois</strong> (rung 3) ajoute un graphique de l'indexation effective des pensions sous le mécanisme d'équilibrage automatique.
+            <strong>Mode Suédois</strong> (rung 3) ajoute un graphique de l'indexation effective des retraites sous le mécanisme d'équilibrage automatique.
           </p>
         </div>
       )}

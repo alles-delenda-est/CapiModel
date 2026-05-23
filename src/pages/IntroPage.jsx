@@ -371,7 +371,7 @@ const PILLARS = [
   { num: 'I',   title: 'La Justice',
     body: "Acter la justice intergénérationnelle. Chaque génération assume sa propre retraite — fini de faire payer aux actifs des promesses non provisionnées." },
   { num: 'II',  title: 'La Sobriété',
-    body: "Indexation prudente, courbe Équinoxe sur les pensions élevées, fin de l'abattement forfaitaire. Le système doit redevenir soutenable." },
+    body: "Indexation prudente, courbe Équinoxe sur les retraites élevées, fin de l'abattement forfaitaire. Le système doit redevenir soutenable." },
   { num: 'III', title: 'Le Courage',
     body: "Libéraliser le marché du travail pour générer les cotisations dont nous avons besoin — sans casser le filet social, parmi les plus complets au monde." },
   { num: 'IV',  title: 'La Prudence',

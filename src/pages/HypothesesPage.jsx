@@ -335,7 +335,7 @@ export default function HypothesesPage() {
         <table className="hyp-table">
           <tbody>
             <tr><td><strong>COR</strong></td><td>Conseil d'orientation des retraites</td></tr>
-            <tr><td><strong>CSG / CRDS</strong></td><td>Contribution sociale généralisée / Contribution au remboursement de la dette sociale — prélèvements sociaux sur les revenus, y compris les pensions</td></tr>
+            <tr><td><strong>CSG / CRDS</strong></td><td>Contribution sociale généralisée / Contribution au remboursement de la dette sociale — prélèvements sociaux sur les revenus, y compris les retraites</td></tr>
             <tr><td><strong>DREES</strong></td><td>Direction de la recherche, des études, de l'évaluation et des statistiques (ministère des Solidarités)</td></tr>
             <tr><td><strong>INSEE</strong></td><td>Institut national de la statistique et des études économiques</td></tr>
             <tr><td><strong>OAT</strong></td><td>Obligation assimilable du Trésor — la dette souveraine française</td></tr>
