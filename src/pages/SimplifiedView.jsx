@@ -122,7 +122,7 @@ export default function SimplifiedView({ navigateTo }) {
     if (kpis.peakDebtYear) {
       items.push({
         year: kpis.peakDebtYear,
-        label: `Pic de dette : ${fmtMd(kpis.peakDebt)}`,
+        label: kpis.peakDebt > 20000 ? 'Dette en croissance non soutenable' : `Pic de dette : ${fmtMd(kpis.peakDebt)}`,
         detail: 'Le besoin de financement de la transition atteint son maximum',
       })
     }
@@ -132,8 +132,8 @@ export default function SimplifiedView({ navigateTo }) {
     if (crossover) {
       items.push({
         year: crossover.year,
-        label: 'Bascule des pensions',
-        detail: 'Les pensions du nouveau système dépassent celles de l\'ancien',
+        label: 'Bascule des retraites',
+        detail: 'Les retraites du nouveau système dépassent celles de l\'ancien',
       })
     }
 
@@ -181,8 +181,10 @@ export default function SimplifiedView({ navigateTo }) {
       } else {
         debtSentence = `L'État devrait emprunter jusqu'à ${fmtMd(peakDebt)} (pic en ${peakDebtYear}). La dette serait remboursée d'ici ${debtFreeYear}, soit ${duration}ans après le début de la réforme. C'est un délai long qui suppose une stabilité économique durable.`
       }
+    } else if (peakDebt > 20000) {
+      debtSentence = `Sous ces hypothèses, la dette augmente indéfiniment — le fonds rapporte moins que le coût de l'emprunt, et le déficit se creuse chaque année sans jamais se résorber.`
     } else {
-      debtSentence = `L'État devrait emprunter jusqu'à ${fmtMd(peakDebt)} (pic en ${peakDebtYear}). Attention: la dette ne serait pas entièrement remboursée dans l'horizon de ${params.N}ans simulé.`
+      debtSentence = `L'État devrait emprunter jusqu'à ${fmtMd(peakDebt)} (pic en ${peakDebtYear}). Attention : la dette ne serait pas entièrement remboursée dans l'horizon de ${params.N} ans simulé.`
     }
 
     const capiSentence = `À terme, l'épargne retraite collective atteindrait ${fmtMd(finalCapiReal)} en euros d'aujourd'hui (corrigés de l'inflation).`
@@ -418,8 +420,8 @@ export default function SimplifiedView({ navigateTo }) {
             <thead>
               <tr>
                 <th>Année</th>
-                <th>Pensions ancien système (Md€)</th>
-                <th>Pensions nouveau système (Md€)</th>
+                <th>Retraites ancien système (Md€)</th>
+                <th>Retraites nouveau système (Md€)</th>
                 <th>Dette de transition (Md€)</th>
                 <th>Épargne retraite réelle (Md€)</th>
               </tr>
@@ -447,12 +449,12 @@ export default function SimplifiedView({ navigateTo }) {
 
         {/* Chart 1: Pension split */}
         <div className="sv-chart-block">
-          <h3>Comment les pensions évoluent au fil du temps</h3>
+          <h3>Comment les retraites évoluent au fil du temps</h3>
           <p className="sv-chart-explain">
-            Les pensions de l'ancien système (en rouge) diminuent à mesure
+            Les retraites de l'ancien système (en rouge) diminuent à mesure
             que les retraités actuels partent, tandis que le nouveau système
             de retraite par capitalisation (en vert) prend le relais. La ligne
-            pointillée montre le total des pensions versées.
+            pointillée montre le total des retraites versées.
           </p>
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData} margin={{ bottom: 20 }}>
@@ -467,7 +469,7 @@ export default function SimplifiedView({ navigateTo }) {
                 fill="#86efac" stroke="#059669" name="Nouveau système (capitalisation)" />
               <Line type="monotone" dataKey="totalPensionExp"
                 stroke="#1e293b" strokeWidth={2} strokeDasharray="5 5"
-                name="Total des pensions" dot={false} />
+                name="Total des retraites" dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
