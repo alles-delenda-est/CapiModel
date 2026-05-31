@@ -1,5 +1,2 @@
-[project]
-project_id = "sqsqkspbwlvplbrypgpe"
-
 [functions.feedback-digest]
 verify_jwt = false
