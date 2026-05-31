@@ -2,3 +2,5 @@ node_modules
 dist
 .vercel
 settings.local.json
+CapiModel_details_local
+CapiModel_details_local.txt
