@@ -169,9 +169,9 @@ function ChartsTab({ rows, params, rung }) {
           <em>restructuration forcée</em> plafonne la dette et déclenche une coupe nominale
           de 50 % des retraites, étalée sur 3 ans.{' '}
           <strong>Aucun pays n'a soutenu une dette supérieure à 300 % du PIB sans
-          restructuration</strong>{' '}
+          restructuration</strong>
           <Cite tooltip="Reinhart, Carmen M. & Rogoff, Kenneth S. — This Time Is Different: Eight Centuries of Financial Folly (2009). Étude empirique de 800 ans de crises de dette souveraine dans 66 pays. Conclusion centrale : les pays qui laissent leur dette dépasser 90 % du PIB connaissent systématiquement une compression de croissance ; aucun n'a évité une restructuration ou un défaut au-delà de 300 %.">
-            (cf. Reinhart &amp; Rogoff, <em>This Time Is Different</em>)
+            <sup className="fn-sup">1</sup>
           </Cite>.{' '}
           Cela est, évidemment, sans tenir compte de toutes les autres parties de la société
           sacrifiées pour financer les retraites que nous ne pouvons plus nous permettre :
