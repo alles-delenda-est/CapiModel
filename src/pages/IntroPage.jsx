@@ -243,7 +243,7 @@ function ChartGroup({ runs, activeIdx }) {
         dataKey="debtMdE"
         title="Dette publique cumulée (régime retraites)"
         unit="Md€"
-        fmtFn={v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : Math.round(v).toString()}
+        fmtFn={v => Math.abs(v) >= 1000 ? Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "'") : Math.round(v).toString()}
         height={130}
       />
     </>
