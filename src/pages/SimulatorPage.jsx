@@ -25,6 +25,30 @@ const fmt = (n, d = 0) =>
   }).format(n)
 const fmtSigned = (n, d = 0) => (n > 0 ? '+' : '') + fmt(n, d)
 
+// Axis tick formatter: uses apostrophe thousands separator instead of "k"
+// e.g. 1500 → "1'500", 500 → "500"
+const fmtAxis = v => Math.abs(v) >= 1000
+  ? Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "'")
+  : Math.round(v)
+
+// Inline citation with hover tooltip
+function Cite({ children, tooltip }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <span
+      className="sim-cite"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+      tabIndex={0}
+    >
+      {children}
+      {open && <span className="sim-cite-tooltip" role="tooltip">{tooltip}</span>}
+    </span>
+  )
+}
+
 // Mirror of UI_CONFIG from src/presets.js
 const UI_BASE = {
   ...DEFAULT_CONFIG,
@@ -145,7 +169,14 @@ function ChartsTab({ rows, params, rung }) {
           <em>restructuration forcée</em> plafonne la dette et déclenche une coupe nominale
           de 50 % des retraites, étalée sur 3 ans.{' '}
           <strong>Aucun pays n'a soutenu une dette supérieure à 300 % du PIB sans
-          restructuration</strong> (cf. Reinhart &amp; Rogoff, <em>This Time Is Different</em>).
+          restructuration</strong>
+          <Cite tooltip="Reinhart, Carmen M. & Rogoff, Kenneth S. — This Time Is Different: Eight Centuries of Financial Folly (2009). Étude empirique de 800 ans de crises de dette souveraine dans 66 pays. Conclusion centrale : les pays qui laissent leur dette dépasser 90 % du PIB connaissent systématiquement une compression de croissance ; aucun n'a évité une restructuration ou un défaut au-delà de 300 %.">
+            <sup className="fn-sup">1</sup>
+          </Cite>.{' '}
+          Cela est, évidemment, sans tenir compte de toutes les autres parties de la société
+          sacrifiées pour financer les retraites que nous ne pouvons plus nous permettre :
+          des profs encore plus sous-payés et encore plus en sous-effectif, la justice encore
+          plus lente faute de moyens, les routes encore moins bien entretenues, et encore.
           {collapse && (
             <div style={{ marginTop: 6, fontWeight: 600 }}>
               Restructuration déclenchée en {collapse.collapseYear}
@@ -166,7 +197,7 @@ function ChartsTab({ rows, params, rung }) {
             <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(5,193,173,0.2)' }}
               tick={axisTickStyle} ticks={[2030, 2045, 2060, 2075, 2090]} />
             <YAxis tickLine={false} axisLine={false} width={60} tick={axisTickStyle}
-              tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : Math.round(v)} />
+              tickFormatter={fmtAxis} />
             <Tooltip {...tooltipProps}
               formatter={v => [fmt(v) + ' Md€', 'Dette']}
               labelFormatter={l => 'Année ' + l} />
@@ -233,7 +264,7 @@ function ChartsTab({ rows, params, rung }) {
             <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(5,193,173,0.2)' }}
               tick={axisTickStyle} ticks={[2030, 2045, 2060, 2075, 2090]} />
             <YAxis tickLine={false} axisLine={false} width={56} tick={axisTickStyle}
-              tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : Math.round(v)} />
+              tickFormatter={fmtAxis} />
             <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} iconType="square" />
             <Tooltip {...tooltipProps} formatter={v => [fmt(Math.round(v)) + ' Md€', '']}
               labelFormatter={l => 'Année ' + l} />
@@ -732,7 +763,7 @@ function DiagnosticsTab({ params, rows, baseRows }) {
                 <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(5,193,173,0.2)' }}
                   tick={axisTickStyle} ticks={[2030, 2045, 2060, 2075, 2090]} />
                 <YAxis tickLine={false} axisLine={false} width={60} tick={axisTickStyle}
-                  tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : Math.round(v)} />
+                  tickFormatter={fmtAxis} />
                 <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} iconType="square" />
                 <Tooltip {...tooltipProps} formatter={v => [fmt(Math.round(v)) + ' Md€', '']}
                   labelFormatter={l => 'Année ' + l} />
@@ -758,7 +789,7 @@ function DiagnosticsTab({ params, rows, baseRows }) {
                 <XAxis dataKey="year" tickLine={false} axisLine={{ stroke: 'rgba(5,193,173,0.2)' }}
                   tick={axisTickStyle} ticks={[2030, 2045, 2060, 2075, 2090]} />
                 <YAxis tickLine={false} axisLine={false} width={56} tick={axisTickStyle}
-                  tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : Math.round(v)} />
+                  tickFormatter={fmtAxis} />
                 <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} iconType="square" />
                 <Tooltip {...tooltipProps} formatter={v => [fmt(Math.round(v)) + ' Md€', '']}
                   labelFormatter={l => 'Année ' + l} />

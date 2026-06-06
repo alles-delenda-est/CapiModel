@@ -728,3 +728,54 @@ body {
   .sim-inline-section { padding: 16px; }
   .sim-inline-kpis .sim-kpis { grid-template-columns: 1fr 1fr; }
 }
+
+/* ---- Inline citation tooltip ---- */
+.sim-cite {
+  position: relative;
+  display: inline;
+  cursor: help;
+  border-bottom: 1px dotted var(--teal, #05c1ad);
+  color: inherit;
+}
+.sim-cite-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 300px;
+  max-width: 90vw;
+  background: var(--bg-card, #12182a);
+  border: 1px solid var(--rule-strong, rgba(5,193,173,0.25));
+  border-radius: 8px;
+  padding: 11px 13px;
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  color: var(--ink-2, #dae0ee);
+  line-height: 1.6;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  white-space: normal;
+  text-align: left;
+  pointer-events: none;
+}
+.sim-cite-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--rule-strong, rgba(5,193,173,0.25));
+}
+
+.sim-cite .fn-sup {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--teal, #05c1ad);
+  font-weight: 700;
+  vertical-align: super;
+  line-height: 0;
+  margin-left: 1px;
+}
