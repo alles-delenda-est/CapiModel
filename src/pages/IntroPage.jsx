@@ -4,7 +4,7 @@ import {
   ReferenceLine, ResponsiveContainer,
 } from 'recharts'
 import { runSimulation, DEFAULT_CONFIG } from '../simulation-engine.js'
-import { LADDER_RUNGS, applyGreekCollapseOverlay } from './IntroLadderRungs.js'
+import { LADDER_RUNGS, FOOTNOTES, applyGreekCollapseOverlay } from './IntroLadderRungs.js'
 import './IntroPage.css'
 
 // French number formatter
@@ -14,6 +14,58 @@ const fmt = (n, d = 0) =>
     maximumFractionDigits: d,
   }).format(n)
 const fmtSigned = (n, d = 0) => (n > 0 ? '+' : '') + fmt(n, d)
+
+// Footnote tooltip component — shown on hover, stays open while hovered.
+function Footnote({ id }) {
+  const [open, setOpen] = useState(false)
+  const fn = FOOTNOTES[id]
+  if (!fn) return null
+  return (
+    <span
+      className="fn-ref"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+      tabIndex={0}
+    >
+      <sup className="fn-sup">{fn.num}</sup>
+      {open && (
+        <span className="fn-tooltip" role="tooltip">
+          {fn.text}
+          {fn.url && (
+            <a
+              className="fn-tooltip-link"
+              href={fn.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+            >
+              Wikipedia →
+            </a>
+          )}
+        </span>
+      )}
+    </span>
+  )
+}
+
+// Renders a rung summary — either a plain string or a mixed array
+// containing strings and { fn: 'fn_1' } footnote markers.
+function RungSummary({ summary, className }) {
+  if (typeof summary === 'string') {
+    return <p className={className}>{summary}</p>
+  }
+  return (
+    <p className={className}>
+      {summary.map((part, i) =>
+        typeof part === 'string'
+          ? <span key={i}>{part}</span>
+          : <Footnote key={i} id={part.fn} />
+      )}
+    </p>
+  )
+}
 
 // Mirror of UI_CONFIG from src/presets.js — we don't import it directly
 // because the engine DEFAULT_CONFIG is already complete; UI_CONFIG only
@@ -227,10 +279,10 @@ function LadderStepper({ runs, activeIdx, setActiveIdx }) {
       <div className="cc-ladder-stage">
         <div className="cc-stage-side">
           <div className="cc-eyebrow" style={{ color: active.rung.color }}>
-            Étape {active.rung.num} sur 5
+            Étape {active.rung.num} sur 6
           </div>
           <h2>{active.rung.headline}</h2>
-          <p className="cc-stage-summary">{active.rung.summary}</p>
+          <RungSummary summary={active.rung.summary} className="cc-stage-summary" />
 
           <div className="cc-stage-kpis">
             <div className="cc-stage-kpi">
@@ -327,7 +379,7 @@ function LadderScrolly({ runs, activeIdx, setActiveIdx }) {
               {String(run.rung.num).padStart(2, '0')} · {run.rung.label}
             </div>
             <h2>{run.rung.headline}</h2>
-            <p>{run.rung.summary}</p>
+            <RungSummary summary={run.rung.summary} />
 
             <div className="cc-scrolly-step-kpis">
               <div>

@@ -433,3 +433,61 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   .cc-deficit-amount { grid-column: 1; grid-row: 2; }
   .cc-deficit-note   { grid-column: 1; grid-row: 3; }
 }
+
+/* ---- Footnote tooltips ---- */
+.fn-ref {
+  position: relative;
+  display: inline;
+  cursor: help;
+}
+.fn-sup {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--teal, #05c1ad);
+  font-weight: 700;
+  vertical-align: super;
+  line-height: 0;
+  margin-left: 1px;
+  border-bottom: 1px dotted var(--teal, #05c1ad);
+  padding-bottom: 1px;
+}
+.fn-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 320px;
+  max-width: 90vw;
+  background: var(--bg-card, #12182a);
+  border: 1px solid var(--rule-strong, rgba(5,193,173,0.25));
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-2, #dae0ee);
+  line-height: 1.6;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  pointer-events: auto;
+  white-space: normal;
+}
+.fn-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--rule-strong, rgba(5,193,173,0.25));
+}
+.fn-tooltip-link {
+  display: block;
+  margin-top: 8px;
+  color: var(--teal, #05c1ad);
+  font-size: 11px;
+  text-decoration: none;
+}
+.fn-tooltip-link:hover { text-decoration: underline; }

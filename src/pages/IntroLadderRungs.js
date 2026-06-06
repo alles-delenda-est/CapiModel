@@ -72,6 +72,20 @@ export function applyGreekCollapseOverlay(series, fieldMap) {
   }
 }
 
+// Footnotes referenced in rung summaries via { fn: 'fn_1' } markers.
+// Rendered by IntroPage as hover tooltips with optional URL.
+export const FOOTNOTES = {
+  fn_1: {
+    num: 1,
+    text: "La CDC est un établissement public financier créé en 1816, placé sous le contrôle direct du Parlement. Elle gère environ 170 Md€ d'actifs nets pour le compte de l'État. L'affectation de ses actifs au fonds de capitalisation fait du sens étant donné que la CDC est en réalité le gestionnaire de facto de l'épargne long-terme des Français — elle fait déjà ce qu'un fonds de capitalisation ferait, mais de manière opaque et sans lien direct avec les droits retraite individuels. Avec un fonds de départ pareil, le fonds de capitalisation pourrait assurer des rendements beaucoup plus importants pour les futurs retraités.",
+    url: "https://fr.wikipedia.org/wiki/Caisse_des_d%C3%A9p%C3%B4ts_et_consignations",
+  },
+  fn_2: {
+    num: 2,
+    text: "Les logements sociaux font souvent l'actualité ces derniers temps, jamais pour des raisons flatteuses. Le système actuel est à bout de souffle : pendant que des proches de partis de gauche se voient octroyer les meilleures places pour y rester même en tant que député gagnant trois fois le SMIC, les gens en réel besoin attendent littéralement des années pour un foyer trop souvent vétuste, mal équipé, et encore heureux quand ce n'est pas tout simplement insalubre. Ici nous proposons du gagnant-gagnant : l'État, manifestement incapable de gérer le parc actuel, le liquide sur 10 ans, le concept du « logement social » est supprimé de la loi, et à la place la même partie du budget est donnée directement aux foyers les plus modestes pour se loger à leur guise.",
+  },
+}
+
 export const LADDER_RUNGS = [
   {
     id: 'actuel',
@@ -128,7 +142,14 @@ export const LADDER_RUNGS = [
     label: 'Mode Suédois',
     short: 'Suède',
     headline: 'Suède : équilibrage automatique + petit pilier capi',
-    summary: "Cette proposition de réforme est inspirée du système suédois Inkomstpension (pension par revenu) + Premiepension (pension de prime), dernières « grandes réformes » dans un pays européen (1999). Dans ce modèle, nous restons dans un système par répartition, mais avec un compte notionnel par cotisant, complété par un petit pilier de capitalisation (contribution de 4 % des salaires, que les individus peuvent supplémenter). Le mécanisme d'équilibrage automatique (ABM) coupe l'indexation des retraites lorsque les ressources du système passent en-dessous des décaissements, gardant le système solvable sans recourir à la dette. Cette solution élimine le conflit intergénérationnel parce que les retraités et les actifs partagent les fruits de la croissance économique.",
+    summary: [
+      "Cette proposition de réforme est inspirée du système suédois Inkomstpension (pension par revenu) + Premiepension (pension de prime), dernières « grandes réformes » dans un pays européen (1999). Dans ce modèle, nous restons dans un système par répartition, mais avec un compte notionnel par cotisant, complété par un petit pilier de capitalisation (contribution de 4 % des salaires, que les individus peuvent supplémenter). Le mécanisme d'équilibrage automatique (ABM) coupe l'indexation des retraites lorsque les ressources du système passent en-dessous des décaissements, gardant le système solvable sans recourir à la dette. Cette solution élimine le conflit intergénérationnel parce que les retraités et les actifs partagent les fruits de la croissance économique. ",
+      "En option dans le simulateur, vous pouvez doper le fonds de capitalisation en y affectant les actifs nets de la Caisse des Dépôts et des Consignations ",
+      { fn: 'fn_1' },
+      " (CDC) et en liquidant le parc social sur 10 ans ",
+      { fn: 'fn_2' },
+      ".",
+    ],
     closestPreset: 'v1_default + swedenMode (canonical toggle)',
     color: '#05c1ad',
     greekCollapse: false,
@@ -155,7 +176,13 @@ export const LADDER_RUNGS = [
     label: 'Mode Chilien',
     short: 'Chili',
     headline: 'Chili : capitalisation totale + obligations de reconnaissance',
-    summary: "Notre deuxième alternative est de suivre le modèle chilien. Ici, les cotisations basculent intégralement vers la capitalisation. Les droits acquis sont convertis en obligations indexées sur l'inflation, qui se remboursent à mesure que chaque cotisant prend sa retraite. La dette de transition est explicite et lisible — mais elle est massive si on ne la finance pas.",
+    summary: [
+      "Notre deuxième alternative est de suivre le modèle chilien. Ici, les cotisations basculent intégralement vers la capitalisation. Les droits acquis sont convertis en obligations indexées sur l'inflation, qui se remboursent à mesure que chaque cotisant prend sa retraite. La dette de transition est explicite et lisible — mais elle est massive si on ne la finance pas, même avec l'affectation des actifs nets de la Caisse des Dépôts et des Consignations ",
+      { fn: 'fn_1' },
+      " (CDC) et la liquidation du parc social sur 10 ans ",
+      { fn: 'fn_2' },
+      ".",
+    ],
     closestPreset: 'v1_default + chileMode (canonical toggle)',
     color: '#9b72f0',
     greekCollapse: false,
