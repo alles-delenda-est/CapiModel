@@ -468,8 +468,14 @@ export default function IntroPage({ navigateTo }) {
     const transferts     = r0.fiscalTransfer_t ?? 0
     const besoinPrimaire = cotisations - depenses
     const soldeResiduel  = r0.netFlow_t ?? (besoinPrimaire + transferts)
+    // Cumulative budget-général subsidy 2027→2050: money actually diverted
+    // from the general budget (which funds justice/education/health), as
+    // opposed to the borrowed portion that becomes debt.
+    let cumTransferts = 0
+    for (let t = 0; t <= i50; t++) cumTransferts += base.rows[t].fiscalTransfer_t ?? 0
     return {
       cotisations, depenses, transferts, besoinPrimaire, soldeResiduel,
+      cumTransferts,
       depenses2050: r50.totalLegacyOutflow_t ?? 0,
       solde2050:    r50.netFlow_t ?? 0,
       debt2050:     r50.D_t ?? 0,
@@ -501,11 +507,13 @@ export default function IntroPage({ navigateTo }) {
           </p>
           <div className="cc-deficit-callout">
             <span className="cc-deficit-label">Sous perfusion aujourd'hui</span>
-            <span className="cc-deficit-amount">≈ 40 Md€/an</span>
+            <span className="cc-deficit-amount">
+              ≈ {cadrage ? fmt(Math.abs(Math.round(cadrage.besoinPrimaire))) : 46} Md€/an
+            </span>
             <span className="cc-deficit-note">
-              Le système de retraite reçoit chaque année une subvention directe du
-              budget de l'État (CSG dédiée, FSV, TVA sociale). Ce sont vos impôts
-              qui comblent le trou — pas seulement les cotisations.{' '}
+              Les cotisations ne couvrent pas les pensions versées : il manque
+              chaque année ce montant, comblé par vos impôts (CSG dédiée, FSV,
+              TVA sociale) et par l'emprunt — pas par les cotisations.{' '}
               <a className="cc-deficit-link" href="#cadrage">Voir les comptes ↓</a>
             </span>
           </div>
@@ -585,7 +593,7 @@ export default function IntroPage({ navigateTo }) {
             </div>
             <div className="cc-cadrage-flow-row is-total">
               <span className="cc-cadrage-flow-op">
-                Solde résiduel <em>financé par la dette</em>
+                Déficit résiduel <em>financé par la dette</em>
               </span>
               <span className="cc-cadrage-flow-calc" />
               <span className="cc-cadrage-flow-res is-bad">
@@ -596,7 +604,7 @@ export default function IntroPage({ navigateTo }) {
 
           <p className="cc-cadrage-clarif">
             <strong>Ce que masque le chiffre de {fmt(Math.round(cadrage.transferts))} Md€.</strong>{' '}
-            Le système n'affiche qu'un solde résiduel de{' '}
+            Le système n'affiche qu'un déficit résiduel de{' '}
             {fmt(Math.abs(Math.round(cadrage.soldeResiduel)))} Md€ — mais seulement
             parce que {fmt(Math.round(cadrage.transferts))} Md€ d'impôts sont
             injectés chaque année pour combler le trou. Ce ne sont pas les
@@ -637,6 +645,11 @@ export default function IntroPage({ navigateTo }) {
                 </span>
               </div>
             </div>
+            <p className="cc-cadrage-traj-diverted">
+              <strong>≈ {fmt(Math.round(cadrage.cumTransferts))} Md€</strong> de déficit
+              financé par le budget général sur ces 25 ans — autant de moyens
+              soustraits à la justice, à l'éducation et à la santé.
+            </p>
             <p className="cc-cadrage-traj-note">
               Hypothèses macro centrales : inflation 2 %/an, démographie COR,
               salaires réels +0,4 %/an. Au-delà de {cadrage.year2050}, l'horizon
