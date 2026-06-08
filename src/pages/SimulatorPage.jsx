@@ -584,6 +584,7 @@ function ParamsTab({ params, setTweak, mode }) {
 // ============================ Et pour vous tab ============================
 function PovTab({ params, rows, cfRows, collapse, rung }) {
   const [birthYear, setBirthYear] = useState(1985)
+  const [nominal, setNominal] = useState(false)
   const raw = useMemo(() => {
     try {
       // cfRows = rung 1 (status quo) rows, used as the universal "sans réforme"
@@ -619,6 +620,21 @@ function PovTab({ params, rows, cfRows, collapse, rung }) {
   }, [raw, reformHaircutActive, cfHaircutActive])
 
   const gain = data.monthlyGain
+
+  // Nominal/real display helpers
+  const Y0 = params.Y0 ?? 2027
+  const retT = Math.max(0, data.retirementYear - Y0)
+  const inflFactor = Math.pow(1 + (params.pi ?? 0.02), retT)
+  const disp = val => nominal ? Math.round(val * inflFactor) : val
+  const unitSuffix = nominal ? `€ courants ${data.retirementYear}` : '€ constants 2027'
+
+  // Representative worker monthly salary at retirement (real 2027 €), growing at real wage rate.
+  // W0 = total wage bill in Md€; /30 = per-worker k€/year; ×1000/12 = €/month.
+  const realMonthlyWage = Math.round(
+    (params.W0 ?? 1320) / 30 * Math.pow(1 + (params.w_r ?? 0.004), retT) * 1000 / 12,
+  )
+  const dispWage = disp(realMonthlyWage)
+
   return (
     <div className="sim-pov">
       <h3>Et pour vous ?</h3>
@@ -666,37 +682,56 @@ function PovTab({ params, rows, cfRows, collapse, rung }) {
         </div>
       </div>
 
+      <div className="sim-pov-toggle-row">
+        <span className="sim-pov-toggle-label">Afficher en</span>
+        <div className="sim-pov-toggle">
+          <button className={!nominal ? 'is-on' : ''} onClick={() => setNominal(false)}>€ constants 2027</button>
+          <button className={nominal ? 'is-on' : ''} onClick={() => setNominal(true)}>€ courants</button>
+        </div>
+      </div>
+
       <div className="sim-pov-output">
         <div>
           <div className="sim-pov-out-label">Retraite mensuelle (réforme)</div>
           <div>
-            <span className="sim-pov-out-value">{fmt(data.monthlyPensionTotal)}</span>
-            <span className="sim-pov-out-unit">€/mois</span>
+            <span className="sim-pov-out-value">{fmt(disp(data.monthlyPensionTotal))}</span>
+            <span className="sim-pov-out-unit">{unitSuffix}/mois</span>
           </div>
           <div className="sim-pov-out-sub">
             {data.monthlyCapiAnnuity > 0
-              ? <>Dont {fmt(data.monthlyPensionLegacy)} € répartition · {fmt(data.monthlyCapiAnnuity)} € capitalisation</>
+              ? <>Dont {fmt(disp(data.monthlyPensionLegacy))} € répartition · {fmt(disp(data.monthlyCapiAnnuity))} € capitalisation</>
               : <>Intégralement par répartition</>}
           </div>
         </div>
         <div>
           <div className="sim-pov-out-label">Retraite sans réforme</div>
           <div>
-            <span className="sim-pov-out-value">{fmt(data.monthlyPensionCF)}</span>
-            <span className="sim-pov-out-unit">€/mois</span>
+            <span className="sim-pov-out-value">{fmt(disp(data.monthlyPensionCF))}</span>
+            <span className="sim-pov-out-unit">{unitSuffix}/mois</span>
           </div>
           <div className="sim-pov-out-sub">Système par répartition seul, sans Équinoxe</div>
         </div>
         <div>
           <div className="sim-pov-out-label">Différence</div>
           <div>
-            <span className={'sim-pov-out-value ' + (gain >= 0 ? '' : 'is-bad')}>{fmtSigned(gain)}</span>
-            <span className="sim-pov-out-unit">€/mois</span>
+            <span className={'sim-pov-out-value ' + (gain >= 0 ? '' : 'is-bad')}>{fmtSigned(disp(gain))}</span>
+            <span className="sim-pov-out-unit">{unitSuffix}/mois</span>
           </div>
           <div className={'sim-pov-out-delta ' + (gain >= 0 ? '' : 'is-bad')}>
             {gain >= 0 ? '↑' : '↓'} {Math.abs(Math.round(gain / Math.max(data.monthlyPensionCF, 1) * 100))} % vs. statu quo
           </div>
         </div>
+      </div>
+
+      <div className="sim-pov-wage-row">
+        <span className="sim-pov-wage-label">Salaire médian estimé en {data.retirementYear}</span>
+        <span className="sim-pov-wage-value">
+          {fmt(dispWage)}
+          <span className="sim-pov-out-unit"> {unitSuffix}/mois</span>
+        </span>
+        <span className="sim-pov-wage-rate">
+          Taux de remplacement : {Math.round(disp(data.monthlyPensionTotal) / Math.max(dispWage, 1) * 100)} %
+        </span>
       </div>
     </div>
   )

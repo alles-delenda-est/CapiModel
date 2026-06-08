@@ -646,6 +646,70 @@ body {
 }
 .sim-pov-out-delta.is-bad { color: var(--bad-red); }
 
+/* nominal / real toggle inside PovTab */
+.sim-pov-toggle-row {
+  padding: 16px 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sim-pov-toggle-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.sim-pov-toggle {
+  display: inline-flex;
+  border: 1px solid var(--rule-strong);
+}
+.sim-pov-toggle button {
+  border: 0; background: transparent;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  color: var(--ink-3); cursor: pointer;
+}
+.sim-pov-toggle button + button { border-left: 1px solid var(--rule); }
+.sim-pov-toggle button.is-on { background: var(--ink-1); color: var(--bg-warm); }
+.sim-pov-toggle button:hover:not(.is-on) { background: var(--bg-soft); color: var(--ink-1); }
+
+/* median salary reference row */
+.sim-pov-wage-row {
+  margin-top: 16px;
+  padding: 11px 14px;
+  background: var(--bg-soft);
+  border-left: 3px solid var(--rule-strong);
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.sim-pov-wage-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+.sim-pov-wage-value {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink-2);
+}
+.sim-pov-wage-rate {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--teal);
+  margin-left: auto;
+}
+
 /* "Et pour vous" tab — visually distinct call-to-action */
 .sim-tab.sim-tab-pov {
   color: var(--copper);
