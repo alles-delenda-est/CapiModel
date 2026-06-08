@@ -109,6 +109,7 @@ function runRung(rung) {
       rDeffective: r.r_d_t,
       fiscalTransferMdE: r.fiscalTransfer_t ?? 0,
       borrowedMdE: r.borrowed_t ?? 0,
+      depensesMdE: (r.totalLegacyOutflow_t ?? r.legacyExp_t ?? 0),
     }
   })
 
@@ -141,6 +142,7 @@ function runRung(rung) {
   const midIdx  = Math.min(23, series.length - 1)
   const lastIdx = series.length - 1
   const peakDebt = Math.max(...series.map(s => s.debtMdE))
+  const r50 = rows[midIdx]
   const k = {
     pension2050:    series[midIdx].perRetireeRealMo,
     solde2050:      series[midIdx].soldeExclTransfersMdE,
@@ -150,6 +152,10 @@ function runRung(rung) {
     peakDebtYear:   series.find(s => s.debtMdE === peakDebt)?.year,
     peakTransfers:  Math.max(...series.map(s => s.fiscalTransferMdE)),
     collapse,
+    // Raw 2050 flow metrics for per-reform impact comparison
+    depenses_2050:  r50.totalLegacyOutflow_t ?? r50.legacyExp_t ?? 0,
+    netFlow_2050:   r50.netFlow_t ?? 0,
+    debt_2050:      r50.D_t ?? 0,
   }
   return { rung, params, rows, series, k }
 }
@@ -225,10 +231,10 @@ function ChartGroup({ runs, activeIdx }) {
   return (
     <>
       <MultiPanel runs={runs} activeIdx={activeIdx}
-        dataKey="perRetireeRealMo"
-        title="Pension moyenne par retraité (€/mois, réel 2027)"
-        unit="€/mois"
-        fmtFn={v => fmt(Math.round(v))}
+        dataKey="depensesMdE"
+        title="Dépenses retraites totales"
+        unit="Md€/an"
+        fmtFn={v => Math.abs(v) >= 1000 ? Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "'") : Math.round(v).toString()}
         height={130}
       />
       <MultiPanel runs={runs} activeIdx={activeIdx}
@@ -247,6 +253,99 @@ function ChartGroup({ runs, activeIdx }) {
         height={130}
       />
     </>
+  )
+}
+
+// ------------------------------------------------------------------
+// ImpactDelta — per-reform "ce que ça change en 2050" comparison panel.
+// Shows dépenses, transferts, solde net, and dette at the 25-year horizon,
+// before and after, with signed delta, coloured by direction.
+// Skipped for the no-reform baseline (rung 0) since it IS the reference.
+// ------------------------------------------------------------------
+function ImpactDelta({ baseline, active }) {
+  const bk = baseline.k
+  const k  = active.k
+  if (active.rung.id === baseline.rung.id) return null
+
+  const isTransitionRung = k.debt_2050 > bk.debt_2050 + 50
+
+  const metrics = [
+    {
+      id: 'dep',
+      label: 'Dépenses retraites',
+      base: bk.depenses_2050,
+      val:  k.depenses_2050,
+      unit: 'Md€/an',
+      lowerBetter: true,
+      note: v => v < bk.depenses_2050 - 1
+        ? 'moins de pensions à financer collectivement'
+        : 'dépenses inchangées',
+    },
+    {
+      id: 'tr',
+      label: 'Subvention du budget général',
+      base: bk.transfers2050,
+      val:  k.transfers2050,
+      unit: 'Md€/an',
+      lowerBetter: true,
+      note: v => v < 1 ? 'système autonome, zéro perfusion fiscale' : 'transferts réduits',
+    },
+    {
+      id: 'sol',
+      label: 'Solde annuel (besoin de financement)',
+      base: bk.netFlow_2050,
+      val:  k.netFlow_2050,
+      unit: 'Md€/an',
+      lowerBetter: false,
+      note: v => v > -5 ? "système à l'équilibre" : v > bk.netFlow_2050 + 1 ? 'déficit réduit' : 'transition : charge temporaire',
+    },
+    {
+      id: 'det',
+      label: 'Dette de transition accumulée',
+      base: bk.debt_2050,
+      val:  k.debt_2050,
+      unit: 'Md€',
+      lowerBetter: true,
+      note: () => isTransitionRung
+        ? 'dette explicite, remboursée par les rendements du fonds'
+        : 'dette évitée vs. trajectoire actuelle',
+    },
+  ]
+
+  return (
+    <div className="cc-impact">
+      <div className="cc-impact-eyebrow">Ce que ça change · en 2050 vs. trajectoire actuelle</div>
+      <div className="cc-impact-grid">
+        {metrics.map(m => {
+          const delta  = m.val - m.base
+          const isGood = m.lowerBetter ? delta < -0.5 : delta > 0.5
+          const isNeutral = Math.abs(delta) <= 0.5
+          const cls = isNeutral ? '' : (isGood ? 'is-good' : 'is-bad')
+          return (
+            <div key={m.id} className="cc-impact-card">
+              <div className="cc-impact-lbl">{m.label}</div>
+              <div className="cc-impact-row">
+                <span className="cc-impact-base">{fmt(Math.round(m.base))}</span>
+                <span className="cc-impact-arrow">→</span>
+                <span className={'cc-impact-val ' + cls}>{fmt(Math.round(m.val))}</span>
+                <span className="cc-impact-unit">{m.unit}</span>
+              </div>
+              <div className={'cc-impact-delta ' + cls}>
+                {isNeutral ? '—' : fmtSigned(Math.round(delta)) + ' Md€'}
+                {!isNeutral && <span className="cc-impact-note"> · {m.note(m.val)}</span>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {isTransitionRung && (
+        <p className="cc-impact-transition-note">
+          La dette de transition est le coût visible et explicite de la bascule vers la
+          capitalisation. Elle se résorbe à mesure que le fonds mûrit — voir la trajectoire
+          complète dans le Simulateur.
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -328,6 +427,7 @@ function LadderStepper({ runs, activeIdx, setActiveIdx }) {
               </div>
             </div>
           </div>
+          <ImpactDelta baseline={runs[0]} active={active} />
         </div>
 
         <div className="cc-stage-charts">
@@ -408,6 +508,7 @@ function LadderScrolly({ runs, activeIdx, setActiveIdx }) {
                 </div>
               </div>
             </div>
+            <ImpactDelta baseline={runs[0]} active={run} />
           </div>
         ))}
       </div>

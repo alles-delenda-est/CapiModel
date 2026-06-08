@@ -491,3 +491,96 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   text-decoration: none;
 }
 .fn-tooltip-link:hover { text-decoration: underline; }
+
+/* ===== ImpactDelta — per-reform "ce que ça change" panel ===== */
+.cc-impact {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--rule);
+}
+.cc-impact-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-bottom: 12px;
+}
+.cc-impact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.cc-impact-card {
+  background: var(--bg-warm);
+  border: 1px solid var(--rule);
+  padding: 10px 12px;
+}
+.cc-impact-lbl {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+.cc-impact-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.cc-impact-base {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--ink-4);
+}
+.cc-impact-arrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--ink-4);
+}
+.cc-impact-val {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+.cc-impact-val.is-good { color: var(--copper); }
+.cc-impact-val.is-bad  { color: #e05c4e; }
+.cc-impact-unit {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--ink-4);
+  letter-spacing: 0.05em;
+}
+.cc-impact-delta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+  line-height: 1.4;
+}
+.cc-impact-delta.is-good { color: var(--copper); }
+.cc-impact-delta.is-bad  { color: #e05c4e; }
+.cc-impact-note { color: var(--ink-4); font-size: 9.5px; }
+.cc-impact-transition-note {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--ink-4);
+  border-left: 2px solid rgba(233, 197, 61, 0.4);
+  padding-left: 10px;
+}
+
+/* In scrolly mode the impact panel is inside a 1-col text column — keep it compact */
+.cc-scrolly-step .cc-impact-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 760px) {
+  .cc-impact-grid { grid-template-columns: 1fr; }
+  .cc-scrolly-step .cc-impact-grid { grid-template-columns: 1fr; }
+}
