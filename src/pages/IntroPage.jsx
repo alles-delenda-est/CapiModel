@@ -452,6 +452,37 @@ export default function IntroPage({ navigateTo }) {
   const [mode, setMode] = useState('scrolly') // 'stepper' | 'scrolly'
   const [activeIdx, setActiveIdx] = useState(0)
 
+  // "Le point de départ" — decompose the current system's flows straight from
+  // the no-reform baseline (rung 0) engine output, so the headline deficit is
+  // an arithmetic result the reader can trace, not an asserted number. Also
+  // surfaces the 25-year (2050) trajectory — the horizon the model can speak
+  // to with some confidence — rather than leading with 2096 aggregates.
+  const cadrage = useMemo(() => {
+    const base = runs[0]
+    if (!base) return null
+    const r0  = base.rows[0]
+    const i50 = Math.min(23, base.rows.length - 1)   // t=23 → 2050
+    const r50 = base.rows[i50]
+    const cotisations    = (r0.C_s_t ?? 0) + (r0.C_e_t ?? 0)
+    const depenses       = r0.totalLegacyOutflow_t ?? r0.legacyExp_t ?? 0
+    const transferts     = r0.fiscalTransfer_t ?? 0
+    const besoinPrimaire = cotisations - depenses
+    const soldeResiduel  = r0.netFlow_t ?? (besoinPrimaire + transferts)
+    // Cumulative budget-général subsidy 2027→2050: money actually diverted
+    // from the general budget (which funds justice/education/health), as
+    // opposed to the borrowed portion that becomes debt.
+    let cumTransferts = 0
+    for (let t = 0; t <= i50; t++) cumTransferts += base.rows[t].fiscalTransfer_t ?? 0
+    return {
+      cotisations, depenses, transferts, besoinPrimaire, soldeResiduel,
+      cumTransferts,
+      depenses2050: r50.totalLegacyOutflow_t ?? 0,
+      solde2050:    r50.netFlow_t ?? 0,
+      debt2050:     r50.D_t ?? 0,
+      year2050:     r50.year,
+    }
+  }, [runs])
+
   // Allow ?mode=stepper|scrolly in the hash to pre-select a view
   // (lets external embedders pin one mode per iframe).
   useEffect(() => {
@@ -475,12 +506,15 @@ export default function IntroPage({ navigateTo }) {
             dette atterrit.
           </p>
           <div className="cc-deficit-callout">
-            <span className="cc-deficit-label">Le déficit aujourd'hui</span>
-            <span className="cc-deficit-amount">≈ 40 Md€/an</span>
+            <span className="cc-deficit-label">Sous perfusion aujourd'hui</span>
+            <span className="cc-deficit-amount">
+              ≈ {cadrage ? fmt(Math.abs(Math.round(cadrage.besoinPrimaire))) : 46} Md€/an
+            </span>
             <span className="cc-deficit-note">
-              Le système de retraite reçoit chaque année une subvention directe du
-              budget de l'État (CSG dédiée, FSV, TVA sociale). Ce sont vos impôts
-              qui comblent le trou — pas seulement les cotisations.
+              Les cotisations ne couvrent pas les pensions versées : il manque
+              chaque année ce montant, comblé par vos impôts (CSG dédiée, FSV,
+              TVA sociale) et par l'emprunt — pas par les cotisations.{' '}
+              <a className="cc-deficit-link" href="#cadrage">Voir les comptes ↓</a>
             </span>
           </div>
           <div className="cc-mode-switch">
@@ -508,6 +542,123 @@ export default function IntroPage({ navigateTo }) {
           </ol>
         </aside>
       </section>
+
+      {cadrage && (
+        <section className="cc-cadrage" id="cadrage">
+          <div className="cc-eyebrow">Le point de départ · les flux du système</div>
+          <h2 className="cc-h2">D'abord, d'où vient le trou</h2>
+          <p className="cc-cadrage-lede">
+            Avant toute réforme, posons les comptes du système de retraite tel
+            qu'il tourne aujourd'hui (2027, tous régimes confondus). Tout le
+            reste en découle.
+          </p>
+
+          <div className="cc-cadrage-ledger">
+            <div className="cc-cadrage-side">
+              <span className="cc-cadrage-side-label">Recettes</span>
+              <div className="cc-cadrage-line">
+                <span className="cc-cadrage-line-lbl">
+                  Cotisations <em>salariés + employeurs</em>
+                </span>
+                <span className="cc-cadrage-amt">{fmt(Math.round(cadrage.cotisations))} Md€</span>
+              </div>
+            </div>
+            <div className="cc-cadrage-side">
+              <span className="cc-cadrage-side-label">Dépenses</span>
+              <div className="cc-cadrage-line">
+                <span className="cc-cadrage-line-lbl">Pensions versées</span>
+                <span className="cc-cadrage-amt">{fmt(Math.round(cadrage.depenses))} Md€</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="cc-cadrage-flow">
+            <div className="cc-cadrage-flow-row">
+              <span className="cc-cadrage-flow-op">Besoin de financement</span>
+              <span className="cc-cadrage-flow-calc">
+                {fmt(Math.round(cadrage.cotisations))} − {fmt(Math.round(cadrage.depenses))}
+              </span>
+              <span className="cc-cadrage-flow-res is-bad">
+                {fmtSigned(Math.round(cadrage.besoinPrimaire))} Md€/an
+              </span>
+            </div>
+            <div className="cc-cadrage-flow-row">
+              <span className="cc-cadrage-flow-op">
+                Comblé par les transferts du budget général <em>CSG, FSV, TVA sociale</em>
+              </span>
+              <span className="cc-cadrage-flow-calc" />
+              <span className="cc-cadrage-flow-res is-plug">
+                {fmtSigned(Math.round(cadrage.transferts))} Md€/an
+              </span>
+            </div>
+            <div className="cc-cadrage-flow-row is-total">
+              <span className="cc-cadrage-flow-op">
+                Déficit résiduel <em>financé par la dette</em>
+              </span>
+              <span className="cc-cadrage-flow-calc" />
+              <span className="cc-cadrage-flow-res is-bad">
+                {fmtSigned(Math.round(cadrage.soldeResiduel))} Md€/an
+              </span>
+            </div>
+          </div>
+
+          <p className="cc-cadrage-clarif">
+            <strong>Ce que masque le chiffre de {fmt(Math.round(cadrage.transferts))} Md€.</strong>{' '}
+            Le système n'affiche qu'un déficit résiduel de{' '}
+            {fmt(Math.abs(Math.round(cadrage.soldeResiduel)))} Md€ — mais seulement
+            parce que {fmt(Math.round(cadrage.transferts))} Md€ d'impôts sont
+            injectés chaque année pour combler le trou. Ce ne sont pas les
+            cotisations qui équilibrent le système, ce sont vos impôts : autant
+            d'argent qui ne va ni à l'école, ni à l'hôpital, ni à la justice.
+          </p>
+
+          <div className="cc-cadrage-traj">
+            <div className="cc-eyebrow">
+              Sans réforme · la tendance à 25 ans ({cadrage.year2050})
+            </div>
+            <div className="cc-cadrage-traj-grid">
+              <div className="cc-cadrage-traj-kpi">
+                <span className="cc-cadrage-traj-val is-bad">
+                  {fmt(Math.round(cadrage.depenses2050))} Md€
+                </span>
+                <span className="cc-cadrage-traj-lbl">
+                  Dépenses retraites en {cadrage.year2050}
+                  <em>contre {fmt(Math.round(cadrage.depenses))} Md€ aujourd'hui</em>
+                </span>
+              </div>
+              <div className="cc-cadrage-traj-kpi">
+                <span className="cc-cadrage-traj-val is-bad">
+                  {fmtSigned(Math.round(cadrage.solde2050))} Md€/an
+                </span>
+                <span className="cc-cadrage-traj-lbl">
+                  Besoin de financement annuel
+                  <em>le trou se creuse avec la démographie</em>
+                </span>
+              </div>
+              <div className="cc-cadrage-traj-kpi">
+                <span className="cc-cadrage-traj-val is-bad">
+                  ≈ {fmt(Math.round(cadrage.debt2050))} Md€
+                </span>
+                <span className="cc-cadrage-traj-lbl">
+                  Dette de transition accumulée
+                  <em>uniquement pour payer les retraites</em>
+                </span>
+              </div>
+            </div>
+            <p className="cc-cadrage-traj-diverted">
+              <strong>≈ {fmt(Math.round(cadrage.cumTransferts))} Md€</strong> de déficit
+              financé par le budget général sur ces 25 ans — autant de moyens
+              soustraits à la justice, à l'éducation et à la santé.
+            </p>
+            <p className="cc-cadrage-traj-note">
+              Hypothèses macro centrales : inflation 2 %/an, démographie COR,
+              salaires réels +0,4 %/an. Au-delà de {cadrage.year2050}, l'horizon
+              devient trop incertain pour des chiffres précis — c'est pourquoi on
+              cadre d'abord le court-moyen terme.
+            </p>
+          </div>
+        </section>
+      )}
 
       {mode === 'stepper'
         ? <LadderStepper runs={runs} activeIdx={activeIdx} setActiveIdx={setActiveIdx} />
