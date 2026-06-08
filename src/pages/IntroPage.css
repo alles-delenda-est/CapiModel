@@ -425,6 +425,13 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   grid-row: 1 / 3;
   align-self: center;
 }
+.cc-deficit-link {
+  color: var(--copper);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--copper);
+  white-space: nowrap;
+}
+.cc-deficit-link:hover { color: var(--ink-1); border-bottom-color: var(--ink-1); }
 @media (max-width: 640px) {
   .cc-deficit-callout {
     grid-template-columns: 1fr;
@@ -432,6 +439,170 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   }
   .cc-deficit-amount { grid-column: 1; grid-row: 2; }
   .cc-deficit-note   { grid-column: 1; grid-row: 3; }
+}
+
+/* ===== "Le point de départ" cadrage section ===== */
+.cc-cadrage {
+  --bad: #e05c4e;
+  padding: 56px 0;
+  border-top: 1px solid var(--rule);
+  scroll-margin-top: 24px;
+}
+.cc-cadrage .cc-h2 { margin-bottom: 12px; }
+.cc-cadrage-lede {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 64ch;
+  margin: 0 0 32px;
+}
+
+/* Recettes / Dépenses ledger */
+.cc-cadrage-ledger {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.cc-cadrage-side {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  padding: 18px 20px;
+}
+.cc-cadrage-side-label {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 12px;
+}
+.cc-cadrage-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+.cc-cadrage-line-lbl { font-size: 14px; color: var(--ink-2); }
+.cc-cadrage-line-lbl em {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ink-4);
+  margin-top: 2px;
+}
+.cc-cadrage-amt {
+  font-family: 'Playfair Display', serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--ink-1);
+  white-space: nowrap;
+}
+
+/* Flow: besoin → transfert → solde */
+.cc-cadrage-flow {
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--copper);
+  background: color-mix(in srgb, var(--copper) 4%, var(--bg-card));
+}
+.cc-cadrage-flow-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  gap: 16px;
+  padding: 14px 20px;
+}
+.cc-cadrage-flow-row + .cc-cadrage-flow-row { border-top: 1px solid var(--rule); }
+.cc-cadrage-flow-row.is-total { background: color-mix(in srgb, var(--copper) 7%, var(--bg-card)); }
+.cc-cadrage-flow-op { font-size: 14px; color: var(--ink-2); }
+.cc-cadrage-flow-op em {
+  font-style: normal;
+  color: var(--ink-4);
+  font-size: 12px;
+  margin-left: 4px;
+}
+.cc-cadrage-flow-calc {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+.cc-cadrage-flow-res {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 120px;
+  text-align: right;
+}
+.cc-cadrage-flow-res.is-bad  { color: var(--bad); }
+.cc-cadrage-flow-res.is-plug { color: var(--gold); }
+.cc-cadrage-flow-row.is-total .cc-cadrage-flow-res { font-size: 18px; font-weight: 700; }
+
+.cc-cadrage-clarif {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink-2);
+  max-width: 70ch;
+  margin: 24px 0 0;
+}
+.cc-cadrage-clarif strong { color: var(--ink-1); }
+
+/* 25-year trajectory strip */
+.cc-cadrage-traj {
+  margin-top: 40px;
+  padding-top: 28px;
+  border-top: 1px dashed var(--rule);
+}
+.cc-cadrage-traj-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 16px;
+}
+.cc-cadrage-traj-kpi {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--bad);
+  padding: 16px 18px;
+}
+.cc-cadrage-traj-val {
+  display: block;
+  font-family: 'Playfair Display', serif;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.05;
+}
+.cc-cadrage-traj-val.is-bad { color: var(--bad); }
+.cc-cadrage-traj-lbl {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-2);
+  margin-top: 8px;
+  line-height: 1.4;
+}
+.cc-cadrage-traj-lbl em {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ink-4);
+  margin-top: 3px;
+}
+.cc-cadrage-traj-note {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-4);
+  max-width: 72ch;
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .cc-cadrage-ledger { grid-template-columns: 1fr; }
+  .cc-cadrage-traj-grid { grid-template-columns: 1fr; }
+  .cc-cadrage-flow-row { grid-template-columns: 1fr auto; }
+  .cc-cadrage-flow-calc { display: none; }
 }
 
 /* ---- Footnote tooltips ---- */
