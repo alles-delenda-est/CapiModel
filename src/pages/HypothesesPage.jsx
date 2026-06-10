@@ -54,7 +54,7 @@ export default function HypothesesPage() {
             </tr>
             <tr>
               <td>Croissance salariale w<sub>r</sub></td><td>{fmtPct(d.w_r)}</td><td><Kind k="S" /></td>
-              <td>SMPT (salaire moyen par tête) — moyenne INSEE 2014–2024 ; le 2024–2026 a été plus haut (~0,5–0,7%) post-inflation, mais la BdF Avril 2026 voit ~0,2% réel attendu pour 2026.</td>
+              <td>SMPT (salaire moyen par tête) — moyenne INSEE 2014–2024 ; le 2024–2026 a été plus haut (~0,5–0,7%) post-inflation, mais la BdF Avril 2026 voit ~0,2% réel attendu pour 2026. <strong>Note :</strong> l'hypothèse de long terme du COR est 0,7 %/an (scénario central, 2026) — notre valeur de 0,4 % est donc plus conservatrice que le COR central.</td>
             </tr>
             <tr>
               <td>r_f_portfolio</td><td>{fmtPct(d.r_f_portfolio)}</td><td><Kind k="S" /></td>
@@ -82,7 +82,7 @@ export default function HypothesesPage() {
             </tr>
             <tr>
               <td>R0</td><td>{d.R0} M</td><td><Kind k="S" /></td>
-              <td>Retraités droits directs — DREES Édition 2025, projeté à fin 2026.</td>
+              <td>Retraités droits directs — DREES Édition 2025, projeté à fin 2026. Le COR recense 17,2 M retraités fin 2024 ; la croissance de ~150–200 k/an amène ~17,6–17,7 M fin 2026. La valeur de 18,0 M inclut les ayants-droit (pensions de réversion) dans le périmètre — à recalibrer si le périmètre est resserré aux droits propres uniquement.</td>
             </tr>
           </tbody>
         </table>
@@ -129,7 +129,7 @@ export default function HypothesesPage() {
             <tr><td>lifeExpAt65_Y0</td><td>{d.lifeExpAt65_Y0} ans</td><td><Kind k="S" /></td>
               <td>INSEE 2024 (19,7+23,4)/2 = 21,55 ; projeté +3 ans à Y0=2027 au taux COR. Non réglable utilisateur (à recalculer si Y0 change).</td></tr>
             <tr><td>lifeExpAt65_per_decade</td><td>{d.lifeExpAt65_per_decade} ans/décennie</td><td><Kind k="S" /></td>
-              <td>COR juin 2025, scénario central ; gain ≈4,2 ans sur 4,6 décennies.</td></tr>
+              <td>COR juin 2025, scénario central ; gain ≈4,2 ans sur 4,6 décennies. Le rapport COR 2026 retient une légère décélération des gains d'espérance de vie — la valeur ici reste une approximation conservative à recalibrer lors de la publication des tables complètes 2026.</td></tr>
             <tr><td>LIFE_EXP_INDEXATION_FRACTION</td><td>0,5</td><td><Kind k="M" /></td>
               <td>Hardcodé spec §3.3 — moitié des gains LE va à l'âge, moitié à la durée. Candidat pour exposition utilisateur (§10.13).</td></tr>
           </tbody>
@@ -168,7 +168,7 @@ export default function HypothesesPage() {
           <thead><tr><th>Paramètre</th><th>Valeur</th><th>Type</th><th>Source / rationale</th></tr></thead>
           <tbody>
             <tr><td>E₀ (dép. pension totale)</td><td>{d.E0} Md€/an</td><td><Kind k="S" /></td>
-              <td>DREES 2025 13,1% PIB en 2023 → ~390 Md€ projeté Y0. Périmètre&nbsp;: tous retraités (cf. note R₀/E₀ §10.14).</td></tr>
+              <td>COR 2026 confirme 13,9 % PIB en 2024 (≈ 370 Md€) ; trajectoire vers 14,2 % en 2070. Projeté à ~413 Md€ (13,8 % de 3 000 Md€) en Y0=2027 — cohérent avec la fourchette COR. Périmètre&nbsp;: tous retraités (cf. note R₀/E₀ §10.14).</td></tr>
             <tr><td>useEquinoxe</td><td>{String(d.useEquinoxe)}</td><td><Kind k="M" /></td>
               <td>Master toggle réforme Équinoxe.</td></tr>
             <tr><td>equinoxePhasing</td><td><code>{d.equinoxePhasing}</code></td><td><Kind k="M" /></td>
@@ -291,7 +291,7 @@ export default function HypothesesPage() {
               <td>{DEMOGRAPHIC_PROFILES.cor_central.peakMult}</td>
               <td>{DEMOGRAPHIC_PROFILES.cor_central.longRunMult}</td>
               <td>{DEMOGRAPHIC_PROFILES.cor_central.peakT}</td>
-              <td>+42% (vs COR central +48%)</td></tr>
+              <td>+42% (vs ancien COR central +48% — hypothèse fécondité 1,8). Le COR 2026 a abaissé la fécondité à 1,45 et doublé le solde migratoire (150 k/an), ce qui rapproche le scénario central COR de notre profil « realistic ». Une recalibration sur les tables 2026 est prévue.</td></tr>
             <tr><td><code>realistic</code></td>
               <td>{DEMOGRAPHIC_PROFILES.realistic.peakMult}</td>
               <td>{DEMOGRAPHIC_PROFILES.realistic.longRunMult}</td>

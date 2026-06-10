@@ -613,6 +613,14 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   max-width: 72ch;
   margin: 0;
 }
+.cc-cadrage-traj-note--cor2026 {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--gold, #e9c53d) 8%, transparent);
+  border-left: 3px solid var(--gold, #e9c53d);
+  border-radius: 0 6px 6px 0;
+  color: var(--ink-3);
+}
 
 @media (max-width: 760px) {
   .cc-cadrage-ledger { grid-template-columns: 1fr; }

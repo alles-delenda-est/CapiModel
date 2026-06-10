@@ -619,7 +619,7 @@ const RISKS = [
   { t: 'La liquidation HLM',
     b: "5 % du parc HLM/an alimente le fonds de transition (la structure qui porte les droits acquis pendant la bascule). Le modèle applique une décote conservatrice plafonnée à 30 % pour absorber l'effet volume." },
   { t: 'Le rendement capi',
-    b: "L'hypothèse de base à 3 % réel est dans la fourchette historique conservatrice. Les fonds souverains comparables (Norvège, Singapour) affichent au-delà de 6 %." },
+    b: "L'hypothèse de base à 4,5 % réel (r_c) correspond à la médiane historique du GPFG norvégien (1998–2025). Les fonds souverains comparables — Norvège, Singapour, Ontario Teachers' — affichent 6–7 % nominal sur longue période. Le modèle inclut en plus une pénalité d'effet de taille (GE penalty) au-delà de 2–3× le PIB." },
   { t: 'Le changement de régime ~2069',
     b: "Les graphiques montrent une inflexion vers 2069 : c'est la fin de la période de transition. Le dernier cotisant avec des droits PAYG partiels (né en 2005, entré dans le marché du travail en 2027) part à la retraite à 64 ans. Après cette date, tous les nouveaux retraités sont en capitalisation pure." },
 ]
@@ -836,6 +836,16 @@ export default function IntroPage({ navigateTo }) {
               salaires réels +0,4 %/an. Au-delà de {cadrage.year2050}, l'horizon
               devient trop incertain pour des chiffres précis — c'est pourquoi on
               cadre d'abord le court-moyen terme.
+            </p>
+            <p className="cc-cadrage-traj-note cc-cadrage-traj-note--cor2026">
+              <strong>Mise à jour COR juin 2026 :</strong> dans son rapport annuel,
+              le COR a révisé son déficit structurel projeté en 2070 de −1,4 %
+              à <strong>−2,4 % du PIB</strong> — la fécondité réelle (1,45 enfant
+              par femme) ayant rattrapé les hypothèses optimistes. La trajectoire
+              à court terme reste stable (−0,2 % PIB en 2030, −0,9 % en 2045).
+              Le COR calcule que, avec le seul levier de l'âge, il faudrait partir
+              à <strong>67,6 ans en 2070</strong> pour équilibrer le système — sans
+              aucune réforme structurelle.
             </p>
           </div>
         </section>
