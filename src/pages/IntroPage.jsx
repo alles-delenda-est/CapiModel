@@ -4,7 +4,7 @@ import {
   ReferenceLine, ResponsiveContainer,
 } from 'recharts'
 import { runSimulation, DEFAULT_CONFIG } from '../simulation-engine.js'
-import { LADDER_RUNGS, FOOTNOTES, applyGreekCollapseOverlay } from './IntroLadderRungs.js'
+import { LADDER_RUNGS, FOOTNOTES, MECHANISMS, applyGreekCollapseOverlay } from './IntroLadderRungs.js'
 import './IntroPage.css'
 
 // French number formatter
@@ -47,6 +47,80 @@ function Footnote({ id }) {
         </span>
       )}
     </span>
+  )
+}
+
+// MechanismButton — the discoverable ⓘ pill next to a rung headline that
+// opens the individual-level mechanism explainer. Renders nothing if the
+// rung has no MECHANISMS entry.
+function MechanismButton({ rung, onClick }) {
+  if (!MECHANISMS[rung.id]) return null
+  return (
+    <button
+      type="button"
+      className="cc-mech-btn"
+      onClick={onClick}
+      style={{ '--mech-color': rung.color }}
+      aria-label={`Comment ça marche, concrètement, pour le scénario ${rung.label} ?`}
+    >
+      <span className="cc-mech-btn-icon" aria-hidden="true">i</span>
+      <span className="cc-mech-btn-text">Comment ça marche&nbsp;?</span>
+    </button>
+  )
+}
+
+// MechanismModal — on-demand individual-level explainer. Centered dialog on
+// desktop, bottom-sheet on mobile (see CSS). Closes on overlay click, the ✕
+// button, or Escape. Locks body scroll while open.
+function MechanismModal({ rung, onClose }) {
+  const mech = rung ? MECHANISMS[rung.id] : null
+
+  useEffect(() => {
+    if (!rung) return
+    const onKey = e => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [rung, onClose])
+
+  if (!rung || !mech) return null
+
+  return (
+    <div className="cc-mech-overlay" onClick={onClose}>
+      <div
+        className="cc-mech-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Mécanisme — ${rung.label}`}
+        onClick={e => e.stopPropagation()}
+      >
+        <button type="button" className="cc-mech-close" onClick={onClose} aria-label="Fermer">
+          ✕
+        </button>
+        <div className="cc-mech-eyebrow" style={{ color: rung.color }}>
+          Étape {rung.num} · {rung.label}
+        </div>
+        <h3 className="cc-mech-title">{mech.tagline}</h3>
+        <dl className="cc-mech-points">
+          {mech.points.map((pt, i) => (
+            <div key={i} className="cc-mech-point">
+              <dt className="cc-mech-point-k" style={{ color: rung.color }}>{pt.k}</dt>
+              <dd className="cc-mech-point-v">{pt.v}</dd>
+            </div>
+          ))}
+        </dl>
+        {mech.example && (
+          <div className="cc-mech-example" style={{ borderLeftColor: rung.color }}>
+            <div className="cc-mech-example-lbl">{mech.example.label}</div>
+            <p className="cc-mech-example-text">{mech.example.text}</p>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -356,6 +430,7 @@ function ImpactDelta({ baseline, active }) {
 function LadderStepper({ runs, activeIdx, setActiveIdx }) {
   const active = runs[activeIdx]
   const k = active.k
+  const [mechRung, setMechRung] = useState(null)
 
   return (
     <section className="cc-ladder cc-ladder--stepper">
@@ -381,6 +456,7 @@ function LadderStepper({ runs, activeIdx, setActiveIdx }) {
             Étape {active.rung.num} sur 6
           </div>
           <h2>{active.rung.headline}</h2>
+          <MechanismButton rung={active.rung} onClick={() => setMechRung(active.rung)} />
           <RungSummary summary={active.rung.summary} className="cc-stage-summary" />
 
           <div className="cc-stage-kpis">
@@ -434,6 +510,7 @@ function LadderStepper({ runs, activeIdx, setActiveIdx }) {
           <ChartGroup runs={runs} activeIdx={activeIdx} />
         </div>
       </div>
+      <MechanismModal rung={mechRung} onClose={() => setMechRung(null)} />
     </section>
   )
 }
@@ -444,6 +521,7 @@ function LadderStepper({ runs, activeIdx, setActiveIdx }) {
 // ------------------------------------------------------------------
 function LadderScrolly({ runs, activeIdx, setActiveIdx }) {
   const stepRefs = useRef([])
+  const [mechRung, setMechRung] = useState(null)
 
   useEffect(() => {
     const observers = []
@@ -479,6 +557,7 @@ function LadderScrolly({ runs, activeIdx, setActiveIdx }) {
               {String(run.rung.num).padStart(2, '0')} · {run.rung.label}
             </div>
             <h2>{run.rung.headline}</h2>
+            <MechanismButton rung={run.rung} onClick={() => setMechRung(run.rung)} />
             <RungSummary summary={run.rung.summary} />
 
             <div className="cc-scrolly-step-kpis">
@@ -516,6 +595,7 @@ function LadderScrolly({ runs, activeIdx, setActiveIdx }) {
       <div className="cc-scrolly-sticky">
         <ChartGroup runs={runs} activeIdx={activeIdx} />
       </div>
+      <MechanismModal rung={mechRung} onClose={() => setMechRung(null)} />
     </section>
   )
 }
@@ -539,7 +619,7 @@ const RISKS = [
   { t: 'La liquidation HLM',
     b: "5 % du parc HLM/an alimente le fonds de transition (la structure qui porte les droits acquis pendant la bascule). Le modèle applique une décote conservatrice plafonnée à 30 % pour absorber l'effet volume." },
   { t: 'Le rendement capi',
-    b: "L'hypothèse de base à 3 % réel est dans la fourchette historique conservatrice. Les fonds souverains comparables (Norvège, Singapour) affichent au-delà de 6 %." },
+    b: "L'hypothèse de base à 4,5 % réel (r_c) correspond à la médiane historique du GPFG norvégien (1998–2025). Les fonds souverains comparables — Norvège, Singapour, Ontario Teachers' — affichent 6–7 % nominal sur longue période. Le modèle inclut en plus une pénalité d'effet de taille (GE penalty) au-delà de 2–3× le PIB." },
   { t: 'Le changement de régime ~2069',
     b: "Les graphiques montrent une inflexion vers 2069 : c'est la fin de la période de transition. Le dernier cotisant avec des droits PAYG partiels (né en 2005, entré dans le marché du travail en 2027) part à la retraite à 64 ans. Après cette date, tous les nouveaux retraités sont en capitalisation pure." },
 ]
@@ -756,6 +836,16 @@ export default function IntroPage({ navigateTo }) {
               salaires réels +0,4 %/an. Au-delà de {cadrage.year2050}, l'horizon
               devient trop incertain pour des chiffres précis — c'est pourquoi on
               cadre d'abord le court-moyen terme.
+            </p>
+            <p className="cc-cadrage-traj-note cc-cadrage-traj-note--cor2026">
+              <strong>Mise à jour COR juin 2026 :</strong> dans son rapport annuel,
+              le COR a révisé son déficit structurel projeté en 2070 de −1,4 %
+              à <strong>−2,4 % du PIB</strong> — la fécondité réelle (1,45 enfant
+              par femme) ayant rattrapé les hypothèses optimistes. La trajectoire
+              à court terme reste stable (−0,2 % PIB en 2030, −0,9 % en 2045).
+              Le COR calcule que, avec le seul levier de l'âge, il faudrait partir
+              à <strong>67,6 ans en 2070</strong> pour équilibrer le système — sans
+              aucune réforme structurelle.
             </p>
           </div>
         </section>
