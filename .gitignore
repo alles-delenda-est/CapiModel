@@ -4,3 +4,7 @@ dist
 settings.local.json
 CapiModel_details_local
 CapiModel_details_local.txt
+
+# Local artifacts (design handoff zip, working spreadsheets) — not part of the app
+CapiModel.zip
+*.xlsx
