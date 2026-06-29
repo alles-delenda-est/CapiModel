@@ -75,7 +75,7 @@ body {
   background: linear-gradient(135deg, #013340 0%, #016b63 100%);
 }
 .sim-brand-name {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -325,7 +325,7 @@ body {
   border-bottom: 1px solid var(--rule);
 }
 .sim-chart-h h3 {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-size: 16px;
   font-weight: 600;
   margin: 0;
@@ -383,7 +383,7 @@ body {
   padding: 18px 20px 16px;
 }
 .sim-param-group h3 {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-size: 17px;
   font-weight: 600;
   margin: 0 0 4px;
@@ -548,7 +548,7 @@ body {
   display: flex; align-items: baseline; gap: 6px;
 }
 .sim-kpi-value {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-size: 32px;
   font-weight: 600;
   line-height: 1;
@@ -577,7 +577,7 @@ body {
   max-width: 920px;
 }
 .sim-pov h3 {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-size: 24px;
   font-weight: 600;
   margin: 0 0 6px;
@@ -620,7 +620,7 @@ body {
   min-height: 26px;
 }
 .sim-pov-out-value {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-size: 30px;
   font-weight: 600;
   letter-spacing: -0.015em;
@@ -696,7 +696,7 @@ body {
   flex-shrink: 0;
 }
 .sim-pov-wage-value {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-size: 20px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -843,3 +843,68 @@ body {
   line-height: 0;
   margin-left: 1px;
 }
+
+/* ============================================================
+   2a cosmetic refresh — branch redesign/2a-expert-skin
+   Presentation only: rounded geometry, teal-panel input tiles,
+   softer range sliders, and Libre Franklin display headings
+   (applied at source via the --display token, swapped in from
+   the previous 'Playfair Display'). No markup, state, or engine
+   changes — delete this block (and restore the Playfair font) to
+   fully revert the skin.
+   ============================================================ */
+:root {
+  --display: 'Libre Franklin', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --r-card: 13px;   /* section / chart / KPI cards */
+  --r-tile: 11px;   /* smaller inset tiles */
+  --r-ctl:  8px;    /* buttons, inputs, segmented toggles */
+  --r-pill: 10px;   /* rung pills */
+}
+
+/* --- rounded card surfaces --- */
+.sim-chart-card,
+.sim-param-group,
+.sim-kpi,
+.sim-pov,
+.sim-inline-section { border-radius: var(--r-card); }
+
+.sim-scenario-summary,
+.sim-pov-wage-row { border-radius: var(--r-tile); }
+
+.sim-callout { border-radius: var(--r-ctl); }
+
+/* --- teal input tiles (match 2a presets / groups / KPIs on --bg-soft) --- */
+.sim-kpi,
+.sim-param-group { background: var(--bg-soft); }
+
+/* Keep inline KPI cards navy so they read against the teal inline
+   section they sit inside (charts tab, simple mode). */
+.sim-inline-kpis .sim-kpi { background: var(--bg-card); }
+
+/* --- rounded controls & segmented toggles (clip inner button borders) --- */
+.sim-brand-toggle,
+.sim-conditions-track,
+.sim-param-yesno,
+.sim-param-seg,
+.sim-pov-toggle { border-radius: var(--r-ctl); overflow: hidden; }
+
+.sim-param-input,
+.sim-tabs-meta button { border-radius: var(--r-ctl); }
+
+/* --- rung pills --- */
+.sim-var-a .sim-rung-pill,
+.sim-var-b .sim-rung-row-side { border-radius: var(--r-pill); }
+
+/* --- softer parameter sliders: 4px rounded track, 18px teal thumb w/ ring --- */
+.sim-slider-input input[type="range"] { height: 4px; border-radius: 4px; }
+.sim-slider-input input[type="range"]::-webkit-slider-thumb {
+  width: 18px; height: 18px;
+  border: 3px solid var(--bg-card);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.sim-slider-input input[type="range"]::-moz-range-thumb {
+  width: 18px; height: 18px;
+  border: 3px solid var(--bg-card);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.sim-pov-cohort-control input[type="range"] { accent-color: var(--teal); }

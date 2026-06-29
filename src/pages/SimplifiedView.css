@@ -623,3 +623,27 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================================
+   2a cosmetic refresh — teal highlight tiles + softer slider.
+   Headings (var(--font-serif)) and card radii (var(--radius))
+   already re-fonted/rounded via the global App.css tokens.
+   Presentation only.
+   ============================================================ */
+.sv-header { border-radius: var(--r-card); }
+
+/* teal highlight tiles — KPI cards + scenario presets */
+.sv-kpi-card,
+.sv-scenario-btn,
+.sv-scenario-btn.active { background: var(--bg-soft); }
+
+/* softer slider: 4px rounded track + 18px teal thumb with ring */
+.sv-slider { height: 4px; border-radius: 4px; }
+.sv-slider::-webkit-slider-thumb {
+  border: 3px solid var(--bg-card);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.sv-slider::-moz-range-thumb {
+  border: 3px solid var(--bg-card);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
