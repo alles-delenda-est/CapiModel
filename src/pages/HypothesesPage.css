@@ -279,3 +279,10 @@
 .kind-s { background: #dbeafe; color: #1e40af; }
 .kind-c { background: #fef3c7; color: #92400e; }
 .kind-m { background: #e9d5ff; color: #6b21a8; }
+
+/* ============================================================
+   2a cosmetic refresh — teal preset tiles. Card radii and
+   headings already round/re-font via the global --radius and
+   --font-serif tokens. Presentation only.
+   ============================================================ */
+.preset-explain-card { background: var(--bg-soft); }

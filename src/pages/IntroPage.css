@@ -52,7 +52,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   margin-bottom: 48px;
 }
 .cc-h1 {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-size: 64px;
   line-height: 1.04;
   font-weight: 600;
@@ -97,7 +97,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   font-size: 13px; line-height: 1.55; color: var(--ink-2);
 }
 .cc-hero-aside h3 {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-weight: 600;
   font-size: 22px;
   margin: 12px 0 8px;
@@ -171,7 +171,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   padding: 36px 40px;
 }
 .cc-stage-side h2 {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-size: 30px;
   font-weight: 600;
   line-height: 1.15;
@@ -201,7 +201,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   margin-bottom: 4px;
 }
 .cc-stage-kpi-value {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-size: 30px;
   font-weight: 600;
   line-height: 1;
@@ -274,7 +274,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   display: block;
 }
 .cc-scrolly-step h2 {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-size: 28px;
   font-weight: 600;
   line-height: 1.2;
@@ -302,7 +302,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   margin-bottom: 3px;
 }
 .cc-scrolly-step-kpi-value {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-size: 22px;
   font-weight: 600;
 }
@@ -327,7 +327,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   margin-top: 24px;
 }
 .cc-h2 {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-size: 36px;
   font-weight: 600;
   line-height: 1.15;
@@ -349,7 +349,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   margin-bottom: 12px;
 }
 .cc-pillar-title, .cc-risk h3 {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--display);
   font-size: 22px;
   font-weight: 600;
   margin: 0 0 10px;
@@ -409,7 +409,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   grid-row: 1;
 }
 .cc-deficit-amount {
-  font-family: 'Playfair Display', serif;
+  font-family: var(--display);
   font-size: 28px;
   font-weight: 700;
   color: var(--copper);
@@ -493,7 +493,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   margin-top: 2px;
 }
 .cc-cadrage-amt {
-  font-family: 'Playfair Display', serif;
+  font-family: var(--display);
   font-size: 26px;
   font-weight: 700;
   color: var(--ink-1);
@@ -569,7 +569,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
 }
 .cc-cadrage-traj-val {
   display: block;
-  font-family: 'Playfair Display', serif;
+  font-family: var(--display);
   font-size: 30px;
   font-weight: 700;
   letter-spacing: -0.015em;
@@ -602,7 +602,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
 }
 .cc-cadrage-traj-diverted strong {
   color: #e05c4e;
-  font-family: 'Playfair Display', serif;
+  font-family: var(--display);
   font-size: 18px;
   font-weight: 700;
 }
@@ -737,7 +737,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   color: var(--ink-4);
 }
 .cc-impact-val {
-  font-family: 'Playfair Display', serif;
+  font-family: var(--display);
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -813,7 +813,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   border-radius: 50%;
   background: var(--mech-color);
   color: var(--bg-warm, #0f1524);
-  font-family: 'Playfair Display', serif;
+  font-family: var(--display);
   font-style: italic;
   font-weight: 700;
   font-size: 12px;
@@ -879,7 +879,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
 }
 .cc-mech-title {
   margin: 0 0 18px;
-  font-family: 'Playfair Display', serif;
+  font-family: var(--display);
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -948,3 +948,28 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
     text-overflow: ellipsis;
   }
 }
+
+/* ============================================================
+   2a cosmetic refresh — rounded geometry + teal highlight tiles.
+   IntroPage hardcodes its own dark tokens and sharp edges, so the
+   global --radius lever doesn't reach it; round its boxed
+   containers explicitly here. Headings already re-fonted to Libre
+   Franklin (Playfair → var(--display)) above. Presentation only.
+   ============================================================ */
+.cc-ladder--stepper .cc-ladder-rail,
+.cc-mode-switch { border-radius: var(--r-ctl); overflow: hidden; }
+
+.cc-ladder--stepper .cc-ladder-stage,
+.cc-scrolly-sticky,
+.cc-cadrage-side { border-radius: var(--r-card); }
+
+.cc-chart-block,
+.cc-cadrage-flow,
+.cc-cadrage-traj-kpi,
+.cc-deficit-callout,
+.cc-cadrage-traj-diverted { border-radius: var(--r-tile); }
+
+.cc-impact-card { border-radius: var(--r-ctl); }
+
+/* teal highlight tiles — echo the simulator's KPI panels */
+.cc-cadrage-traj-kpi { background: var(--bg-soft); }

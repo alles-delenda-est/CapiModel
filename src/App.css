@@ -23,11 +23,23 @@
   --border-color: rgba(5, 193, 173, 0.15);
   --border-ultra-thin: rgba(5, 193, 173, 0.10);
 
-  --radius: 2px;                    /* near-sharp */
+  /* 2a refresh: rounded geometry (was 2px near-sharp) */
+  --radius: 12px;
+  --r-card: 13px;   /* section / chart / KPI cards */
+  --r-tile: 11px;   /* smaller inset tiles */
+  --r-ctl:  8px;    /* buttons, inputs, segmented toggles */
+  --r-pill: 10px;   /* rung pills */
 
-  --font-serif: 'Playfair Display', Georgia, serif;
+  /* 2a refresh: Libre Franklin is now the display face (Playfair retired).
+     --font-serif keeps its legacy name for compatibility but holds the sans
+     display stack, so every heading that referenced it re-fonts at once. */
+  --display: 'Libre Franklin', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Libre Franklin', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+
+  /* teal highlight-panel surface (shared with the simulator's --bg-soft) */
+  --bg-soft: #003340;
 
   --ease-luxury: cubic-bezier(0.19, 1, 0.22, 1);
 }
@@ -55,7 +67,7 @@ body {
   background: linear-gradient(135deg, #013340 0%, #016b63 100%);
   color: var(--text-primary);
   padding: 2.5rem 2rem 2rem;
-  border-radius: 0;
+  border-radius: 16px;
   border-bottom: 1px solid var(--border-ultra-thin);
   margin-bottom: 1.5rem;
   text-align: center;
