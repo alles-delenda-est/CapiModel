@@ -179,8 +179,8 @@ function ChartsTab({ rows, params, rung }) {
           plus lente faute de moyens, les routes encore moins bien entretenues, et encore.
           {collapse && (
             <div style={{ marginTop: 6, fontWeight: 600 }}>
-              Restructuration déclenchée en {collapse.collapseYear}
-              {' '}(dette à {Math.round(collapse.debtRatioAtCollapse)} % du PIB).
+              Restructuration déclenchée, au plus tard, en {collapse.collapseYear}
+              {' '}(vraisemblablement bien avant) — dette à {Math.round(collapse.debtRatioAtCollapse)} % du PIB.
             </div>
           )}
         </div>
