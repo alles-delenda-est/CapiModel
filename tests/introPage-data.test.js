@@ -84,8 +84,8 @@ describe('IntroPage data contract — v1_default preset', () => {
       expect(kpis.peakDebtYear).toBeLessThanOrEqual(2096);
     });
 
-    it('peakDebtYear under v1_default is 2064', () => {
-      expect(kpis.peakDebtYear).toBe(2064);
+    it('peakDebtYear under v1_default is 2065', () => {
+      expect(kpis.peakDebtYear).toBe(2065);
     });
 
     it('debtFreeYear (gold ReferenceLine) is null — D_t never clears under v1_default', () => {
@@ -113,24 +113,24 @@ describe('IntroPage data contract — v1_default preset', () => {
       }
     });
 
-    it('Dette pic ≈ 7 573 Md€ (±0.5 %)', () => {
-      expectClose(kpis.peakDebt, 7572.6);
+    it('Dette pic ≈ 7 910 Md€ (±0.5 %)', () => {
+      expectClose(kpis.peakDebt, 7910.3);
     });
 
-    it('Intérêts cumulés ≈ 13 874 Md€ (±0.5 %)', () => {
-      expectClose(kpis.totalInterest, 13873.6);
+    it('Intérêts cumulés ≈ 15 052 Md€ (±0.5 %)', () => {
+      expectClose(kpis.totalInterest, 15052.0);
     });
 
-    it('Pot capi (fin) nominal ≈ 132 500 Md€ (±0.5 %)', () => {
-      expectClose(kpis.finalCapi, 132500.2);
+    it('Pot capi (fin) nominal ≈ 131 895 Md€ (±0.5 %)', () => {
+      expectClose(kpis.finalCapi, 131895.0);
     });
 
-    it('Pot capi (fin) real (2027 €) ≈ 33 791 Md€ (±0.5 %)', () => {
-      expectClose(kpis.finalCapiReal, 33791.3);
+    it('Pot capi (fin) real (2027 €) ≈ 33 637 Md€ (±0.5 %)', () => {
+      expectClose(kpis.finalCapiReal, 33637.0);
     });
 
-    it('Spread minimum ≈ +1.51 % (sign is OK → is-ok class)', () => {
-      expectClose(kpis.minSpread, 0.01505, 0.01);
+    it('Spread minimum ≈ +1.25 % (sign is OK → is-ok class)', () => {
+      expectClose(kpis.minSpread, 0.012448, 0.01);
       expect(kpis.minSpread).toBeGreaterThan(0);
     });
 
@@ -161,16 +161,20 @@ describe('IntroPage data contract — v1_default preset', () => {
       expect(Number.isFinite(cfFinalDebt)).toBe(true);
     });
 
-    it('counterfactual final D_t ≈ 710 522 Md€ (±0.5 %)', () => {
-      expectClose(cfFinalDebt, 710521.6);
+    // NB: the no-reform counterfactual is an uncontrolled exponential, so its
+    // absolute level is highly sensitive to inputs (a 3.5 % debt-base change moved
+    // it ~14 %). The robust guards are the order-of-magnitude invariants below
+    // (≫ reform peak; ratio large); this exact pin just tracks the current base.
+    it('counterfactual final D_t ≈ 808 560 Md€ (±0.5 %)', () => {
+      expectClose(cfFinalDebt, 808560.0);
     });
 
     it('counterfactual final D_t materially exceeds the reform peak (page narrative)', () => {
       expect(cfFinalDebt).toBeGreaterThan(kpis.peakDebt * 10);
     });
 
-    it('cfRatio (displayed ×N multiplier) ≈ 94', () => {
-      expect(cfRatio).toBe(94);
+    it('cfRatio (displayed ×N multiplier) ≈ 102', () => {
+      expect(cfRatio).toBe(102);
     });
 
     it('cfRatio is large (≥ 50) so the rhetorical footnote stays meaningful', () => {

@@ -833,9 +833,12 @@ export default function IntroPage({ navigateTo }) {
             </p>
             <p className="cc-cadrage-traj-note">
               Hypothèses macro centrales : inflation 2 %/an, démographie COR,
-              salaires réels +0,4 %/an. Au-delà de {cadrage.year2050}, l'horizon
-              devient trop incertain pour des chiffres précis — c'est pourquoi on
-              cadre d'abord le court-moyen terme.
+              salaires réels +0,4 %/an (la variante <em>prudente</em> du COR ; son
+              scénario central retient 0,7 %). Ces montants sont des projections
+              sous ce scénario — sensibles aux hypothèses, en premier lieu la
+              productivité — et non des prévisions. Au-delà de {cadrage.year2050},
+              l'horizon devient trop incertain pour des chiffres précis : on cadre
+              d'abord le court-moyen terme.
             </p>
             <p className="cc-cadrage-traj-note cc-cadrage-traj-note--cor2026">
               <strong>Mise à jour COR juin 2026 :</strong> dans son rapport annuel,

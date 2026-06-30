@@ -81,7 +81,11 @@ export const DEFAULT_CONFIG = {
   r_c: 0.045,
   r_d_base: 0.035,
   extraSpread: 0,
-  existingDebt: 3450,
+  // §3.1 sovereign-debt base. Only the RATIO existingDebt/baseGDP enters the model
+  // (eq 32: D_ext_t = existingDebt × GDP_t/baseGDP), i.e. the 2027 debt-to-GDP start.
+  // 3570/3000 = 119% — the 2027 trajectory (INSEE: end-2025 = €3,460.5bn = 115.6% of
+  // GDP, rising ~2pp/yr). Was 3450 (115%, ≈ the end-2025 level — stale for a 2027 base).
+  existingDebt: 3570,
   baseGDP: 3000,
   R0: 18.0,
   // §3.2 workforce & contributions
