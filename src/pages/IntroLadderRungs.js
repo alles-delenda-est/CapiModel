@@ -7,12 +7,13 @@
 // (only for rung 1 / no-reform scenario in the simulator).
 
 // Threshold constants — Greek-style fiscal collapse pedagogical overlay.
-// "No country has sustained debt > 300 % of GDP without restructuring"
-// (Reinhart & Rogoff, This Time Is Different). The GE-penalty kick-in at
-// 150 % models the snowball effect of refinancing risk before outright
-// restructuring becomes inevitable.
+// Reinhart & Rogoff (This Time Is Different) find no country has sustained debt
+// > 300 % of GDP without restructuring. We trigger EARLIER, at 250 %: EU fiscal
+// rules (the Stability & Growth Pact) make a 300 % threshold unrealistically high
+// for a member state, so a restructuring would bite well before R&R's historical
+// ceiling. The GE-penalty kick-in at 150 % models the refinancing-risk snowball.
 export const GREEK_GE_THRESHOLD_PCT_GDP    = 150
-export const GREEK_COLLAPSE_TRIGGER_PCT    = 300
+export const GREEK_COLLAPSE_TRIGGER_PCT    = 250
 export const GREEK_GE_ACCEL_PER_YEAR       = 0.04
 export const GREEK_R_D_RESTRUCTURE_TRIGGER = 0.195
 
@@ -29,9 +30,9 @@ export const GREEK_R_D_RESTRUCTURE_TRIGGER = 0.195
 //   1. Above GE threshold (150 % GDP): adds a 4 %/yr compound multiplier
 //      to debt fields each subsequent year — models the spiral that the
 //      engine's endogenous rate only partially captures.
-//   2. Above collapse trigger (300 % GDP) or r_d ≥ 19.5 %: caps debt at
-//      that level (forced restructuring), phases in a 50 % real pension
-//      cut over 3 years, and forces the solde toward ~0 (austerity
+//   2. Above collapse trigger (250 % GDP) or r_d ≥ 19.5 %: caps debt at
+//      that level (forced restructuring), phases in a 30 % real pension
+//      cut (10 %/yr over 3 years), and forces the solde toward ~0 (austerity
 //      equilibrium).
 export function applyGreekCollapseOverlay(series, fieldMap) {
   const { debt, debtRatio, rDeff, pension, solde } = fieldMap
@@ -60,7 +61,7 @@ export function applyGreekCollapseOverlay(series, fieldMap) {
   for (let i = collapseIdx; i < series.length; i++) {
     const tSinceCollapse = i - collapseIdx
     const cutPhase = Math.min(1, tSinceCollapse / 3)
-    series[i][pension]    = series[i][pension] * (1 - 0.5 * cutPhase)
+    series[i][pension]    = series[i][pension] * (1 - 0.3 * cutPhase)
     series[i][debt]       = capDebt      * (1 - 0.1 * cutPhase)
     series[i][debtRatio]  = capDebtRatio * (1 - 0.1 * cutPhase)
     series[i][solde]      = series[i][solde] + Math.abs(series[i][solde]) * cutPhase
