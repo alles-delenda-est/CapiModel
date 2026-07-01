@@ -284,6 +284,11 @@ function KpisTab({ k }) {
   const cards = [
     { label: 'Dette pic', value: fmt(k.peakDebt, 0), unit: 'Md€', sub: 'Atteinte en ' + k.peakDebtYear },
     { label: 'Intérêts cumulés', value: fmt(k.totalInterest, 0), unit: 'Md€', sub: 'Coût total de la transition' },
+    {
+      label: 'Sacrifices budgétaires', value: fmt(k.totalFiscalTransferReal, 0), unit: 'Md€',
+      cls: k.totalFiscalTransferReal > 0 ? 'is-bad' : '',
+      sub: 'Investissements renoncés : éducation, justice, solidarité (€ 2027)',
+    },
     { label: 'Pot capi (final, réel)', value: fmt(k.finalCapiReal, 0), unit: 'Md€', sub: '€ constants 2027' },
     {
       label: 'Spread minimum', value: fmt(k.minSpread * 100, 2), unit: '%',
@@ -418,7 +423,8 @@ function ParamsTab({ params, setTweak, mode }) {
           transferts du budget général, l'indexation jusqu'à 67,6 ans (cible COR) suffit à contenir
           la dette. <strong>Sans ces transferts, l'âge seul ne suffit plus</strong> : il faudrait
           partir à ~67 ans dès aujourd'hui, ou indexer depuis ~66 ans (soit près de 70 ans à terme),
-          pour rester solvable. Le COR calcule ses 67,6 ans en supposant ces transferts maintenus.
+          pour rester solvable. Le COR calcule ses 67,6 ans en supposant ces transferts maintenus, ainsi
+          que les coupes budgétaires pour les écoles, la justice, et autres qu'ils impliquent.
         </p>
       </div>
 

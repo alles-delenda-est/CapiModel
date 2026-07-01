@@ -248,11 +248,17 @@ export function extractKPIs(rows) {
   // Minimum balancing ratio = worst pension haircut (1.0 = no cut, 0.5 = floor).
   const minABMFactor = Math.min(1, ...rows.map(r => r.abmFactor_t ?? 1));
   const abmYearsActive = rows.filter(r => (r.abmFactor_t ?? 1) < 0.999).length;
+  // Cumulative budget-général transfers into the pension system — the "budget
+  // sacrifice": resources diverted from education / justice / solidarity to
+  // pensions. Nominal cumul + deflated to constant-2027 € (π = 2 %).
+  const totalFiscalTransfer = rows.reduce((s, r) => s + (r.fiscalTransfer_t ?? 0), 0);
+  const totalFiscalTransferReal = rows.reduce((s, r) => s + (r.fiscalTransfer_t ?? 0) / Math.pow(1.02, r.t), 0);
   return {
     peakDebt, peakDebtYear, debtFreeYear, totalInterest,
     finalCapi, finalCapiReal, netPosition, minSpread, S0,
     pvLegacyTotal: last.pvLegacyCum_t,
     pvCapiPayoutTotal: last.pvCapiPayoutCum_t,
+    totalFiscalTransfer, totalFiscalTransferReal,
     totalCapiShortfall, peakCapiShortfall, firstShortfallYear,
     employerTaxCutInitial, employerTaxCutEventual,
     totalBondsIssued, totalRepayFund, bondNetObligation, totalBondRedemptions,
