@@ -165,12 +165,12 @@ function ChartsTab({ rows, params, rung }) {
         <div className="sim-callout sim-callout-warn is-wide">
           <strong>Scénario sans réforme — présentation pédagogique :</strong>{' '}
           au-delà de 150 % du PIB, et dans l'absence de réforme crédible engagée,
-          les taux d'intérêt grimpent de 4 %/an. À 300 % du PIB, un événement de{' '}
-          <em>restructuration forcée</em> plafonne la dette et déclenche une coupe nominale
-          de 50 % des retraites, étalée sur 3 ans.{' '}
+          les taux d'intérêt grimpent de 4 %/an. À 250 % du PIB, la France est contrainte à une{' '}
+          <em>restructuration forcée</em>, avec plafonnement de la dette et des coupes
+          drastiques de 30 % des retraites (10 % par an sur 3 ans).{' '}
           <strong>Aucun pays n'a soutenu une dette supérieure à 300 % du PIB sans
           restructuration</strong>
-          <Cite tooltip="Reinhart, Carmen M. & Rogoff, Kenneth S. — This Time Is Different: Eight Centuries of Financial Folly (2009). Étude empirique de 800 ans de crises de dette souveraine dans 66 pays. Conclusion centrale : les pays qui laissent leur dette dépasser 90 % du PIB connaissent systématiquement une compression de croissance ; aucun n'a évité une restructuration ou un défaut au-delà de 300 %.">
+          <Cite tooltip="Reinhart, Carmen M. & Rogoff, Kenneth S. — This Time Is Different: Eight Centuries of Financial Folly (2009). Étude empirique de 800 ans de crises de dette souveraine dans 66 pays. Conclusion centrale : les pays qui laissent leur dette dépasser 90 % du PIB connaissent systématiquement une compression de croissance ; aucun n'a évité une restructuration ou un défaut au-delà de 300 %. Les règles budgétaires de l'UE (pacte de stabilité et de croissance) rendent toutefois ce seuil de 300 % irréaliste pour un État membre : le modèle déclenche donc la restructuration dès 250 %.">
             <sup className="fn-sup">1</sup>
           </Cite>.{' '}
           Cela est, évidemment, sans tenir compte de toutes les autres parties de la société
@@ -684,14 +684,14 @@ function PovTab({ params, rows, cfRows, collapse, rung }) {
       {reformHaircutActive && (
         <div className="sim-callout sim-callout-warn" style={{ marginBottom: 16 }}>
           <strong>Retraite après la restructuration ({collapse.collapseYear}) :</strong>{' '}
-          en l'absence de réforme, vous subiriez la coupe de 50 % des retraites appliquée
+          en l'absence de réforme, vous subiriez la coupe de 30 % des retraites appliquée
           sur 3 ans. Les chiffres ci-dessous en tiennent compte.
         </div>
       )}
       {cfHaircutActive && !reformHaircutActive && (
         <div className="sim-callout sim-callout-warn" style={{ marginBottom: 16 }}>
           <strong>Comparaison honnête — sans réforme, restructuration vers {collapse.collapseYear} :</strong>{' '}
-          la retraite « sans réforme » ci-dessous inclut la coupe de 50 % que le scénario
+          la retraite « sans réforme » ci-dessous inclut la coupe de 30 % que le scénario
           du statu quo entraînerait pour votre génération. Votre gain net réel est donc{' '}
           <strong>{fmtSigned(gain)} €/mois</strong>.
         </div>
@@ -700,7 +700,7 @@ function PovTab({ params, rows, cfRows, collapse, rung }) {
         <div className="sim-callout" style={{ marginBottom: 16, background: 'var(--bg-soft)', borderLeft: '3px solid var(--ink-3)' }}>
           <strong>Sans réforme, restructuration prévue vers {collapse.collapseYear}.</strong>{' '}
           Faites glisser le curseur au-delà de {collapse.collapseYear - (params.retirementAgeBase ?? 64)} pour
-          voir l'impact sur les générations concernées par la coupe de 50 %.
+          voir l'impact sur les générations concernées par la coupe de 30 %.
         </div>
       )}
 

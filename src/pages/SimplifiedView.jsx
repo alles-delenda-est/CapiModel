@@ -171,10 +171,10 @@ export default function SimplifiedView({ navigateTo }) {
       capi: r.K_t,
       capiReal: r.K_t / Math.pow(1 + (params.pi ?? 0.02), r.t),
     }))
-    // PR B: cap runaway debt at the ~300 % GDP restructuring point (same overlay
-    // the intro/simulator use), so a spiralling scenario shows a capped debt line
+    // Cap runaway debt at the ~250 % GDP restructuring point (same overlay the
+    // intro/simulator use), so a spiralling scenario shows a capped debt line
     // rather than an unreadable 20 000 %+ spike. No-op for solvent scenarios (they
-    // stay below the 150 %/300 % thresholds).
+    // stay below the 150 %/250 % thresholds).
     applyGreekCollapseOverlay(series, {
       debt: 'debt', debtRatio: 'debtRatio', rDeff: 'rDeff',
       pension: 'totalPensionExp', solde: 'solde',
