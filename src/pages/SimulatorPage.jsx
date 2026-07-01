@@ -284,6 +284,11 @@ function KpisTab({ k }) {
   const cards = [
     { label: 'Dette pic', value: fmt(k.peakDebt, 0), unit: 'Md€', sub: 'Atteinte en ' + k.peakDebtYear },
     { label: 'Intérêts cumulés', value: fmt(k.totalInterest, 0), unit: 'Md€', sub: 'Coût total de la transition' },
+    {
+      label: 'Sacrifices budgétaires', value: fmt(k.totalFiscalTransferReal, 0), unit: 'Md€',
+      cls: k.totalFiscalTransferReal > 0 ? 'is-bad' : '',
+      sub: 'Investissements renoncés : éducation, justice, solidarité (€ 2027)',
+    },
     { label: 'Pot capi (final, réel)', value: fmt(k.finalCapiReal, 0), unit: 'Md€', sub: '€ constants 2027' },
     {
       label: 'Spread minimum', value: fmt(k.minSpread * 100, 2), unit: '%',
@@ -389,6 +394,40 @@ function ParamsTab({ params, setTweak, mode }) {
 
   return (
     <div className="sim-params">
+      {/* Paramètres centraux — structural levers, always visible (not gated by a
+          reform mechanism), shown directly rather than behind a "Plus de détails". */}
+      <div className="sim-param-group sim-param-group-core">
+        <h3>Paramètres centraux</h3>
+        <p className="sim-param-group-sub">
+          Les leviers structurels du système, indépendants du type de réforme choisi.
+        </p>
+        <div className="sim-param-row">
+          <label>
+            Âge de départ à la retraite
+            <span className="sim-param-row-tip">Âge effectif de base, 60–70 ans (réforme 2023 : 64 ; gel LFSS 2026)</span>
+          </label>
+          <NumInput value={getEff('retirementAgeBase')} onChange={v => setTweak('retirementAgeBase', v)}
+            unit="ans" dp={1} step={0.5} min={60} max={70} />
+        </div>
+        <div className="sim-param-row">
+          <label>
+            Indexation de l'âge sur l'espérance de vie
+            <span className="sim-param-row-tip">Indexé sur 90 % du gain d'espérance de vie à 65 ans, afin d'atteindre 67,6 ans en 2070 (suivant le COR)</span>
+          </label>
+          <Seg value={getEff('retirementAgeMode')} onChange={v => setTweak('retirementAgeMode', v)}
+            options={[{ value: 'fixed', label: 'Fixe' }, { value: 'indexed', label: 'Indexé' }]} />
+        </div>
+        <p className="sim-param-note">
+          À terme, relever l'âge équilibre le <em>solde annuel</em> du système — mais la{' '}
+          <em>dette accumulée</em> pendant la montée en charge dépend du financement. Avec les
+          transferts du budget général, l'indexation jusqu'à 67,6 ans (cible COR) suffit à contenir
+          la dette. <strong>Sans ces transferts, l'âge seul ne suffit plus</strong> : il faudrait
+          partir à ~67 ans dès aujourd'hui, ou indexer depuis ~66 ans (soit près de 70 ans à terme),
+          pour rester solvable. Le COR calcule ses 67,6 ans en supposant ces transferts maintenus, ainsi
+          que les coupes budgétaires pour les écoles, la justice, et autres qu'ils impliquent.
+        </p>
+      </div>
+
       <ParamGroup
         title="Rééquilibrage Équinoxe"
         description="Réduction progressive des retraites élevées, restauration CSG/CRDS, fin de l'abattement forfaitaire."
