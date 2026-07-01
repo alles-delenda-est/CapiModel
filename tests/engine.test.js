@@ -48,8 +48,8 @@ describe('module scaffold', () => {
     expect(DREES_DECILES[9].hi).toBe(6000);
   });
 
-  it('exports LIFE_EXP_INDEXATION_FRACTION = 0.9', () => {
-    expect(LIFE_EXP_INDEXATION_FRACTION).toBe(0.9);
+  it('exports LIFE_EXP_INDEXATION_FRACTION = 0.92', () => {
+    expect(LIFE_EXP_INDEXATION_FRACTION).toBe(0.92);
   });
 });
 
@@ -215,9 +215,9 @@ describe('retirementAge §5.4 eq (12)', () => {
       prev = v;
     }
   });
-  it('indexed mode: A_R(t=10) = base + 10/10 × 0.91 × 0.9 = 64.819', () => {
+  it('indexed mode: A_R(t=10) = base + 10/10 × 0.91 × 0.92 = 64.8372', () => {
     const cfg = { ...DEFAULT_CONFIG, retirementAgeMode: 'indexed' };
-    expect(retirementAge(10, cfg)).toBeCloseTo(64.819, 12);
+    expect(retirementAge(10, cfg)).toBeCloseTo(64.8372, 12);
   });
   it('clamps at ceiling (extreme indexation)', () => {
     const cfg = {
