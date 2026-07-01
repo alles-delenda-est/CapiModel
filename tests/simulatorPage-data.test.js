@@ -178,12 +178,22 @@ describe('SimulatorPage — Rung 4 vs Rung 5: unfunded vs funded Chilean transit
 // ---------------------------------------------------------------
 // 6. Cross-rung ordering — reform reduces debt vs status quo
 // ---------------------------------------------------------------
-describe('SimulatorPage — cross-rung debt ordering', () => {
-  it('all reform rungs (2-5) have lower peak D_t than the status-quo (rung 1)', () => {
+describe('SimulatorPage — cross-rung debt ordering (PR B: financing decides)', () => {
+  // Under the INSEE-2026 / COR-RA2026 demographics, financing — not merely
+  // "doing a reform" — is what keeps debt below the no-reform path.
+  it('well-financed reforms (Équinoxe, Suède, Chili financé) stay below no-reform', () => {
     const peakRef = Math.max(...runsByIdx[0].map(r => r.D_t));
-    for (let i = 1; i < 5; i++) {
+    for (const i of [1, 2, 4]) { // rungs 2, 3, 5
       const peak = Math.max(...runsByIdx[i].map(r => r.D_t));
       expect(peak, `rung ${i + 1} peak D_t < rung 1`).toBeLessThan(peakRef);
     }
+  });
+
+  it('the UNFINANCED Chilean transition (rung 4) exceeds no-reform — financing is the point', () => {
+    const peakRef = Math.max(...runsByIdx[0].map(r => r.D_t));
+    const peak4   = Math.max(...runsByIdx[3].map(r => r.D_t));
+    // Diverting contributions to a fund without financing the legacy pensions
+    // is worse than the status quo — the cautionary lesson rungs 4/6 now show.
+    expect(peak4).toBeGreaterThan(peakRef);
   });
 });

@@ -566,10 +566,15 @@ function equinoxePhaseFactor(t, cfg) {
 // Maps demoProfile values to actuarial demoScenario equivalents.
 // Under parametric mode demoProfile is used directly; under actuarial mode
 // demoProfile is a no-op unless we translate it here (PR #34 A.2).
+// PR B: cor_high / cor_low are now genuine INSEE demographic variants
+// (population haute / basse), not the old unemployment variants. So the
+// favourable 'reformed' profile maps to cor_high (optimistic demographics),
+// while 'realistic' stays on the central reference (fertility 1.45 IS the
+// realistic case now). cor_low (pessimistic) is reachable via demoScenario.
 const PROFILE_TO_SCENARIO = {
-  realistic:   'cor_high',
+  realistic:   'cor_central',
   cor_central: 'cor_central',
-  reformed:    'cor_low',
+  reformed:    'cor_high',
 }
 
 export function runSimulation(userConfig = {}) {

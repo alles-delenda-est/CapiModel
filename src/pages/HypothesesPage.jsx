@@ -38,6 +38,20 @@ export default function HypothesesPage() {
           Les valeurs ci-dessous correspondent au scénario <strong>« Hypothèses de
           base »</strong>. Tous ces paramètres se règlent au curseur dans le simulateur.
         </p>
+        <p className="hyp-note">
+          <strong>Mise à jour juin 2026 — démographie.</strong> Le moteur démographique
+          est ré-ancré sur les <strong>Projections de population 2026 de l'INSEE</strong>
+          (fécondité&nbsp;1,45, migration&nbsp;+150&nbsp;000/an, population active
+          15-64&nbsp;ans) et le <strong>Rapport annuel 2026 du COR</strong> (dépenses de
+          retraite&nbsp;15,3&nbsp;% du PIB, solde&nbsp;−2,4&nbsp;% en&nbsp;2070). Le
+          constat central de cette révision&nbsp;: sous cette démographie plus dure, une
+          réforme n'est solvable que si sa dette de transition est
+          <strong>explicitement financée</strong> (prélèvement sur la croissance du fonds,
+          transferts budgétaires, ou équilibrage automatique à la suédoise) — une bascule
+          non financée dérive, et coûte plus cher que le statu quo. La viabilité dépend
+          aussi du <strong>maintien de l'emploi</strong> face au recul de la population en
+          âge de travailler.
+        </p>
       </section>
 
       {/* --- §3.1 Macro --- */}
@@ -168,7 +182,7 @@ export default function HypothesesPage() {
           <thead><tr><th>Paramètre</th><th>Valeur</th><th>Type</th><th>Source / rationale</th></tr></thead>
           <tbody>
             <tr><td>E₀ (dép. pension totale)</td><td>{d.E0} Md€/an</td><td><Kind k="S" /></td>
-              <td>COR 2026 confirme 13,9 % PIB en 2024 (≈ 370 Md€) ; trajectoire vers 14,2 % en 2070. Projeté à ~413 Md€ (13,8 % de 3 000 Md€) en Y0=2027 — cohérent avec la fourchette COR. Périmètre&nbsp;: tous retraités (cf. note R₀/E₀ §10.14).</td></tr>
+              <td>COR 2026 confirme 13,9 % PIB en 2024 (≈ 370 Md€) ; trajectoire vers 15,3 % en 2070 (RA2026, révisé depuis 14,2 %). Projeté à ~413 Md€ (13,8 % de 3 000 Md€) en Y0=2027 — cohérent avec la fourchette COR. Périmètre&nbsp;: tous retraités (cf. note R₀/E₀ §10.14).</td></tr>
             <tr><td>useEquinoxe</td><td>{String(d.useEquinoxe)}</td><td><Kind k="M" /></td>
               <td>Master toggle réforme Équinoxe.</td></tr>
             <tr><td>equinoxePhasing</td><td><code>{d.equinoxePhasing}</code></td><td><Kind k="M" /></td>

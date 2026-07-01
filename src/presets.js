@@ -40,6 +40,39 @@ const v1_default = {
 };
 
 /**
+ * v1_finance — financed funded transition (PR B). A Chilean-style switch whose
+ * transition debt is honestly financed: a tauK 2.5 %/yr sweep on fund growth
+ * above the solvency floor + existing budget-general transfers. Under the
+ * INSEE-2026 / COR-RA2026 demographics this stays SOLVENT (peak ~1 280 Md€ around
+ * 2065, debt cleared ~2074, fund autonomous thereafter) — whereas the minimal
+ * balanced cascade (v1_default) now tips into a debt spiral. This is the
+ * "reform that works" base case the pedagogy now leans on.
+ */
+const v1_finance = {
+  label: 'Transition financée',
+  description: 'Bascule capitalisée dont la dette de transition est financée (prélèvement tauK sur la croissance du fonds + transferts budgétaires). Reste solvable sous la démographie INSEE/COR 2026.',
+  params: {
+    ...UI_CONFIG,
+    useEquinoxe: true,
+    equinoxePhasing: 'phased-10y',
+    enableCapi: true,
+    chileMode: true,
+    cutoffAge: 50,
+    hlmDiscount: true,
+    delta: 0.3,
+    rho: 0.05,
+    T_hlm: 20,
+    lambda: 0.30,
+    tauK: 0.025,
+    thetaBuffer: 0.01,
+    employmentRateTarget: 0.76,
+    employmentTransitionYears: 8,
+    fiscalTransferMode: 'full',
+    demoProfile: 'cor_central',
+  },
+};
+
+/**
  * v1_optimiste — favourable macro / demographic regime.
  *
  * Joint move of r_c and r_f_portfolio: under v1.0a these are correlated in
@@ -185,6 +218,7 @@ const pureCapi = {
 
 export const PRESETS = {
   v1_default,
+  v1_finance,
   v1_optimiste,
   v1_stress,
   equinoxeOnly,
