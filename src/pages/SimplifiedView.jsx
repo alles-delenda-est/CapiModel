@@ -9,6 +9,7 @@ import { runSimulation } from '../simulation-engine.js'
 import { extractKPIs, PRESETS } from '../presets.js'
 import ChartTooltip from '../components/ChartTooltip.jsx'
 import IndividualPerspectivePanel from '../components/IndividualPerspectivePanel.jsx'
+import { applyGreekCollapseOverlay } from './IntroLadderRungs.js'
 import './SimplifiedView.css'
 
 // === Simplified scenario definitions — same engine params, friendly labels ===
@@ -22,10 +23,10 @@ const SCENARIOS = {
   },
   central: {
     label: 'Central',
-    tagline: 'Hypothèses réalistes',
-    description: 'Basé sur les tendances économiques récentes en France. C\'est le scénario de référence, ni optimiste ni pessimiste.',
+    tagline: 'Réforme financée',
+    description: 'Une réforme dont la dette de transition est honnêtement financée (prélèvement sur la croissance du fonds + transferts budgétaires). Sous la démographie INSEE/COR 2026, c\'est le scénario de référence qui reste solvable — une réforme minimale, elle, dérive.',
     color: '#2563eb',
-    params: { ...PRESETS.v1_default.params },
+    params: { ...PRESETS.v1_finance.params },
   },
   optimiste: {
     label: 'Optimiste',
@@ -157,17 +158,29 @@ export default function SimplifiedView({ navigateTo }) {
 
   // --- Chart data (simplified — fewer fields than expert view) ---
   const chartData = useMemo(() => {
-    return results.map(r => ({
+    const series = results.map(r => ({
       year: r.year,
       // v1.0a row-field renames; totalPensionExp + capiReal derived locally.
       legacyExp: r.legacyExp_t,
       capiPayout: r.capiPayout_t,
       totalPensionExp: r.legacyExp_t + r.capiPayout_t,
       debt: r.D_t,
+      debtRatio: r.D_t_to_gdp_pct,
+      rDeff: r.r_d_t,
+      solde: 0,
       capi: r.K_t,
       capiReal: r.K_t / Math.pow(1 + (params.pi ?? 0.02), r.t),
     }))
-  }, [results])
+    // PR B: cap runaway debt at the ~300 % GDP restructuring point (same overlay
+    // the intro/simulator use), so a spiralling scenario shows a capped debt line
+    // rather than an unreadable 20 000 %+ spike. No-op for solvent scenarios (they
+    // stay below the 150 %/300 % thresholds).
+    applyGreekCollapseOverlay(series, {
+      debt: 'debt', debtRatio: 'debtRatio', rDeff: 'rDeff',
+      pension: 'totalPensionExp', solde: 'solde',
+    })
+    return series
+  }, [results, params.pi])
 
   // --- Dynamic narrative based on results ---
   const narrative = useMemo(() => {

@@ -30,8 +30,13 @@ function expectClose(actual, expected, relTol = 0.005) {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tol);
 }
 
-describe('IntroPage data contract — v1_default preset', () => {
-  const params = PRESETS.v1_default.params;
+describe('IntroPage data contract — v1_finance preset (financed base case)', () => {
+  // PR B: the intro's "reform that works" base is now the FINANCED transition
+  // (v1_finance). The minimal balanced cascade (v1_default) spirals under the
+  // INSEE-2026 / COR-RA2026 demographics, so it is the cautionary case, not the
+  // base. NOTE: this file still asserts the pre-PR34 KPI-strip/footnote layout;
+  // a rewrite against the live LADDER_RUNGS intro is a pending cleanup.
+  const params = PRESETS.v1_finance.params;
   const results = runSimulation(params);
   const kpis = extractKPIs(results);
 
@@ -84,12 +89,12 @@ describe('IntroPage data contract — v1_default preset', () => {
       expect(kpis.peakDebtYear).toBeLessThanOrEqual(2096);
     });
 
-    it('peakDebtYear under v1_default is 2065', () => {
+    it('peakDebtYear under v1_finance is 2065', () => {
       expect(kpis.peakDebtYear).toBe(2065);
     });
 
-    it('debtFreeYear (gold ReferenceLine) is null — D_t never clears under v1_default', () => {
-      expect(kpis.debtFreeYear).toBeNull();
+    it('debtFreeYear (gold ReferenceLine) = 2074 — the financed reform clears its debt', () => {
+      expect(kpis.debtFreeYear).toBe(2074);
     });
 
     it('every chart row has a finite D_t', () => {
@@ -113,24 +118,24 @@ describe('IntroPage data contract — v1_default preset', () => {
       }
     });
 
-    it('Dette pic ≈ 7 910 Md€ (±0.5 %)', () => {
-      expectClose(kpis.peakDebt, 7910.3);
+    it('Dette pic ≈ 1 272 Md€ (±0.5 %)', () => {
+      expectClose(kpis.peakDebt, 1271.9);
     });
 
-    it('Intérêts cumulés ≈ 15 052 Md€ (±0.5 %)', () => {
-      expectClose(kpis.totalInterest, 15052.0);
+    it('Intérêts cumulés ≈ 1 689 Md€ (±0.5 %)', () => {
+      expectClose(kpis.totalInterest, 1689.3);
     });
 
-    it('Pot capi (fin) nominal ≈ 131 895 Md€ (±0.5 %)', () => {
-      expectClose(kpis.finalCapi, 131895.0);
+    it('Pot capi (fin) nominal ≈ 85 592 Md€ (±0.5 %)', () => {
+      expectClose(kpis.finalCapi, 85591.5);
     });
 
-    it('Pot capi (fin) real (2027 €) ≈ 33 637 Md€ (±0.5 %)', () => {
-      expectClose(kpis.finalCapiReal, 33637.0);
+    it('Pot capi (fin) real (2027 €) ≈ 21 828 Md€ (±0.5 %)', () => {
+      expectClose(kpis.finalCapiReal, 21828.3);
     });
 
-    it('Spread minimum ≈ +1.25 % (sign is OK → is-ok class)', () => {
-      expectClose(kpis.minSpread, 0.012448, 0.01);
+    it('Spread minimum ≈ +3.0 % (sign is OK → is-ok class)', () => {
+      expectClose(kpis.minSpread, 0.03, 0.01);
       expect(kpis.minSpread).toBeGreaterThan(0);
     });
 
@@ -162,19 +167,19 @@ describe('IntroPage data contract — v1_default preset', () => {
     });
 
     // NB: the no-reform counterfactual is an uncontrolled exponential, so its
-    // absolute level is highly sensitive to inputs (a 3.5 % debt-base change moved
-    // it ~14 %). The robust guards are the order-of-magnitude invariants below
-    // (≫ reform peak; ratio large); this exact pin just tracks the current base.
-    it('counterfactual final D_t ≈ 808 560 Md€ (±0.5 %)', () => {
-      expectClose(cfFinalDebt, 808560.0);
+    // absolute level is highly sensitive to inputs. The robust guards are the
+    // order-of-magnitude invariants below (≫ reform peak; ratio large); this
+    // exact pin just tracks the current base.
+    it('counterfactual final D_t ≈ 342 256 Md€ (±0.5 %)', () => {
+      expectClose(cfFinalDebt, 342255.8);
     });
 
     it('counterfactual final D_t materially exceeds the reform peak (page narrative)', () => {
       expect(cfFinalDebt).toBeGreaterThan(kpis.peakDebt * 10);
     });
 
-    it('cfRatio (displayed ×N multiplier) ≈ 102', () => {
-      expect(cfRatio).toBe(102);
+    it('cfRatio (displayed ×N multiplier) ≈ 269', () => {
+      expect(cfRatio).toBe(269);
     });
 
     it('cfRatio is large (≥ 50) so the rhetorical footnote stays meaningful', () => {
@@ -198,9 +203,10 @@ describe('IntroPage data contract — v1_default preset', () => {
       expect(Number.isFinite(kpis.minSpread)).toBe(true);
     });
 
-    it('UI default is the v2.1 balanced cascade with fiscalTransferMode=none', () => {
+    it('v1_finance is the balanced cascade + financed transition (fiscalTransferMode=full)', () => {
       expect(params.cashFlowMode).toBe('balanced');
-      expect(params.fiscalTransferMode).toBe('none');
+      expect(params.fiscalTransferMode).toBe('full');
+      expect(params.chileMode).toBe(true);
       expect(params.geKneeRatio).toBe(3);
       expect(params.geFloorRatio).toBe(8);
     });
