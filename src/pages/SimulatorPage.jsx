@@ -165,9 +165,9 @@ function ChartsTab({ rows, params, rung }) {
         <div className="sim-callout sim-callout-warn is-wide">
           <strong>Scénario sans réforme — présentation pédagogique :</strong>{' '}
           au-delà de 150 % du PIB, et dans l'absence de réforme crédible engagée,
-          les taux d'intérêt grimpent de 4 %/an. À 250 % du PIB, un événement de{' '}
-          <em>restructuration forcée</em> plafonne la dette et déclenche une coupe nominale
-          de 30 % des retraites (10 % par an sur 3 ans).{' '}
+          les taux d'intérêt grimpent de 4 %/an. À 250 % du PIB, la France est contrainte à une{' '}
+          <em>restructuration forcée</em>, avec plafonnement de la dette et des coupes
+          drastiques de 30 % des retraites (10 % par an sur 3 ans).{' '}
           <strong>Aucun pays n'a soutenu une dette supérieure à 300 % du PIB sans
           restructuration</strong>
           <Cite tooltip="Reinhart, Carmen M. & Rogoff, Kenneth S. — This Time Is Different: Eight Centuries of Financial Folly (2009). Étude empirique de 800 ans de crises de dette souveraine dans 66 pays. Conclusion centrale : les pays qui laissent leur dette dépasser 90 % du PIB connaissent systématiquement une compression de croissance ; aucun n'a évité une restructuration ou un défaut au-delà de 300 %. Les règles budgétaires de l'UE (pacte de stabilité et de croissance) rendent toutefois ce seuil de 300 % irréaliste pour un État membre : le modèle déclenche donc la restructuration dès 250 %.">

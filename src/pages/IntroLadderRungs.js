@@ -11,7 +11,7 @@
 // > 300 % of GDP without restructuring. We trigger EARLIER, at 250 %: EU fiscal
 // rules (the Stability & Growth Pact) make a 300 % threshold unrealistically high
 // for a member state, so a restructuring would bite well before R&R's historical
-// ceiling. The GE-penalty kick-in at 150 % models the refinancing-risk snowball.
+// ceiling. The GE-penalty phase in from 150 % models the refinancing-risk snowball.
 export const GREEK_GE_THRESHOLD_PCT_GDP    = 150
 export const GREEK_COLLAPSE_TRIGGER_PCT    = 250
 export const GREEK_GE_ACCEL_PER_YEAR       = 0.04
