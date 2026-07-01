@@ -412,6 +412,14 @@ function ParamsTab({ params, setTweak, mode }) {
           <Seg value={getEff('retirementAgeMode')} onChange={v => setTweak('retirementAgeMode', v)}
             options={[{ value: 'fixed', label: 'Fixe' }, { value: 'indexed', label: 'Indexé' }]} />
         </div>
+        <p className="sim-param-note">
+          À terme, relever l'âge équilibre le <em>solde annuel</em> du système — mais la{' '}
+          <em>dette accumulée</em> pendant la montée en charge dépend du financement. Avec les
+          transferts du budget général, l'indexation jusqu'à 67,6 ans (cible COR) suffit à contenir
+          la dette. <strong>Sans ces transferts, l'âge seul ne suffit plus</strong> : il faudrait
+          partir à ~67 ans dès aujourd'hui, ou indexer depuis ~66 ans (soit près de 70 ans à terme),
+          pour rester solvable. Le COR calcule ses 67,6 ans en supposant ces transferts maintenus.
+        </p>
       </div>
 
       <ParamGroup
