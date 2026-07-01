@@ -123,7 +123,7 @@ export default function HypothesesPage() {
             <tr><td>retirementAgeBase</td><td>{d.retirementAgeBase} ans</td><td><Kind k="S" /></td>
               <td>Âge effectif post-réforme 2023 (France).</td></tr>
             <tr><td>retirementAgeMode</td><td><code>{d.retirementAgeMode}</code></td><td><Kind k="M" /></td>
-              <td>« fixe » garde la base constante&nbsp;; « indexé » l'augmente d'1/2 du gain d'espérance de vie à 65 (logique Suède/Italie NDC).</td></tr>
+              <td>« fixe » garde la base constante&nbsp;; « indexé » l'augmente de 90&nbsp;% du gain d'espérance de vie à 65&nbsp;ans, afin d'atteindre ~67,6&nbsp;ans en 2070 (suivant le COR).</td></tr>
             <tr><td>retirementAgeFloor / Ceil</td><td>{d.retirementAgeFloor} / {d.retirementAgeCeil}</td><td><Kind k="M" /></td>
               <td>Bornes dures (clamp eq 12d).</td></tr>
             <tr><td>lifeExpAt65_Y0</td><td>{d.lifeExpAt65_Y0} ans</td><td><Kind k="S" /></td>

@@ -33,8 +33,12 @@ export const DREES_DECILES = [
   { lo: 2900, hi: 6000 },
 ];
 
-// §3.3 hardcoded constant — do NOT expose as parameter (v1.1 candidate per §10.13).
-export const LIFE_EXP_INDEXATION_FRACTION = 0.5;
+// §3.3 indexation fraction: the share of the life-expectancy-at-65 gain by which
+// the 'indexed' retirement-age mode raises the age each year. 0.9 makes the indexed
+// path reach ~67.6 by 2070, tracking COR's balancing age (was 0.5, a gentler ½-LE
+// rule). Only used when retirementAgeMode === 'indexed'; the 'fixed' default is
+// unaffected, so the regression fixtures are unchanged.
+export const LIFE_EXP_INDEXATION_FRACTION = 0.9;
 
 // §4 demographic profiles
 export const DEMOGRAPHIC_PROFILES = {
@@ -365,7 +369,8 @@ export function computeGePenalty(capiToGdp, knee, floor) {
 
 // §5.4 eq (12): retirement-age trajectory.
 // fixed: A_R(t) = retirementAgeBase always.
-// indexed: A_R(t) rises by half the gain in life expectancy at 65 since Y0.
+// indexed: A_R(t) rises by 90% of the gain in life expectancy at 65 since Y0
+//   (reaches ~67.6 by 2070, tracking COR's balancing age).
 // Then clamped to [retirementAgeFloor, retirementAgeCeil] (eq 12d).
 // Note: A_R is real-valued — never round in the loop (§10.2).
 export function retirementAge(t, cfg) {

@@ -407,7 +407,7 @@ function ParamsTab({ params, setTweak, mode }) {
         <div className="sim-param-row">
           <label>
             Indexation de l'âge sur l'espérance de vie
-            <span className="sim-param-row-tip">« indexé » relève l'âge de ½ du gain d'espérance de vie à 65 ans (logique NDC suédoise/italienne)</span>
+            <span className="sim-param-row-tip">Indexé sur 90 % du gain d'espérance de vie à 65 ans, afin d'atteindre 67,6 ans en 2070 (suivant le COR)</span>
           </label>
           <Seg value={getEff('retirementAgeMode')} onChange={v => setTweak('retirementAgeMode', v)}
             options={[{ value: 'fixed', label: 'Fixe' }, { value: 'indexed', label: 'Indexé' }]} />
