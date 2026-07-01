@@ -390,6 +390,29 @@ function ParamsTab({ params, setTweak, mode }) {
   return (
     <div className="sim-params">
       <ParamGroup
+        title="Âge de départ à la retraite"
+        description="Le levier central du débat français (réforme 2023 : 64 ans ; gel LFSS 2026). Relever l'âge réduit le nombre de retraités — et donc le coût du système."
+        alwaysOn
+      >
+        <div className="sim-param-row">
+          <label>
+            Âge de base
+            <span className="sim-param-row-tip">Âge effectif de départ, 60–70 ans</span>
+          </label>
+          <NumInput value={getEff('retirementAgeBase')} onChange={v => setTweak('retirementAgeBase', v)}
+            unit="ans" dp={1} step={0.5} min={60} max={70} />
+        </div>
+        <div className="sim-param-row">
+          <label>
+            Indexation sur l'espérance de vie
+            <span className="sim-param-row-tip">« indexé » relève l'âge de ½ du gain d'espérance de vie à 65 ans (logique NDC suédoise/italienne)</span>
+          </label>
+          <Seg value={getEff('retirementAgeMode')} onChange={v => setTweak('retirementAgeMode', v)}
+            options={[{ value: 'fixed', label: 'Fixe' }, { value: 'indexed', label: 'Indexé' }]} />
+        </div>
+      </ParamGroup>
+
+      <ParamGroup
         title="Rééquilibrage Équinoxe"
         description="Réduction progressive des retraites élevées, restauration CSG/CRDS, fin de l'abattement forfaitaire."
         enabled={getEff('useEquinoxe')}

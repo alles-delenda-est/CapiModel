@@ -685,14 +685,22 @@ export function runSimulation(userConfig = {}) {
     // ---------- §5.4 (pre-computed) Retirement age — needed for §5.2 retiree-stock scaling ----------
     // A_R_t is used in two places: (a) retireeAgeScale_t below, (b) §5.4 cohort routing.
     const A_R_t = retirementAge(t, cfg);                                        // (12)
-    // Mechanical retiree-stock reduction: when A_R rises, fewer people have crossed the threshold.
-    // Scale = T_ret(indexed) / T_ret(base) = 1 − ΔA / T_ret_base_t.  Only applied in indexed mode.
+    // Mechanical retiree-stock response to the retirement age. Both the COR P_ret
+    // tables (actuarial mode) and the parametric retireeIdx are calibrated to an
+    // effective retirement age of 64. Scale the retiree count by how far the ACTUAL
+    // retirement age A_R(t) sits above/below 64 — each extra year of work removes
+    // ~1/T_ret of the standing retiree stock (and vice-versa). This makes the base
+    // age a genuine PAYG lever (raise it → fewer retirees → lower legacy cost) in
+    // BOTH modes, and subsumes the previous indexed-only rise. At the default
+    // (retirementAgeBase = 64, mode 'fixed') A_R = 64 → scale = 1, so the default
+    // output is bit-identical to before (regression fixtures unaffected).
+    const RETIREE_TABLE_BASE_AGE = 64;
     const T_ret_base_t = Math.max(15,
       cfg.lifeExpAt65_Y0 + (65 - cfg.retirementAgeBase)
       + (t / 10) * cfg.lifeExpAt65_per_decade);
-    const deltaAR_t = A_R_t - cfg.retirementAgeBase;
-    const retireeAgeScale_t = (cfg.retirementAgeMode === 'indexed' && deltaAR_t > 0)
-      ? Math.max(0.5, 1 - deltaAR_t / T_ret_base_t)
+    const deltaAR_t = A_R_t - RETIREE_TABLE_BASE_AGE;
+    const retireeAgeScale_t = deltaAR_t !== 0
+      ? clamp(1 - deltaAR_t / T_ret_base_t, 0.5, 1.5)
       : 1;
 
     // ---------- §5.2 Demographic indices — dispatched by demoMode ----------
