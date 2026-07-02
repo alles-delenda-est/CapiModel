@@ -1,0 +1,188 @@
+# Spec — SimplifiedView redesign (Project B)
+
+**Status:** DRAFT for review. Author: Claude (Opus 4.8). Reviewer: Sonnet agent (cold).
+**Depends on:** Project A (250 % / 30 % restructuring) landing first — B's collapse-year and
+pension-delta KPIs read A's restructuring logic. **Its own PR**, after A.
+
+---
+
+## 1. Thesis (the one sentence everything serves)
+
+> **There is no free lever.** Every path to keeping French pensions running has a price —
+> paid in *pensions cut*, in *budget sacrificed* (schools, justice, solidarity), or in *debt*.
+> The simple view lets a lay visitor feel those trade-offs by choosing a reform and watching
+> the four "prices" move.
+
+Every option, KPI and parameter below is justified only insofar as it serves that sentence.
+Anything that doesn't, we cut.
+
+## 2. Architecture — single source of truth for reforms (the key decision)
+
+Today the reforms are defined **twice**: `LADDER_RUNGS` (intro) and the SimplifiedView's own
+`SCENARIOS`. That risks the *same* reform showing *different* numbers in two places.
+
+**Decision:** extract one shared module — `src/reforms.js` — exporting the canonical reform
+set (id, label, lay-friendly description, `paramOverrides`, `greekCollapse` flag). Both the
+intro ladder and the simple view consume it. The simple view picks a subset; the intro keeps
+its 5-rung ordering. New reforms (Équilibre 2070) are added here once.
+
+Canonical reforms (superset):
+`actuel · equinoxe · equilibre2070 (NEW) · suede · chiliFinance · chiliUnfunded · capiPur`
+
+SimplifiedView exposes **5**: `actuel · equinoxe · equilibre2070 · suede · chiliFinance`
+(Patrick's 01–05). Options 01/02 confirmed = **Actuel / Rééquilibrage (Équinoxe)**.
+
+## 3. Layout (mobile-first; the current view already works on mobile — keep it)
+
+```
+┌ Réforme (selector, 5 options) ─────────────────────────┐
+├ 4 KPI cards (2×2 on mobile) ───────────────────────────┤
+├ Chart: cotisations vs dette vs diversification (ex-dette)┤
+├ Paramètres (incl. macro "conditions" folded in) ───────┤
+└ Reste (narrative / individual perspective) as-is ──────┘
+```
+
+Per Patrick B3: the macro **conditions** (optimiste/neutre/stress) move *into* the parameters
+block rather than a second top selector — so there's **one** top-level choice (the reform) and
+everything else is a parameter. Cleaner for lay users; keeps reform × conditions orthogonal.
+
+## 4. KPIs (4 — the "four prices")
+
+| KPI | Definition | Notes |
+|---|---|---|
+| **Pension moyenne 2070** | *Delta* vs today, **real** (€2027), €/mois. `perRetireeRealMo(2070) − perRetireeRealMo(2027)`. | Mouse-over explains "écart en pouvoir d'achat vs aujourd'hui". Under a collapsing scenario this reflects A's 30 % cut → strongly negative (the point). Baseline "today" = 2027 model value, stated. |
+| **Année de collapse** | First year the restructuring trigger (A: 250 % GDP) fires, else "—". | Blank/"Aucun" for solvent reforms — informative, not a bug. |
+| **Sacrifices budgétaires** | Cumulative budget-général transfers, real €2027 (`totalFiscalTransferReal`, already in extractKPIs). | The KPI added in #49. Same quantity as the §5 chart series (KPI = cumulative, chart = annual flow). |
+| **Fonds net 2070** | `K_t(2070) − D_t(2070)` (net funded position at COR's horizon). | 2070 not 2096, to align with COR. |
+
+## 5. Chart — cotisations vs dette vs "sacrifices budgétaires"
+
+Three annual series, %GDP or Md€:
+- **Cotisations** — payroll contributions (`C_s_t + C_e_t`).
+- **Dette** — transition debt stock `D_t` (with A's 250 % cap overlay for display).
+- **Sacrifices budgétaires** — annual budget-général transfers, `fiscalTransfer_t`. This is the
+  **same quantity** as the §4 "Sacrifices budgétaires" KPI, shown two ways: the chart is the
+  *annual flow*, the KPI is its *cumulative total* (`totalFiscalTransferReal`). Deliberately
+  **excludes** HLM proceeds, the CDC endowment draw, and the tauK/surplus levies — those are
+  one-off asset realizations or levies on the funded pot, not recurring cuts to the general
+  budget (schools, justice, solidarity). *Consequence (intended): for the one funded reform
+  shown, `chiliFinance`, its HLM/fund/levy financing does not appear on this chart — because it
+  isn't a budget sacrifice.*
+
+## 6. Parameters (the material few; each with a COR reference in tiny text)
+
+| Param | Control | COR reference (tiny text) |
+|---|---|---|
+| **Âge de départ** | number 60–70 | *COR : 64 (réforme 2023) ; 67,6 pour équilibrer en 2070* |
+| **Indexation de l'âge** | Fixe / Indexé | *COR : ~67,6 ans en 2070 sous indexation* |
+| **Croissance (productivité)** | slider (w_r) | *COR central : 0,7 %/an* |
+| **Taux d'emploi** | slider (employmentRateTarget) | *COR : hypothèse ~... ; nous 76 %* |
+| **Sacrifices budgétaires** | Oui/Non (transfers toggle) | mouse-over (Patrick): *"diversification des moyens de financement, c.-à-d. couper le budget de l'éducation, de la justice, et de la solidarité"* |
+| **Financement HLM + CDC** | Oui/Non (default Oui) | bundles rho/delta/F0 into one switch |
+| **Conditions macro** | Prudent / Neutre / Optimiste | folded here per B3 |
+
+Lay register: use plain-language labels, not jargon (e.g. "L'âge suit-il l'espérance de vie ?").
+
+## 7. Équilibre 2070 (per B4 decision; solver method decided 2026-07-02)
+
+A **live-solved** parametric package: on every run, one lever is auto-solved so that net debt
+2070 ≈ 0 under the *currently selected* conditions and other parameters. **Not** a fixed offline
+pin (an earlier draft pinned it; superseded — a pinned package only balances at the exact
+baseline it was solved for, so the "Équilibre" label goes false the moment a user moves the
+conditions selector or a slider). The reveal of *what it takes* — the solved lever value under
+each condition — is the lesson.
+
+**Method — well-posed as a single 1-D root-find:**
+- **Target:** `netFund(2070) = K_t(2070) − D_t(2070) ≈ 0`. Budget transfers are *structurally*
+  zero already (`fiscalTransferMode: 'none'`), so the solver chases net debt only — one equation.
+- **Solved lever:** **`employmentRateTarget`** — continuous, bounded, smooth in the objective.
+  Age stays a *user* input (with its `Fixe / Indexé` mode), **not** a solver output. This
+  resolves Open Q #3: the solver moves employment only; contributions are untouched.
+- **Algorithm:** bisection on employment over `[floor, ceiling]` to tolerance (e.g. |netFund| <
+  ~1 Md€), ~15–20 engine evaluations, sub-second. The full model already re-runs live on every
+  keystroke, so the cost is acceptable.
+- **Ceiling = a defensible economic assumption, not a UI knob.** The pedagogy hinges on it:
+  set too high and nothing is ever infeasible, too low and everything is. Ground the maximum
+  employment rate in literature (French vs. Nordic benchmark, on the same cohort
+  `employmentRateTarget` uses) **before** pinning it. Placeholder pending research — do NOT
+  invent it at build time.
+- **Infeasible state (NEW UI state):** when the required employment exceeds the ceiling, clamp
+  at the ceiling and show **"Impossible d'équilibrer dans ces conditions sans autre levier"**
+  instead of KPIs that imply balance. This is the loudest statement of the thesis, not an error.
+
+Distinct from chiliFinance (funded). The reform stays in `reforms.js`, but its
+`employmentRateTarget` is **computed at run time**, not stored as a literal.
+
+## 8. Dependencies, testing, risks
+
+- **A before B** (collapse + pension-cut logic).
+- **Tests:** data-contract test for `reforms.js` (each reform's headline KPIs pinned, ±0.5 %),
+  mirroring `simulatorPage-data.test.js`. Guards drift. For `equilibre2070` (solved, not pinned)
+  assert the *outcome* — `netFund(2070) ≈ 0` under baseline conditions, plus the solved
+  employment value — **not** a hardcoded input; add a case asserting the **infeasible** branch
+  fires under stress conditions.
+- **Risk / by design:** the employment solver (§7) may demand extreme values to hit nil-debt.
+  When the requirement exceeds the ceiling it clamps and surfaces the **infeasible state** —
+  that extremity *is* the message, not a bug. Age remains a user input under its ≤ 70 ceiling.
+- **Risk:** folding conditions into params must not explode the param count on mobile — keep to 7.
+
+## 9. Open questions for Patrick
+
+1. ~~Confirm options 01/02?~~ **Resolved:** 01/02 = **Actuel / Rééquilibrage (Équinoxe)**.
+2. ~~Exact components of the third chart series?~~ **Resolved (§5):** the series is renamed
+   **"Sacrifices budgétaires"** = annual `fiscalTransfer_t` only (same quantity as the §4 KPI);
+   HLM proceeds, CDC draw and tauK/surplus levies are **excluded**.
+3. ~~Équilibre 2070: which levers may it move?~~ **Resolved (§7):** the solver moves
+   **employment only**; age is a user input, contributions are untouched.
+4. ~~Keep the 5 sliders' copy, or rewrite fully?~~ **Resolved:** keep the slider *style* and
+   reuse the friendly copy for the one surviving continuous param (**productivité / `w_r`**);
+   write fresh copy for the two new sliders (**âge de départ, taux d'emploi**); retire the
+   `r_c` / spread / `rho` / `lambda` sliders (folded into conditions + toggles per §6, R4).
+
+---
+
+## 10. Revisions after the cold Sonnet review
+
+**Accepted (fold into build):**
+- **[B1] `perRetireeRealMo` is NOT a row field** — it's derived in IntroPage from
+  `legacyExp_t + transitionalPaygExp_t + ndcPaygPension_t + capiPayout_t` over
+  `legacyRetirees_t + capiRetirees_t`, deflated by `I_factor_t`. Extract a shared
+  `derivePerRetireePension(row)` helper (part of the single-source-of-truth work);
+  don't treat it as a row property.
+- **[B2] Pin the pension "today" baseline** from ONE reference run (`actuel`, t=0),
+  computed once at mount — not from the selected reform (Équinoxe cuts at t=0, which
+  would move the baseline and make cross-reform comparison meaningless).
+- **[R2] Third chart series** — *superseded by §5 (decided with Patrick):* pared to annual
+  `fiscalTransfer_t` only and renamed **"Sacrifices budgétaires"** (= the §4 KPI's annual flow).
+  HLM proceeds, CDC/`fundReturn_t` and the tauK/surplus levies are all excluded — the series is
+  budget-général transfers only. (R2's original point about not double-counting `fundReturn_t`
+  still holds and is now moot, since nothing but `fiscalTransfer_t` remains.)
+- **[R4] Mobile control types:** 3 continuous *sliders* (productivité, âge, emploi) in
+  one group; the discrete controls (indexation Fixe/Indexé, transfers Oui/Non, HLM+CDC
+  Oui/Non, conditions Prudent/Neutre/Optimiste) in a separate "Réglages" sub-section —
+  don't mix range inputs and toggles in one visual rhythm.
+- **[M1/M3] Scope it as a REWRITE, not an extension.** Explicitly retire the current
+  SCENARIOS concept and list what stays (individual-perspective panel, "comment ça
+  marche") vs what's dropped (the 3-chart section, the decade table) — decide per item.
+- **[M2] Audit `IndividualPerspectivePanel`** before assuming "as-is": it may read the
+  old r_c/rho/lambda params, which are gone from the new param set.
+
+**Resolved by testing:**
+- **[B3] "Équilibre 2070" IS buildable.** Under the merged demographics (cor_central),
+  a PAYG-only, no-transfer package clears debt by 2070 with e.g. **age 68 + emploi 80 %**,
+  or **age 67 indexed + Équinoxe + emploi 80 %** (debt clears, peak only ~200 Md€). The
+  *severity* is the lesson. *(Delivery method superseded — see §7: solved live on employment,
+  not pinned offline. These figures now serve as sanity anchors for the solver's baseline.)*
+
+**Rejected / corrected:**
+- **[R3] The reviewer claimed "no project test files exist" — false.** `tests/` has
+  engine, engine-reference, introPage-data, simulatorPage-data, retirementAge (327
+  tests). The *valid* half stands: the ID rename must be systematic (MECHANISMS + intro
+  display keyed to IDs) and guarded by a `reforms.js` data-contract test.
+
+**Decided by Patrick:**
+- **[R1] Keep the "Année de collapse" KPI.** For **solvent outcomes** (no collapse),
+  display **"Système sain"** instead of a blank/"—" — turns the empty state into a
+  positive signal. It shows a *year* only when the system collapses (e.g. the statu quo
+  once the budget transfers are switched off), tying it directly to the Sacrifices
+  budgétaires KPI — the "no free lever" point made visible.
