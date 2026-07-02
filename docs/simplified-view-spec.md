@@ -30,7 +30,7 @@ Canonical reforms (superset):
 `actuel · equinoxe · equilibre2070 (NEW) · suede · chiliFinance · chiliUnfunded · capiPur`
 
 SimplifiedView exposes **5**: `actuel · equinoxe · equilibre2070 · suede · chiliFinance`
-(Patrick's 01–05). *Open Q: confirm 01/02 = actuel/equinoxe.*
+(Patrick's 01–05). Options 01/02 confirmed = **Actuel / Rééquilibrage (Équinoxe)**.
 
 ## 3. Layout (mobile-first; the current view already works on mobile — keep it)
 
@@ -52,18 +52,22 @@ everything else is a parameter. Cleaner for lay users; keeps reform × condition
 |---|---|---|
 | **Pension moyenne 2070** | *Delta* vs today, **real** (€2027), €/mois. `perRetireeRealMo(2070) − perRetireeRealMo(2027)`. | Mouse-over explains "écart en pouvoir d'achat vs aujourd'hui". Under a collapsing scenario this reflects A's 30 % cut → strongly negative (the point). Baseline "today" = 2027 model value, stated. |
 | **Année de collapse** | First year the restructuring trigger (A: 250 % GDP) fires, else "—". | Blank/"Aucun" for solvent reforms — informative, not a bug. |
-| **Sacrifices budgétaires** | Cumulative budget-général transfers, real €2027 (`totalFiscalTransferReal`, already in extractKPIs). | The KPI added in #49. |
+| **Sacrifices budgétaires** | Cumulative budget-général transfers, real €2027 (`totalFiscalTransferReal`, already in extractKPIs). | The KPI added in #49. Same quantity as the §5 chart series (KPI = cumulative, chart = annual flow). |
 | **Fonds net 2070** | `K_t(2070) − D_t(2070)` (net funded position at COR's horizon). | 2070 not 2096, to align with COR. |
 
-## 5. Chart — cotisations vs dette vs "diversification des moyens de financement (ex-dette)"
+## 5. Chart — cotisations vs dette vs "sacrifices budgétaires"
 
 Three annual series, %GDP or Md€:
 - **Cotisations** — payroll contributions (`C_s_t + C_e_t`).
 - **Dette** — transition debt stock `D_t` (with A's 250 % cap overlay for display).
-- **Diversification des moyens de financement (hors dette)** — the *non-debt* financing the
-  system leans on: budget transfers + HLM proceeds + CDC endowment draw + tauK sweep. i.e. every
-  euro closing the gap that isn't a cotisation and isn't new debt.
-  *Open Q: confirm the exact components — proposal above.*
+- **Sacrifices budgétaires** — annual budget-général transfers, `fiscalTransfer_t`. This is the
+  **same quantity** as the §4 "Sacrifices budgétaires" KPI, shown two ways: the chart is the
+  *annual flow*, the KPI is its *cumulative total* (`totalFiscalTransferReal`). Deliberately
+  **excludes** HLM proceeds, the CDC endowment draw, and the tauK/surplus levies — those are
+  one-off asset realizations or levies on the funded pot, not recurring cuts to the general
+  budget (schools, justice, solidarity). *Consequence (intended): for the one funded reform
+  shown, `chiliFinance`, its HLM/fund/levy financing does not appear on this chart — because it
+  isn't a budget sacrifice.*
 
 ## 6. Parameters (the material few; each with a COR reference in tiny text)
 
@@ -124,11 +128,16 @@ Distinct from chiliFinance (funded). The reform stays in `reforms.js`, but its
 
 ## 9. Open questions for Patrick
 
-1. Confirm options 01/02 = Actuel / Rééquilibrage (Équinoxe)?
-2. Exact components of "diversification (ex-dette)" — proposal in §5.
+1. ~~Confirm options 01/02?~~ **Resolved:** 01/02 = **Actuel / Rééquilibrage (Équinoxe)**.
+2. ~~Exact components of the third chart series?~~ **Resolved (§5):** the series is renamed
+   **"Sacrifices budgétaires"** = annual `fiscalTransfer_t` only (same quantity as the §4 KPI);
+   HLM proceeds, CDC draw and tauK/surplus levies are **excluded**.
 3. ~~Équilibre 2070: which levers may it move?~~ **Resolved (§7):** the solver moves
    **employment only**; age is a user input, contributions are untouched.
-4. Keep the 5 sliders' current friendly copy, or rewrite fully?
+4. ~~Keep the 5 sliders' copy, or rewrite fully?~~ **Resolved:** keep the slider *style* and
+   reuse the friendly copy for the one surviving continuous param (**productivité / `w_r`**);
+   write fresh copy for the two new sliders (**âge de départ, taux d'emploi**); retire the
+   `r_c` / spread / `rho` / `lambda` sliders (folded into conditions + toggles per §6, R4).
 
 ---
 
@@ -143,9 +152,11 @@ Distinct from chiliFinance (funded). The reform stays in `reforms.js`, but its
 - **[B2] Pin the pension "today" baseline** from ONE reference run (`actuel`, t=0),
   computed once at mount — not from the selected reform (Équinoxe cuts at t=0, which
   would move the baseline and make cross-reform comparison meaningless).
-- **[R2] "Diversification (ex-dette)" chart series** = `fiscalTransfer_t + H_t_proceeds
-  + tauKLevy_t + surplusLevy_t` (identifiable add-on financing). Do NOT include
-  `fundReturn_t` — it's already inside the deficit waterfall → double-counting.
+- **[R2] Third chart series** — *superseded by §5 (decided with Patrick):* pared to annual
+  `fiscalTransfer_t` only and renamed **"Sacrifices budgétaires"** (= the §4 KPI's annual flow).
+  HLM proceeds, CDC/`fundReturn_t` and the tauK/surplus levies are all excluded — the series is
+  budget-général transfers only. (R2's original point about not double-counting `fundReturn_t`
+  still holds and is now moot, since nothing but `fiscalTransfer_t` remains.)
 - **[R4] Mobile control types:** 3 continuous *sliders* (productivité, âge, emploi) in
   one group; the discrete controls (indexation Fixe/Indexé, transfers Oui/Non, HLM+CDC
   Oui/Non, conditions Prudent/Neutre/Optimiste) in a separate "Réglages" sub-section —
