@@ -79,27 +79,55 @@ Three annual series, %GDP or Md€:
 
 Lay register: use plain-language labels, not jargon (e.g. "L'âge suit-il l'espérance de vie ?").
 
-## 7. Équilibre 2070 (per B4 decision)
+## 7. Équilibre 2070 (per B4 decision; solver method decided 2026-07-02)
 
-A **pre-solved** parametric package (not a live optimizer) calibrated so that, by 2070,
-net debt ≈ 0 **and** budget transfers ≈ 0 — balancing *répartition as-is* by age + employment
-+ (if needed) contributions. The reveal of *what it takes* (the param values) is the lesson.
-Distinct from chiliFinance (funded). Build note: solve the package offline, pin it in `reforms.js`.
+A **live-solved** parametric package: on every run, one lever is auto-solved so that net debt
+2070 ≈ 0 under the *currently selected* conditions and other parameters. **Not** a fixed offline
+pin (an earlier draft pinned it; superseded — a pinned package only balances at the exact
+baseline it was solved for, so the "Équilibre" label goes false the moment a user moves the
+conditions selector or a slider). The reveal of *what it takes* — the solved lever value under
+each condition — is the lesson.
+
+**Method — well-posed as a single 1-D root-find:**
+- **Target:** `netFund(2070) = K_t(2070) − D_t(2070) ≈ 0`. Budget transfers are *structurally*
+  zero already (`fiscalTransferMode: 'none'`), so the solver chases net debt only — one equation.
+- **Solved lever:** **`employmentRateTarget`** — continuous, bounded, smooth in the objective.
+  Age stays a *user* input (with its `Fixe / Indexé` mode), **not** a solver output. This
+  resolves Open Q #3: the solver moves employment only; contributions are untouched.
+- **Algorithm:** bisection on employment over `[floor, ceiling]` to tolerance (e.g. |netFund| <
+  ~1 Md€), ~15–20 engine evaluations, sub-second. The full model already re-runs live on every
+  keystroke, so the cost is acceptable.
+- **Ceiling = a defensible economic assumption, not a UI knob.** The pedagogy hinges on it:
+  set too high and nothing is ever infeasible, too low and everything is. Ground the maximum
+  employment rate in literature (French vs. Nordic benchmark, on the same cohort
+  `employmentRateTarget` uses) **before** pinning it. Placeholder pending research — do NOT
+  invent it at build time.
+- **Infeasible state (NEW UI state):** when the required employment exceeds the ceiling, clamp
+  at the ceiling and show **"Impossible d'équilibrer dans ces conditions sans autre levier"**
+  instead of KPIs that imply balance. This is the loudest statement of the thesis, not an error.
+
+Distinct from chiliFinance (funded). The reform stays in `reforms.js`, but its
+`employmentRateTarget` is **computed at run time**, not stored as a literal.
 
 ## 8. Dependencies, testing, risks
 
 - **A before B** (collapse + pension-cut logic).
 - **Tests:** data-contract test for `reforms.js` (each reform's headline KPIs pinned, ±0.5 %),
-  mirroring `simulatorPage-data.test.js`. Guards drift.
-- **Risk:** Équilibre 2070 may push age/employment to extreme values to hit nil-debt/nil-transfer
-  — that extremity *is* the message, but check it stays within control ranges (age ≤ 70 ceiling).
+  mirroring `simulatorPage-data.test.js`. Guards drift. For `equilibre2070` (solved, not pinned)
+  assert the *outcome* — `netFund(2070) ≈ 0` under baseline conditions, plus the solved
+  employment value — **not** a hardcoded input; add a case asserting the **infeasible** branch
+  fires under stress conditions.
+- **Risk / by design:** the employment solver (§7) may demand extreme values to hit nil-debt.
+  When the requirement exceeds the ceiling it clamps and surfaces the **infeasible state** —
+  that extremity *is* the message, not a bug. Age remains a user input under its ≤ 70 ceiling.
 - **Risk:** folding conditions into params must not explode the param count on mobile — keep to 7.
 
 ## 9. Open questions for Patrick
 
 1. Confirm options 01/02 = Actuel / Rééquilibrage (Équinoxe)?
 2. Exact components of "diversification (ex-dette)" — proposal in §5.
-3. Équilibre 2070: which levers may it move (age + employment only, or also contributions)?
+3. ~~Équilibre 2070: which levers may it move?~~ **Resolved (§7):** the solver moves
+   **employment only**; age is a user input, contributions are untouched.
 4. Keep the 5 sliders' current friendly copy, or rewrite fully?
 
 ---
@@ -132,7 +160,8 @@ Distinct from chiliFinance (funded). Build note: solve the package offline, pin 
 - **[B3] "Équilibre 2070" IS buildable.** Under the merged demographics (cor_central),
   a PAYG-only, no-transfer package clears debt by 2070 with e.g. **age 68 + emploi 80 %**,
   or **age 67 indexed + Équinoxe + emploi 80 %** (debt clears, peak only ~200 Md€). The
-  *severity* is the lesson. Pre-solve one package and pin it in `reforms.js`.
+  *severity* is the lesson. *(Delivery method superseded — see §7: solved live on employment,
+  not pinned offline. These figures now serve as sanity anchors for the solver's baseline.)*
 
 **Rejected / corrected:**
 - **[R3] The reviewer claimed "no project test files exist" — false.** `tests/` has
