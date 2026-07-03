@@ -11,8 +11,9 @@ const SLIDERS = [
   { key: 'retirementAgeBase', label: 'Âge de départ', min: 60, max: 70, step: 1,
     format: v => `${v} ans`, cor: 'COR : 64 ; 67,6 pour équilibrer en 2070',
     desc: 'L’âge légal de départ à la retraite.' },
-  { key: 'employmentRateTarget', label: 'Taux d’emploi', min: 0.60, max: 0.85, step: 0.01,
-    format: v => `${(v * 100).toFixed(0)}%`, cor: 'nous : 76 %',
+  { key: 'employmentRateTarget', label: 'Taux d’emploi', min: 0.60, max: 0.82, step: 0.01,
+    format: v => `${(v * 100).toFixed(0)}%`, cor: 'plafond 82 % (Pays-Bas ≈ 82 %, France ≈ 69 %) — voir Hypothèses',
+    tip: 'Plafond du taux d’emploi des 15-64 ans, retenu comme limite haute plausible pour la France (82 %). Il correspond au meilleur niveau observé parmi les grandes économies avancées comparables — Pays-Bas ≈ 82 %, Suisse ≈ 80 % (2024) — très au-dessus des ~69 % actuels de la France. Au-delà, seule une économie atypique comme l’Islande (≈ 86 %) l’atteint : le modèle considère alors l’équilibre comme hors de portée. Détail sur la page Hypothèses & sources.',
     desc: 'Part des 15–64 ans en emploi à terme.' },
 ]
 const TOGGLES = [
@@ -34,9 +35,9 @@ export default function SimplifiedParams({ values, setOverride, conditionId, set
         {SLIDERS.map(s => {
           const locked = disabledKeys.includes(s.key)
           return (
-            <div key={s.key} className={`sv-slider-card ${locked ? 'sv-locked' : ''}`}>
+            <div key={s.key} className={`sv-slider-card ${locked ? 'sv-locked' : ''}`} title={s.tip}>
               <div className="sv-slider-header">
-                <label>{s.label}{locked && <span className="sv-lock"> 🔒 auto</span>}</label>
+                <label>{s.label}{s.tip && <span className="sv-info" aria-hidden="true"> ⓘ</span>}{locked && <span className="sv-lock"> 🔒 auto</span>}</label>
                 <span className="sv-slider-value">{s.format(values[s.key])}</span>
               </div>
               <input type="range" className="sv-slider"

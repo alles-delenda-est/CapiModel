@@ -4,10 +4,13 @@
 // "Impossible d'équilibrer dans ces conditions sans autre levier".
 import { runSimulation } from './simulation-engine.js';
 
-// PLACEHOLDER — load-bearing economic assumption (spec §7). Must be grounded in
-// literature (French vs. Nordic employment-rate benchmark, same cohort as
-// employmentRateTarget) before release. Do NOT ship this number unreviewed.
-export const EMPLOYMENT_CEILING = 0.85;
+// Load-bearing economic assumption (spec §7): the most optimistic aggregate
+// 15–64 employment rate France could plausibly reach. Grounded (2026) in
+// harmonised Eurostat/OECD 2024 data — the best-performing large diverse economy
+// is the Netherlands (~82.3 %); France is ~68.8 % (INSEE 2024). 0.85 would require
+// ~89 % participation (only Iceland, an atypical small economy, reaches it), so
+// 0.82 is the defensible ceiling. Full derivation on the Hypothèses page.
+export const EMPLOYMENT_CEILING = 0.82;
 
 // "≈ 0" balance band, Md€. Matches the reforms.js contract's "self-financing"
 // threshold (equilibre2070 has no capi, so netFund = −D_t; D_t < 50 ≈ balanced).

@@ -690,3 +690,6 @@
 /* Project B: the selected reform, named in section headers so the model is
    always identifiable on mobile once the selector scrolls out of view. */
 .sv-current-reform { color: var(--accent-sienna); white-space: nowrap; }
+
+/* Discoverability hint for a param with a mouse-over (title) tooltip. */
+.sv-info { color: var(--text-secondary); font-size: 0.85em; cursor: help; }
