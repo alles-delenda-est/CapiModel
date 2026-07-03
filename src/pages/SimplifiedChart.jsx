@@ -7,7 +7,7 @@ import { applyGreekCollapseOverlay } from './IntroLadderRungs.js'
 
 // Chart for the SimplifiedView (spec §5): where the money comes from —
 // cotisations vs dette vs sacrifices budgétaires (annual budget transfers).
-export default function SimplifiedChart({ results, collapseYear }) {
+export default function SimplifiedChart({ results, collapseYear, reformLabel }) {
   const data = results.map(r => ({
     year: r.year,
     cotisations: (r.C_s_t ?? 0) + (r.C_e_t ?? 0),
@@ -26,12 +26,18 @@ export default function SimplifiedChart({ results, collapseYear }) {
   })
   return (
     <div className="sv-chart-block">
-      <h3>D'où vient l'argent&nbsp;: cotisations, dette, sacrifices budgétaires</h3>
+      <h3>D'où vient l'argent&nbsp;: cotisations, dette, sacrifices budgétaires{reformLabel ? ` · ${reformLabel}` : ''}</h3>
       <p className="sv-chart-explain">
         Les <strong>cotisations</strong> financent le système. Quand elles ne
         suffisent pas, on comble par la <strong>dette</strong> (emprunt) ou par
         les <strong>sacrifices budgétaires</strong>&nbsp;— de l'argent pris au
         budget de l'État (écoles, justice, solidarité).
+      </p>
+      <p className="sv-chart-explain">
+        Pourquoi la dette se résorbe-t-elle vite une fois le pic passé&nbsp;? Les
+        retraites de l'ancien système s'éteignent progressivement tandis que les
+        cotisations continuent de croître&nbsp;: le solde redevient excédentaire et
+        rembourse le stock accumulé.
       </p>
       <ResponsiveContainer width="100%" height={320}>
         <ComposedChart data={data} margin={{ bottom: 20 }}>

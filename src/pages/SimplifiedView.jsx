@@ -93,7 +93,7 @@ export default function SimplifiedView({ navigateTo }) {
 
       {/* ---- FOUR PRICES (or infeasible banner) ---- */}
       <section className="sv-section">
-        <h2>Les quatre prix</h2>
+        <h2>Les quatre prix&nbsp;· <span className="sv-current-reform">{REFORMS[reformId].label}</span></h2>
         {infeasible ? (
           <div className="sv-infeasible">
             <strong>Impossible d’équilibrer dans ces conditions sans autre levier.</strong>
@@ -133,7 +133,7 @@ export default function SimplifiedView({ navigateTo }) {
               <div className={`sv-kpi-value ${kpis.fondsNet2070 >= 0 ? 'sv-ok' : 'sv-bad'}`}>
                 {fmtMd(kpis.fondsNet2070)}
               </div>
-              <div className="sv-kpi-year">épargne − dette, à l’horizon COR</div>
+              <div className="sv-kpi-year">épargne − dette (réel, € 2027), à l’horizon COR</div>
             </div>
           </div>
         )}
@@ -141,7 +141,7 @@ export default function SimplifiedView({ navigateTo }) {
 
       {/* ---- CHART ---- */}
       <section className="sv-section">
-        <SimplifiedChart results={results} collapseYear={kpis.collapseYear} />
+        <SimplifiedChart results={results} collapseYear={kpis.collapseYear} reformLabel={REFORMS[reformId].label} />
       </section>
 
       {/* ---- PARAMETERS ---- */}
@@ -177,7 +177,8 @@ export default function SimplifiedView({ navigateTo }) {
               <div className="sv-step-number">2</div>
               <h3>La réforme</h3>
               <p>
-                Selon la réforme choisie, on ajuste les prestations et l'âge, ou
+                Selon la réforme choisie, un rééquilibrage comme
+                {' '}<strong>Équinoxe</strong> ajuste les prestations et l'âge, ou
                 l'on redirige une partie des cotisations vers de
                 l'<strong>épargne investie</strong> qui fructifie.
               </p>

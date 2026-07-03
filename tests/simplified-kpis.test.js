@@ -25,11 +25,11 @@ describe('extractSimplifiedKPIs', () => {
     const k = extractSimplifiedKPIs(rows, { R0, baselinePerRetiree2027: baseline() });
     expect(k.collapseYear).toBeNull();
   });
-  it('fondsNet2070 equals K_t − D_t at 2070', () => {
+  it('fondsNet2070 is the REAL (deflated) K_t − D_t at 2070', () => {
     const rows = runReform('chili_finance');
     const r70 = rows.find(r => r.year === 2070);
     const k = extractSimplifiedKPIs(rows, { R0, baselinePerRetiree2027: baseline() });
-    expect(k.fondsNet2070).toBeCloseTo(r70.K_t - r70.D_t, 6);
+    expect(k.fondsNet2070).toBeCloseTo((r70.K_t - r70.D_t) / Math.pow(1.02, r70.t), 6);
   });
   it('sacrifices are zero when transfers are off (equilibre2070)', () => {
     const rows = runReform('equilibre2070');   // fiscalTransferMode: 'none'

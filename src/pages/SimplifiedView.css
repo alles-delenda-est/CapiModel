@@ -686,3 +686,7 @@
 }
 .sv-infeasible strong { color: var(--color-danger); display: block; margin-bottom: 0.5rem; font-size: 1.05rem; }
 .sv-infeasible p { margin: 0; color: var(--text-secondary); }
+
+/* Project B: the selected reform, named in section headers so the model is
+   always identifiable on mobile once the selector scrolls out of view. */
+.sv-current-reform { color: var(--accent-sienna); white-space: nowrap; }

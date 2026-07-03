@@ -28,8 +28,11 @@ export function extractSimplifiedKPIs(rows, { R0, baselinePerRetiree2027 }) {
   // 3. Sacrifices budgétaires — cumulative budget transfers, real €2027.
   const sacrificesReal = extractKPIs(rows).totalFiscalTransferReal;
 
-  // 4. Fonds net 2070 — funded position at COR's horizon.
-  const fondsNet2070 = row2070.K_t - row2070.D_t;
+  // 4. Fonds net 2070 — funded position at COR's horizon, in REAL €2027
+  // (deflate by cumulative inflation to t, π = 2 %/yr), so it's on the same
+  // footing as the pension-delta / sacrifices KPIs and the simulator's
+  // "Position nette finale (réel)".
+  const fondsNet2070 = (row2070.K_t - row2070.D_t) / Math.pow(1.02, row2070.t);
 
   return { pensionDelta2070, collapseYear, sacrificesReal, fondsNet2070 };
 }
