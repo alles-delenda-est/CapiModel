@@ -176,8 +176,10 @@ export default function SimplifiedView({ navigateTo }) {
               <h3>Aujourd'hui</h3>
               <p>
                 Les actifs cotisent pour payer directement les retraites des
-                retraités actuels. C'est le système par <strong>répartition</strong>&nbsp;:
-                l'argent ne fait que transiter, il n'est pas épargné.
+                retraités actuels, complété par des sacrifices budgétaires. C'est le
+                système par <strong>répartition</strong>&nbsp;: l'argent ne fait que
+                transiter, il n'est pas épargné, plutôt le contraire puisque l'on
+                s'endette chaque année.
               </p>
             </div>
             <div className="sv-step">
