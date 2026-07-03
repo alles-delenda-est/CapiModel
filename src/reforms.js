@@ -7,9 +7,13 @@
 // `greekCollapse` flags whether the reform gets the pedagogical restructuring
 // overlay (applyGreekCollapseOverlay lives in IntroLadderRungs.js).
 
+import { UI_CONFIG } from './presets.js';
+
 export const REFORMS = {
   actuel: {
     id: 'actuel',
+    label: 'Statu quo',
+    blurb: 'La répartition telle quelle, sans réforme.',
     greekCollapse: true,
     paramOverrides: {
       useEquinoxe: false,
@@ -28,6 +32,8 @@ export const REFORMS = {
 
   equinoxe: {
     id: 'equinoxe',
+    label: 'Rééquilibrage (Équinoxe)',
+    blurb: 'Réforme des prestations et de l’âge, sans capitalisation.',
     greekCollapse: false,
     paramOverrides: {
       useEquinoxe: true,
@@ -47,6 +53,8 @@ export const REFORMS = {
 
   suede: {
     id: 'suede',
+    label: 'Modèle suédois',
+    blurb: 'Comptes notionnels à cotisations définies (NDC).',
     greekCollapse: false,
     paramOverrides: {
       useEquinoxe: true,
@@ -91,6 +99,8 @@ export const REFORMS = {
 
   chili_finance: {
     id: 'chili_finance',
+    label: 'Capitalisation financée',
+    blurb: 'Bascule capitalisée dont la dette de transition est financée.',
     greekCollapse: false,
     paramOverrides: {
       useEquinoxe: true,
@@ -139,6 +149,8 @@ export const REFORMS = {
   // NEW (Project B): parametric balance of the current répartition system.
   equilibre2070: {
     id: 'equilibre2070',
+    label: 'Équilibre 2070',
+    blurb: 'Équilibrer la répartition à l’horizon 2070 — au prix qu’il faut.',
     greekCollapse: false,
     paramOverrides: {
     // Parametric balance of répartition by 2070: no capitalisation, no budget
@@ -162,3 +174,27 @@ export const REFORMS = {
   },
   },
 };
+
+// ── SimplifiedView presentation layer (Project B) ──────────────────────────
+// The 5 reforms the simple view exposes, in display order (spec §2).
+export const SIMPLE_REFORM_IDS = [
+  'actuel', 'equinoxe', 'equilibre2070', 'suede', 'chili_finance',
+];
+
+// Macro "conditions" — orthogonal to the reform (spec §3, B3). A small
+// correlated macro regime; NOT reforms, carry no structural levers. Values
+// mirror presets.js v1_stress / defaults / v1_optimiste.
+export const MACRO_CONDITIONS = {
+  prudent:   { label: 'Prudent',   params: { r_c: 0.025, r_f_portfolio: 0.025, w_r: 0.001, r_d_base: 0.045, extraSpread: 0.005 } },
+  neutre:    { label: 'Neutre',    params: {} },
+  optimiste: { label: 'Optimiste', params: { r_c: 0.05,  r_f_portfolio: 0.05,  w_r: 0.008 } },
+};
+
+// Single base-config builder: UI_CONFIG ← reform.paramOverrides ← condition.params.
+export function SIMPLE_BASE(reformId, conditionId = 'neutre') {
+  return {
+    ...UI_CONFIG,
+    ...REFORMS[reformId].paramOverrides,
+    ...(MACRO_CONDITIONS[conditionId]?.params ?? {}),
+  };
+}

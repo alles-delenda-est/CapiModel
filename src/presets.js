@@ -20,7 +20,7 @@ import { DEFAULT_CONFIG } from './simulation-engine.js';
 //   floor=8.0 → full penalty only at 8× GDP (implausibly large; provides an upper bound)
 // This keeps r_cn_eff above annuityRate_t throughout the simulation horizon, preventing
 // the retirees' pot from depleting and keeping total capi payout monotonically growing.
-const UI_CONFIG = {
+export const UI_CONFIG = {
   ...DEFAULT_CONFIG,
   cashFlowMode: 'balanced',
   geKneeRatio: 3.0,

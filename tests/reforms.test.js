@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { runSimulation, DEFAULT_CONFIG } from '../src/simulation-engine.js';
-import { REFORMS } from '../src/reforms.js';
+import { REFORMS, SIMPLE_REFORM_IDS, MACRO_CONDITIONS, SIMPLE_BASE } from '../src/reforms.js';
 import { LADDER_RUNGS } from '../src/pages/IntroLadderRungs.js';
 
 const UI_BASE = { ...DEFAULT_CONFIG, cashFlowMode: 'balanced', geKneeRatio: 3.0, geFloorRatio: 8.0 };
@@ -48,5 +48,27 @@ describe('reforms.js — canonical reform library', () => {
     const p = REFORMS.equilibre2070.paramOverrides;
     expect(p.enableCapi).toBe(false);
     expect(p.fiscalTransferMode).toBe('none');
+  });
+});
+
+describe('reforms.js — SimplifiedView presentation layer', () => {
+  it('exposes exactly the 5 simple-view reforms, in order', () => {
+    expect(SIMPLE_REFORM_IDS).toEqual(
+      ['actuel', 'equinoxe', 'equilibre2070', 'suede', 'chili_finance']
+    );
+  });
+  it('every simple reform has a lay label and blurb', () => {
+    for (const id of SIMPLE_REFORM_IDS) {
+      expect(REFORMS[id].label, `${id} label`).toBeTruthy();
+      expect(REFORMS[id].blurb, `${id} blurb`).toBeTruthy();
+    }
+  });
+  it('exposes the three macro conditions', () => {
+    expect(Object.keys(MACRO_CONDITIONS).sort()).toEqual(['neutre', 'optimiste', 'prudent']);
+  });
+  it('SIMPLE_BASE layers condition over reform over UI_CONFIG', () => {
+    const cfg = SIMPLE_BASE('actuel', 'optimiste');
+    expect(cfg.demoProfile).toBeDefined();                      // from UI_CONFIG/reform
+    expect(cfg.r_c).toBe(MACRO_CONDITIONS.optimiste.params.r_c); // condition wins
   });
 });

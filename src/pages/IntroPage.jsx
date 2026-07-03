@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 import { runSimulation, DEFAULT_CONFIG } from '../simulation-engine.js'
 import { LADDER_RUNGS, FOOTNOTES, MECHANISMS, applyGreekCollapseOverlay } from './IntroLadderRungs.js'
+import { derivePerRetireePension } from '../pension.js'
 import './IntroPage.css'
 
 // French number formatter
@@ -162,15 +163,7 @@ function runRung(rung) {
   const rows = runSimulation(params)
 
   let series = rows.map(r => {
-    const totalRetireesM = r.retireeIdx * params.R0
-    const totalPensionMdE =
-      (r.legacyExp_t ?? 0)
-      + (r.transitionalPaygExp_t ?? 0)
-      + (r.ndcPaygPension_t ?? 0)
-      + (r.capiPayout_t ?? 0)
-    const perRetireeRealMo = totalRetireesM > 1e-6
-      ? (totalPensionMdE / totalRetireesM) / r.I_factor_t * 1000 / 12
-      : 0
+    const perRetireeRealMo = derivePerRetireePension(r, params.R0)
     const soldeExclTransfersMdE = (r.netFlow_t ?? 0) - (r.fiscalTransfer_t ?? 0)
     return {
       year: r.year,
