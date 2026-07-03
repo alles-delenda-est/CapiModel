@@ -324,7 +324,7 @@ export default function TransitionWalkthrough({ navigateTo }) {
     ? {
         peakDebt: fmtDelta(cur.kpis.peakDebt, prev.kpis.peakDebt, true),
         totalInterest: fmtDelta(cur.kpis.totalInterest, prev.kpis.totalInterest, true),
-        netPosition: fmtDelta(cur.kpis.netPosition, prev.kpis.netPosition, false),
+        netPosition: fmtDelta(cur.kpis.netPositionReal, prev.kpis.netPositionReal, false),
       }
     : { peakDebt: null, totalInterest: null, netPosition: null }
 
@@ -536,9 +536,9 @@ export default function TransitionWalkthrough({ navigateTo }) {
             )}
           </div>
           <div className="tw-kpi">
-            <div className="tw-kpi-label">Position nette finale</div>
-            <div className="tw-kpi-value">{fmtMd(cur.kpis.netPosition)}</div>
-            <div className="tw-kpi-sub">capi − dette de transition</div>
+            <div className="tw-kpi-label">Position nette finale (réel)</div>
+            <div className="tw-kpi-value">{fmtMd(cur.kpis.netPositionReal)}</div>
+            <div className="tw-kpi-sub">capi − dette (€ 2027)</div>
             {deltas.netPosition && (
               <div className={`tw-kpi-delta ${deltas.netPosition.cls}`}>{deltas.netPosition.text}</div>
             )}

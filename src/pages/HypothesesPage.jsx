@@ -336,7 +336,7 @@ export default function HypothesesPage() {
             <tr><td>Année sans dette</td><td>{liveKPIs.debtFreeYear ?? 'jamais'}</td></tr>
             <tr><td>Intérêts cumulés</td><td>{fmtN(liveKPIs.totalInterest)} Md€</td></tr>
             <tr><td>Pot capi (réel 2027€)</td><td>{fmtN(liveKPIs.finalCapiReal)} Md€</td></tr>
-            <tr><td>Position nette finale</td><td>{fmtN(liveKPIs.netPosition)} Md€</td></tr>
+            <tr><td>Position nette finale (réel 2027€)</td><td>{fmtN(liveKPIs.netPositionReal)} Md€</td></tr>
             <tr><td>Insuffisance capi cumulée</td><td>{fmtN(liveKPIs.totalCapiShortfall)} Md€</td></tr>
             <tr><td>Économies pension S₀ (t=0, pré-phasing)</td><td>{liveKPIs.S0.toFixed(2)} Md€/an</td></tr>
           </tbody>
