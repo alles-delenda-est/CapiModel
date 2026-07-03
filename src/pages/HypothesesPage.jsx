@@ -120,8 +120,32 @@ export default function HypothesesPage() {
               <td>Cible OCDE-médiane ; réglable pour scénarios de réforme du marché du travail.</td></tr>
             <tr><td>employmentTransitionYears</td><td>{d.employmentTransitionYears} ans</td><td><Kind k="M" /></td>
               <td>Durée smoothstep vers la cible.</td></tr>
+            <tr><td>Plafond du taux d'emploi (solveur « Équilibre 2070 »)</td><td>82 %</td><td><Kind k="C" /></td>
+              <td>Borne haute plausible pour la France ; voir la note ci-dessous.</td></tr>
           </tbody>
         </table>
+        <p className="hyp-note">
+          <strong>Plafond du taux d'emploi (solveur « Équilibre 2070 »).</strong> Le solveur relève le
+          taux d'emploi des 15-64 ans jusqu'à ce que le régime par répartition s'équilibre, dans la
+          limite d'un plafond fixé à <strong>82 %</strong>. Ce plafond représente la borne haute réaliste
+          pour la France : en 2024, son taux d'emploi des 15-64 ans n'était que de <strong>68,8 %</strong>{' '}
+          (INSEE), pour un taux d'activité record de 74,4 %. À titre de comparaison internationale
+          (données harmonisées Eurostat/OCDE, 2024, tranche 15-64 ans), les meilleures performances sont
+          l'Islande (≈ 85,6 %), les Pays-Bas (≈ 82,3 %), la Suisse (≈ 80 %), le Japon (≈ 79 %), la Suède
+          et l'Allemagne (≈ 77 %) ; la moyenne OCDE s'établit à 70,2 %. Retenir 82 % revient à supposer
+          que la France rejoigne le meilleur niveau des grandes économies avancées comparables (Pays-Bas),
+          soit un gain d'environ 13 points par rapport à aujourd'hui. Même en atteignant le plein emploi
+          (chômage ≈ 5 %, scénario central du COR de juin 2024), un tel taux d'emploi exige un taux
+          d'activité de l'ordre de 86 %, proche du sommet mondial ; un plafond de 85 % supposerait
+          d'égaler l'Islande, cas atypique (petite économie très homogène), et n'est donc pas retenu.
+          À noter : le cadrage sur les 15-64 ans plafonne mécaniquement l'effet d'un recul de l'âge de
+          départ au-delà de 64 ans, les 65 ans et plus sortant du dénominateur.
+        </p>
+        <p className="hyp-note">
+          <em>Sources</em> : INSEE, <em>Une photographie du marché du travail en 2024</em> (Insee
+          Première n° 2044, mars 2025) ; Eurostat / OCDE, taux d'emploi harmonisé 15-64 ans, 2024
+          (OECD Labour Market Situation, Q4 2024) ; COR, <em>Rapport annuel — juin 2024</em>.
+        </p>
       </section>
 
       {/* --- §3.3 Retirement age (NEW SECTION) --- */}
