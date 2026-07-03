@@ -50,7 +50,7 @@ const v1_default = {
  */
 const v1_finance = {
   label: 'Transition financée',
-  description: 'Bascule capitalisée dont la dette de transition est financée (prélèvement tauK sur la croissance du fonds + transferts budgétaires). Reste solvable sous la démographie INSEE/COR 2026.',
+  description: 'Bascule capitalisée dont la dette de transition est financée (prélèvement sur la croissance du fonds + transferts budgétaires). Reste solvable sous la démographie INSEE/COR 2026.',
   params: {
     ...UI_CONFIG,
     useEquinoxe: true,

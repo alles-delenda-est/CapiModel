@@ -87,6 +87,10 @@ export const FOOTNOTES = {
     num: 2,
     text: "Les logements sociaux font souvent l'actualité ces derniers temps, jamais pour des raisons flatteuses. Le système actuel est à bout de souffle : pendant que des proches de partis de gauche se voient octroyer les meilleures places pour y rester même en tant que député gagnant trois fois le SMIC, les gens en réel besoin attendent littéralement des années pour un foyer trop souvent vétuste, mal équipé, et encore heureux quand ce n'est pas tout simplement insalubre. Ici nous proposons du gagnant-gagnant : l'État, manifestement incapable de gérer le parc actuel, le liquide sur 10 ans, le concept du « logement social » est supprimé de la loi, et à la place la même partie du budget est donnée directement aux foyers les plus modestes pour se loger à leur guise.",
   },
+  fn_tauk: {
+    num: 3,
+    text: "« Prélèvement sur la croissance du fonds » correspond au paramètre tauK du moteur (2,5 %/an au-delà du plancher de solvabilité).",
+  },
 }
 
 export const LADDER_RUNGS = [
@@ -134,30 +138,16 @@ export const LADDER_RUNGS = [
     paramOverrides: REFORMS.suede.paramOverrides,
   },
   {
-    id: 'chili',
-    num: 4,
-    label: 'Mode Chilien',
-    short: 'Chili',
-    headline: 'Chili : capitalisation totale + obligations de reconnaissance',
-    summary: [
-      "Notre deuxième alternative est de suivre le modèle chilien. Ici, les cotisations basculent intégralement vers la capitalisation. Les droits acquis sont convertis en obligations indexées sur l'inflation, qui se remboursent à mesure que chaque cotisant prend sa retraite. La dette de transition est explicite et lisible — mais elle est massive si on ne la finance pas, même avec l'affectation des actifs nets de la Caisse des Dépôts et des Consignations ",
-      { fn: 'fn_1' },
-      " (CDC) et la liquidation du parc social sur 10 ans ",
-      { fn: 'fn_2' },
-      ".",
-    ],
-    closestPreset: 'v1_default + chileMode (canonical toggle)',
-    color: '#9b72f0',
-    greekCollapse: REFORMS.chili.greekCollapse,
-    paramOverrides: REFORMS.chili.paramOverrides,
-  },
-  {
     id: 'chili_finance',
-    num: 5,
+    num: 4,
     label: 'Chili + transition financée',
     short: 'Chili financé',
     headline: 'Chili financé : la dette de transition est visible et remboursée par le fonds',
-    summary: "Même bascule que le Mode Chilien, mais le déficit de transition est affiché honnêtement comme dette publique (pic ~1 200 Md€ vers 2047, ~137 % du PIB). Les transferts du budget général déjà existants (CSG, FSV, TVA ≈ 40 Md€/an) continuent de couvrir une partie du solde. La dette restante est remboursée par un prélèvement de 2,5 %/an sur le fonds capitalisé (tauK), prélevé uniquement sur la croissance au-delà du plancher de solvabilité — les retraites ne sont jamais amputées. La dette est soldée vers 2060 et le fonds reste autonome jusqu'à la fin de l'horizon.",
+    summary: [
+      "Même bascule que le Mode Chilien, mais le déficit de transition est affiché honnêtement comme dette publique (pic ~1 200 Md€ vers 2047, ~137 % du PIB). Les transferts du budget général déjà existants (CSG, FSV, TVA ≈ 40 Md€/an) continuent de couvrir une partie du solde. La dette restante est remboursée par un prélèvement de 2,5 %/an sur le fonds capitalisé",
+      { fn: 'fn_tauk' },
+      ", prélevé sur la croissance du fonds de capitalisation ainsi créé et jamais sur la santé, l'éducation, et la justice, au-delà du plancher de solvabilité — les retraites ne sont jamais amputées. La dette est soldée vers 2060 et le fonds reste autonome jusqu'à la fin de l'horizon.",
+    ],
     closestPreset: 'v1_default + chileMode + fiscalTransferMode:full',
     color: '#b8c1d1',
     greekCollapse: REFORMS.chili_finance.greekCollapse,
@@ -165,7 +155,7 @@ export const LADDER_RUNGS = [
   },
   {
     id: 'capi_pur',
-    num: 6,
+    num: 5,
     label: 'Capitalisation pure',
     short: 'Capi pur',
     headline: 'Capitalisation pure : bascule totale, dette explicite, pari sur le rendement',
@@ -228,26 +218,12 @@ export const MECHANISMS = {
       text: "Sur une carrière complète, le pilier capitalisé à 4 % constitue un complément qui peut représenter une part non négligeable de la pension finale, en plus du compte notionnel. Le partage des fruits de la croissance entre actifs et retraités éteint le conflit intergénérationnel.",
     },
   },
-  chili: {
-    tagline: 'Comment ça marche, concrètement, pour vous',
-    points: [
-      { k: 'Le véhicule', v: "Un compte de capitalisation individuel (type AFP chilien) ouvert à votre nom. La totalité de vos cotisations retraite y est investie sur les marchés, via des gestionnaires régulés." },
-      { k: 'Vos droits déjà acquis', v: "Les années déjà cotisées avant la bascule sont converties en « obligations de reconnaissance » : un titre de dette de l'État, indexé sur l'inflation, qui vous est remis et remboursé au moment où vous partez à la retraite." },
-      { k: 'Votre cotisation', v: "Elle ne finance plus les retraités actuels mais alimente directement votre propre capital, qui vous appartient et est transmissible." },
-      { k: 'À la retraite', v: "Votre capital accumulé, plus le remboursement de vos obligations de reconnaissance, financent une rente ou un retrait programmé." },
-      { k: 'La dette de transition', v: "Le point délicat : pendant des décennies, l'État doit continuer à payer les retraités actuels ET rembourser les obligations de reconnaissance, alors que les cotisations ne lui reviennent plus. D'où une dette de transition massive si elle n'est pas financée." },
-    ],
-    example: {
-      label: 'À titre d’illustration',
-      text: "Un actif de 40 ans reçoit une obligation de reconnaissance pour ses ~20 années déjà cotisées ; ses cotisations futures, elles, capitalisent sur son compte jusqu'à 65 ans. À la retraite, les deux se combinent.",
-    },
-  },
   chili_finance: {
     tagline: 'Comment ça marche, concrètement, pour vous',
     points: [
       { k: 'Le véhicule', v: "Identique au Mode Chilien pour vous : un compte de capitalisation individuel, cotisations intégralement investies à votre nom, droits acquis convertis en obligations de reconnaissance indexées sur l'inflation." },
       { k: 'Ce qui change', v: "La différence est au niveau de l'État, pas du vôtre. La dette de transition est affichée honnêtement comme dette publique (pic ~1 200 Md€ vers 2047) plutôt que cachée." },
-      { k: 'Comment la dette est remboursée', v: "Par un prélèvement de 2,5 %/an sur le fonds capitalisé, pris uniquement sur la croissance au-delà du plancher de solvabilité. Concrètement : on ne ponctionne que le surplus de performance, jamais le capital nécessaire à votre pension." },
+      { k: 'Comment la dette est remboursée', v: "Par un prélèvement de 2,5 %/an sur le fonds capitalisé, pris sur la croissance du fonds de capitalisation ainsi créé et jamais sur la santé, l'éducation, et la justice, au-delà du plancher de solvabilité. Concrètement : on ne ponctionne que le surplus de performance, jamais le capital nécessaire à votre pension." },
       { k: 'Votre pension', v: "Elle n'est jamais amputée. La dette est soldée vers 2060 et le fonds reste autonome ensuite, jusqu'à la fin de l'horizon." },
     ],
   },
