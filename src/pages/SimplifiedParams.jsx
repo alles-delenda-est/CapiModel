@@ -52,7 +52,10 @@ export default function SimplifiedParams({ values, setOverride, conditionId, set
       <div className="sv-reglages">
         {TOGGLES.map(t => (
           <div key={t.key} className="sv-toggle-row" title={t.cor}>
-            <span className="sv-toggle-label">{t.label}</span>
+            <span className="sv-toggle-label">
+              {t.label}
+              {disabledKeys.includes(t.key) && <span className="sv-lock"> 🔒 non applicable</span>}
+            </span>
             <div className="sv-toggle-btns">
               <button className={values[t.key] === t.off ? 'active' : ''}
                 disabled={disabledKeys.includes(t.key)}

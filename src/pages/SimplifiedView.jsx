@@ -66,7 +66,14 @@ export default function SimplifiedView({ navigateTo }) {
     fiscalTransferMode: runConfig.fiscalTransferMode,
     hlmBundle: (runConfig.rho ?? 0) > 0,
   }
-  const disabledKeys = reformId === 'equilibre2070' ? ['employmentRateTarget'] : []
+  // Équilibre 2070 is DEFINED as balancing répartition with no budget transfers
+  // and no capitalisation, by age + employment. The employment lever is solved
+  // (locked); budget transfers ("Sacrifices") and HLM/CDC financing aren't part
+  // of its lever set — the solver holds Fonds net ≈ 0 regardless, so toggling
+  // them only adds cost for no benefit. Lock them off to keep the reform honest.
+  const disabledKeys = reformId === 'equilibre2070'
+    ? ['employmentRateTarget', 'fiscalTransferMode', 'hlmBundle']
+    : []
 
   return (
     <div className="sv-app">
