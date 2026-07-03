@@ -16,6 +16,12 @@ const fmt = (n, d = 0) =>
   }).format(n)
 const fmtSigned = (n, d = 0) => (n > 0 ? '+' : '') + fmt(n, d)
 
+// debtLabel — "Dette de transition accumulée" only for capitalisation-transition rungs;
+// status-quo and parametric-reform rungs use the simpler "Dette accumulée".
+const CAPITALISATION_RUNG_IDS = new Set(['chili', 'chili_finance', 'capi_pur'])
+const debtLabel = rungId =>
+  CAPITALISATION_RUNG_IDS.has(rungId) ? 'Dette de transition accumulée' : 'Dette accumulée'
+
 // Footnote tooltip component — shown on hover, stays open while hovered.
 function Footnote({ id }) {
   const [open, setOpen] = useState(false)
@@ -231,7 +237,7 @@ function runRung(rung) {
 // MultiPanel — one stacked chart panel, with all rungs as ghost lines
 // up to `activeIdx`; the active rung is emphasised.
 // ------------------------------------------------------------------
-function MultiPanel({ runs, activeIdx, dataKey, title, unit, fmtFn, height = 130, refLine }) {
+function MultiPanel({ runs, activeIdx, dataKey, title, unit, fmtFn, height = 130, refLine, activeLineColor }) {
   const merged = useMemo(() => {
     if (!runs[0]) return []
     return runs[0].series.map((r, i) => {
@@ -277,7 +283,7 @@ function MultiPanel({ runs, activeIdx, dataKey, title, unit, fmtFn, height = 130
               const isActive = j === activeIdx
               return (
                 <Line key={j} type="monotone" dataKey={'rung' + j}
-                  stroke={run.rung.color}
+                  stroke={isActive && activeLineColor ? activeLineColor : run.rung.color}
                   strokeWidth={isActive ? 2.5 : 1.2}
                   strokeOpacity={isActive ? 1 : 0.35}
                   dot={false}
@@ -311,6 +317,7 @@ function ChartGroup({ runs, activeIdx }) {
         fmtFn={v => (v >= 0 ? '+' : '') + Math.round(v)}
         height={130}
         refLine={0}
+        activeLineColor="#dc2626"
       />
       <MultiPanel runs={runs} activeIdx={activeIdx}
         dataKey="debtMdE"
@@ -368,7 +375,7 @@ function ImpactDelta({ baseline, active }) {
     },
     {
       id: 'det',
-      label: 'Dette de transition accumulée',
+      label: debtLabel(active.rung.id),
       base: bk.debt_2050,
       val:  k.debt_2050,
       unit: 'Md€',
@@ -454,7 +461,7 @@ function LadderStepper({ runs, activeIdx, setActiveIdx }) {
 
           <div className="cc-stage-kpis">
             <div className="cc-stage-kpi">
-              <div className="cc-stage-kpi-label">Transferts du budget général en 2050</div>
+              <div className="cc-stage-kpi-label">Transferts du budget général en 2050 (par an)</div>
               <div>
                 <span className="cc-stage-kpi-value">{fmt(Math.round(k.transfers2050))}</span>
                 <span className="cc-stage-kpi-unit">Md€/an</span>
@@ -468,7 +475,7 @@ function LadderStepper({ runs, activeIdx, setActiveIdx }) {
               </div>
             </div>
             <div className="cc-stage-kpi">
-              <div className="cc-stage-kpi-label">Solde hors transferts en 2050</div>
+              <div className="cc-stage-kpi-label">Solde hors transferts en 2050 (par an)</div>
               <div>
                 <span className="cc-stage-kpi-value">{fmtSigned(Math.round(k.solde2050))}</span>
                 <span className="cc-stage-kpi-unit">Md€/an</span>
@@ -520,15 +527,21 @@ function LadderScrolly({ runs, activeIdx, setActiveIdx }) {
     const observers = []
     stepRefs.current.forEach((el, idx) => {
       if (!el) return
+      // Mobile-safe scroll-spy: use a fixed viewport band (-15% top / -60% bottom =
+      // a 25 %-height zone in the upper third) rather than a proportional-threshold
+      // approach. The original threshold:[0.3,0.5,0.7] never fires on mobile for
+      // tall steps (element height can easily exceed the available intersection
+      // zone, making intersectionRatio permanently < 0.3). With threshold:0 we
+      // fire on first pixel, and rootMargin creates the "landmark" hotspot.
       const observer = new IntersectionObserver(
         entries => {
           entries.forEach(entry => {
-            if (entry.isIntersecting && entry.intersectionRatio > 0.3) {
+            if (entry.isIntersecting) {
               setActiveIdx(idx)
             }
           })
         },
-        { threshold: [0.3, 0.5, 0.7], rootMargin: '-20% 0% -40% 0%' },
+        { threshold: 0, rootMargin: '-15% 0% -60% 0%' },
       )
       observer.observe(el)
       observers.push(observer)
@@ -555,14 +568,14 @@ function LadderScrolly({ runs, activeIdx, setActiveIdx }) {
 
             <div className="cc-scrolly-step-kpis">
               <div>
-                <div className="cc-scrolly-step-kpi-label">Transferts du budget général / 2050</div>
+                <div className="cc-scrolly-step-kpi-label">Transferts du budget général / 2050 · par an</div>
                 <div>
                   <span className="cc-scrolly-step-kpi-value">{fmt(Math.round(run.k.transfers2050))}</span>
                   <span className="cc-scrolly-step-kpi-unit">Md€</span>
                 </div>
               </div>
               <div>
-                <div className="cc-scrolly-step-kpi-label">Solde hors transferts / 2050</div>
+                <div className="cc-scrolly-step-kpi-label">Solde hors transferts / 2050 · par an</div>
                 <div>
                   <span className="cc-scrolly-step-kpi-value">{fmtSigned(Math.round(run.k.solde2050))}</span>
                   <span className="cc-scrolly-step-kpi-unit">Md€</span>
@@ -814,20 +827,20 @@ export default function IntroPage({ navigateTo }) {
                   ≈ {fmt(Math.round(cadrage.debt2050))} Md€
                 </span>
                 <span className="cc-cadrage-traj-lbl">
-                  Dette de transition accumulée
+                  Dette accumulée
                   <em>uniquement pour payer les retraites</em>
                 </span>
               </div>
             </div>
             <p className="cc-cadrage-traj-diverted">
               <strong>≈ {fmt(Math.round(cadrage.cumTransferts))} Md€</strong> de déficit
-              financé par le budget général sur ces 25 ans — autant de moyens
-              soustraits à la justice, à l'éducation et à la santé.
+              financé par le budget général sur ces 25 ans — autant de
+              sacrifices budgétaires pour la justice, l'éducation et la santé.
             </p>
             <p className="cc-cadrage-traj-note">
               Hypothèses macro centrales : inflation 2 %/an, démographie COR,
               salaires réels +0,4 %/an (la variante <em>prudente</em> du COR ; son
-              scénario central retient 0,7 %). Ces montants sont des projections
+              scénario central, contre toute évidence, retient 0,7 %). Ces montants sont des projections
               sous ce scénario — sensibles aux hypothèses, en premier lieu la
               productivité — et non des prévisions. Au-delà de {cadrage.year2050},
               l'horizon devient trop incertain pour des chiffres précis : on cadre
