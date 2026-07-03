@@ -4,11 +4,15 @@
 // rung maps a set of paramOverrides onto the simulation engine. These tests pin
 // the key invariants that the page's narrative depends on:
 //
-//   Rung 1 (Actuel)        — no reform → D_t spirals, no ABM
-//   Rung 2 (Équinoxe)      — partial rebalancing → D_t contained but not zero
-//   Rung 3 (Suède)         — ABM self-balances PAYG → D_t = 0 throughout
-//   Rung 4 (Chili)         — full capitalisation, unfunded transition → large D_t
-//   Rung 5 (Chili financé) — funded transition (tauK + fiscal) → D_t peak <<  rung 4
+//   Rung 1 (Actuel)         — no reform → D_t spirals, no ABM
+//   Rung 2 (Équinoxe)       — partial rebalancing → D_t contained but not zero
+//   Rung 3 (Suède)          — ABM self-balances PAYG → D_t = 0 throughout
+//   Rung 4 (Chili financé)  — funded Chilean transition → D_t peak < 1 500 Md€
+//   Rung 5 (Capi pur)       — immediate full capitalisation, no financing → D_t spirals
+//
+// NOTE: the unfunded "Mode Chilien" rung (formerly rung 4) was removed from the
+// intro ladder (PR: fix/intro-chili-tauk). Rung 4 is now the FUNDED transition;
+// Rung 5 is the unfinanced pure-capi extreme. REFORMS.chili remains defined.
 //
 // This mirrors what introPage-data.test.js does for the IntroPage preset, but
 // covers the five-rung ladder and the swedenMode (PR #30) ABM invariants.
@@ -149,26 +153,27 @@ describe('SimulatorPage — Rung 3 (Suède) ABM self-balancing invariant', () =>
 });
 
 // ---------------------------------------------------------------
-// 5. Rung 4 (Chili) vs Rung 5 (Chili financé) — funded vs unfunded
+// 5. Rung 4 (Chili financé) vs Rung 5 (Capi pur) — funded vs unfunded extreme
 // ---------------------------------------------------------------
-describe('SimulatorPage — Rung 4 vs Rung 5: unfunded vs funded Chilean transition', () => {
-  const rowsChile    = runsByIdx[3]; // rung 4 — unfunded
-  const rowsFinanced = runsByIdx[4]; // rung 5 — funded (tauK + fiscal)
+describe('SimulatorPage — Rung 4 vs Rung 5: funded Chilean transition vs unfinanced pure capi', () => {
+  const rowsFinanced = runsByIdx[3]; // rung 4 — Chili financé (funded: tauK + fiscal)
+  const rowsCapiPur  = runsByIdx[4]; // rung 5 — Capi pur (unfinanced extreme)
 
-  it('rung 4 peak D_t is substantially higher than rung 5 (unfunded > funded)', () => {
-    const peakChile    = Math.max(...rowsChile.map(r => r.D_t));
-    const peakFinanced = Math.max(...rowsFinanced.map(r => r.D_t));
-    // The whole point of rung 5 is to finance the transition — peak should be <30% of rung 4.
-    expect(peakFinanced).toBeLessThan(peakChile * 0.3);
-  });
-
-  it('rung 5 (Chili financé) peak D_t stays below 1 500 Md€ (~137% GDP)', () => {
+  it('rung 4 (Chili financé) peak D_t stays below 1 500 Md€ (~137% GDP)', () => {
     const peakFinanced = Math.max(...rowsFinanced.map(r => r.D_t));
     expect(peakFinanced).toBeLessThan(1_500);
   });
 
-  it('neither Chilean rung has ABM active (swedenMode off)', () => {
-    for (const rows of [rowsChile, rowsFinanced]) {
+  it('rung 5 (Capi pur) peak D_t is substantially higher than rung 4 (unfunded > funded)', () => {
+    const peakFinanced = Math.max(...rowsFinanced.map(r => r.D_t));
+    const peakCapiPur  = Math.max(...rowsCapiPur.map(r => r.D_t));
+    // Pure-capi diverts all contributions without financing legacy pensions —
+    // debt grows far beyond the financed case.
+    expect(peakCapiPur).toBeGreaterThan(peakFinanced * 10);
+  });
+
+  it('neither rung has ABM active (swedenMode off)', () => {
+    for (const rows of [rowsFinanced, rowsCapiPur]) {
       const abmYears = rows.filter(r => (r.abmFactor_t ?? 1) < 0.999).length;
       expect(abmYears).toBe(0);
     }
@@ -183,17 +188,17 @@ describe('SimulatorPage — cross-rung debt ordering (PR B: financing decides)',
   // "doing a reform" — is what keeps debt below the no-reform path.
   it('well-financed reforms (Équinoxe, Suède, Chili financé) stay below no-reform', () => {
     const peakRef = Math.max(...runsByIdx[0].map(r => r.D_t));
-    for (const i of [1, 2, 4]) { // rungs 2, 3, 5
+    for (const i of [1, 2, 3]) { // rungs 2, 3, 4 (Équinoxe, Suède, Chili financé)
       const peak = Math.max(...runsByIdx[i].map(r => r.D_t));
       expect(peak, `rung ${i + 1} peak D_t < rung 1`).toBeLessThan(peakRef);
     }
   });
 
-  it('the UNFINANCED Chilean transition (rung 4) exceeds no-reform — financing is the point', () => {
+  it('the UNFINANCED pure-capi transition (rung 5) exceeds no-reform — financing is the point', () => {
     const peakRef = Math.max(...runsByIdx[0].map(r => r.D_t));
-    const peak4   = Math.max(...runsByIdx[3].map(r => r.D_t));
-    // Diverting contributions to a fund without financing the legacy pensions
-    // is worse than the status quo — the cautionary lesson rungs 4/6 now show.
-    expect(peak4).toBeGreaterThan(peakRef);
+    const peak5   = Math.max(...runsByIdx[4].map(r => r.D_t));
+    // Diverting all contributions to a fund without financing legacy pensions
+    // is worse than the status quo — the cautionary lesson rung 5 now shows.
+    expect(peak5).toBeGreaterThan(peakRef);
   });
 });
