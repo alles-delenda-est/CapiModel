@@ -246,6 +246,8 @@ export function extractKPIs(rows) {
   const finalCapiReal = finalCapi / realDeflator;
   const finalDebt = last.D_t;
   const netPosition = finalCapi - finalDebt;
+  const finalDebtReal = finalDebt / realDeflator;
+  const netPositionReal = finalCapiReal - finalDebtReal;
   const minSpread = Math.min(...rows.map(r => r.spread_t));
   const totalCapiShortfall = last.CK_t;
   const peakCapiShortfall = Math.max(...rows.map(r => r.shortfall_t));
@@ -289,7 +291,7 @@ export function extractKPIs(rows) {
   const totalFiscalTransferReal = rows.reduce((s, r) => s + (r.fiscalTransfer_t ?? 0) / Math.pow(1.02, r.t), 0);
   return {
     peakDebt, peakDebtYear, debtFreeYear, totalInterest,
-    finalCapi, finalCapiReal, netPosition, minSpread, S0,
+    finalCapi, finalCapiReal, finalDebt, finalDebtReal, netPosition, netPositionReal, minSpread, S0,
     pvLegacyTotal: last.pvLegacyCum_t,
     pvCapiPayoutTotal: last.pvCapiPayoutCum_t,
     totalFiscalTransfer, totalFiscalTransferReal,

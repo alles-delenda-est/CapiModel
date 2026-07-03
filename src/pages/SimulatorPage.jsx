@@ -222,7 +222,7 @@ function ChartsTab({ rows, params, rung }) {
             <ReferenceLine y={0} stroke="#e8edf5" strokeOpacity={0.25} strokeDasharray="2 3" />
             <Tooltip {...tooltipProps} formatter={v => [fmtSigned(Math.round(v)) + ' Md€', 'Solde']}
               labelFormatter={l => 'Année ' + l} />
-            <Line type="monotone" dataKey="soldeExclBG" stroke="#05c1ad" strokeWidth={2}
+            <Line type="monotone" dataKey="soldeExclBG" stroke="#dc2626" strokeWidth={2}
               dot={false} isAnimationActive={false} name="Solde" />
           </LineChart>
         </ResponsiveContainer>
@@ -296,9 +296,9 @@ function KpisTab({ k }) {
       sub: k.minSpread > 0 ? 'Toujours positif' : 'Passe en négatif',
     },
     {
-      label: 'Position nette finale', value: fmtSigned(k.netPosition, 0), unit: 'Md€',
-      cls: k.netPosition > 0 ? 'is-ok' : 'is-bad',
-      sub: 'Pot capi − dette de transition',
+      label: 'Position nette finale', value: fmtSigned(k.netPositionReal, 0), unit: 'Md€',
+      cls: k.netPositionReal > 0 ? 'is-ok' : 'is-bad',
+      sub: 'Pot capi − dette (réels, € 2027)',
     },
     { label: 'Économies Équinoxe (t=0)', value: fmt(k.S0, 0), unit: 'Md€/an', sub: 'Effet annuel à régime' },
     { label: 'PV dépenses legacy', value: fmt(k.pvLegacyTotal, 0), unit: 'Md€', sub: 'Valeur actualisée 70 ans' },
