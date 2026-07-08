@@ -187,11 +187,17 @@ function runRung(rung) {
   })
 
   // Pedagogical overlay (see IntroLadderRungs.js → applyGreekCollapseOverlay).
-  // Only étape 1 is at risk of crossing the GE/collapse thresholds in practice;
-  // the other rungs carry greekCollapse:true defensively but their debt
-  // trajectories stay well below 150 % GDP under their reform params.
+  // UNIFORM VALIDITY RULE: the overlay applies to EVERY rung that crosses the
+  // same thresholds (GE acceleration above 150 % GDP; forced restructuring at
+  // 250 % GDP or r_d ≥ 19.5 %), not just the no-reform rung. Rungs that stay
+  // below the thresholds come back untouched (result = null), so solvent
+  // trajectories are unaffected. Without this, the statu quo displayed a
+  // capped "debt at shock" while insolvent reform rungs displayed raw
+  // uncapped horizon-end figures — visually inverting the comparison the
+  // ladder exists to make. The honest comparison is "in which year does each
+  // scenario hit the wall".
   let collapse = null
-  if (rung.greekCollapse) {
+  {
     const result = applyGreekCollapseOverlay(series, {
       debt: 'debtMdE',
       debtRatio: 'debtRatioPct',
@@ -199,14 +205,12 @@ function runRung(rung) {
       pension: 'perRetireeRealMo',
       solde: 'soldeExclTransfersMdE',
     })
-    // Also propagate the debt mutation into debtTotalMdE (= D_t + D_ext_t).
-    // The overlay only knows about the main debt field; we keep D_ext_t intact
-    // and just scale the total proportionally for chart consistency.
     if (result) {
       collapse = {
         year: result.collapseYear,
         idx: result.collapseIdx,
         debtRatioPct: result.debtRatioAtCollapse,
+        debtAtShock: series[result.collapseIdx].debtMdE,
       }
     }
   }
@@ -453,7 +457,7 @@ function LadderStepper({ runs, activeIdx, setActiveIdx }) {
       <div className="cc-ladder-stage">
         <div className="cc-stage-side">
           <div className="cc-eyebrow" style={{ color: active.rung.color }}>
-            Étape {active.rung.num} sur 6
+            Étape {active.rung.num} sur {runs.length}
           </div>
           <h2>{active.rung.headline}</h2>
           <MechanismButton rung={active.rung} onClick={() => setMechRung(active.rung)} />
@@ -486,17 +490,21 @@ function LadderStepper({ runs, activeIdx, setActiveIdx }) {
             </div>
             <div className="cc-stage-kpi">
               <div className="cc-stage-kpi-label">
-                {k.peakDebt > 2 * Math.max(k.debtFinal, 1) ? "Dette au pic" : "Dette en fin d'horizon"}
+                {k.collapse
+                  ? 'Insolvable — restructuration forcée en'
+                  : (k.peakDebt > 2 * Math.max(k.debtFinal, 1) ? "Dette au pic" : "Dette en fin d'horizon")}
               </div>
               <div>
                 <span className="cc-stage-kpi-value">
-                  {fmt(Math.round(k.peakDebt > 2 * Math.max(k.debtFinal, 1) ? k.peakDebt : k.debtFinal))}
+                  {k.collapse
+                    ? k.collapse.year
+                    : fmt(Math.round(k.peakDebt > 2 * Math.max(k.debtFinal, 1) ? k.peakDebt : k.debtFinal))}
                 </span>
-                <span className="cc-stage-kpi-unit">Md€</span>
+                <span className="cc-stage-kpi-unit">{k.collapse ? '' : 'Md€'}</span>
               </div>
               <div className="cc-stage-kpi-sub">
                 {k.collapse
-                  ? `Restructuration forcée en ${k.collapse.year} (dette à ${Math.round(k.collapse.debtRatioPct)} % du PIB)`
+                  ? `Dette au choc ${fmt(Math.round(k.collapse.debtAtShock))} Md€ (${Math.round(k.collapse.debtRatioPct)} % du PIB) — scénario stylisé au-delà`
                   : (k.peakDebt > 100
                       ? `Pic ${fmt(Math.round(k.peakDebt))} Md€ en ${k.peakDebtYear} · fin ${fmt(Math.round(k.debtFinal))} Md€`
                       : 'Dette de transition négligeable')}
@@ -583,13 +591,19 @@ function LadderScrolly({ runs, activeIdx, setActiveIdx }) {
               </div>
               <div>
                 <div className="cc-scrolly-step-kpi-label">
-                  {run.k.collapse ? 'Dette au choc' : (run.k.peakDebt > 2 * Math.max(run.k.debtFinal, 1) ? 'Dette au pic' : 'Dette finale')}
+                  {run.k.collapse ? 'Restructuration forcée en' : (run.k.peakDebt > 2 * Math.max(run.k.debtFinal, 1) ? 'Dette au pic' : 'Dette finale')}
                 </div>
                 <div>
                   <span className="cc-scrolly-step-kpi-value">
-                    {fmt(Math.round(run.k.peakDebt > 2 * Math.max(run.k.debtFinal, 1) ? run.k.peakDebt : run.k.debtFinal))}
+                    {run.k.collapse
+                      ? run.k.collapse.year
+                      : fmt(Math.round(run.k.peakDebt > 2 * Math.max(run.k.debtFinal, 1) ? run.k.peakDebt : run.k.debtFinal))}
                   </span>
-                  <span className="cc-scrolly-step-kpi-unit">Md€</span>
+                  <span className="cc-scrolly-step-kpi-unit">
+                    {run.k.collapse
+                      ? `· ${fmt(Math.round(run.k.collapse.debtAtShock))} Md€ au choc`
+                      : 'Md€'}
+                  </span>
                 </div>
               </div>
             </div>
