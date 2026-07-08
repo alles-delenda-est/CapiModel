@@ -89,7 +89,7 @@ The model implements 60 numbered equations over a 70-year horizon (Y0 = 2027), t
 
 4. **Active-population factor** — each demographic profile drives both the retiree headcount index and the active-population trajectory. The wage bill (`W_t`) and GDP (`GDP_t`) both scale by `activePopFactor(t)`. Without this, the model overstates labour-force capacity in pessimistic scenarios.
 
-5. **Retirement-age trajectory** — `A_R(t)` is real-valued with two modes: `fixed` (constant at `retirementAgeBase = 64`) and `indexed` (rises by half the gain in life expectancy at 65, mirroring Swedish/Italian NDC indexation). Hard floor 60, ceiling 70. Existing 2027 retirees are immune.
+5. **Retirement-age trajectory** — `A_R(t)` is real-valued with two modes: `fixed` (constant at `retirementAgeBase = 64`) and `indexed` (rises by `LIFE_EXP_INDEXATION_FRACTION = 0.92` of the gain in life expectancy at 65 — deliberately recalibrated to hit COR's 67.6-by-2070 balancing age; the earlier ½-rule "mirroring Swedish/Italian NDC indexation" was replaced and that rationale no longer applies). Hard floor 60, ceiling 70. Existing 2027 retirees are immune.
 
 ### Accrued PAYG rights — the central actuarial issue (v1.1)
 
@@ -205,7 +205,7 @@ Financial solvency and political feasibility are separate dimensions. The model 
 
 ## Demographic kernel
 
-### Current — parametric smoothstep (v2.0 default)
+### Parametric smoothstep kernel (v1.x/v2.0 default; superseded as default by the actuarial kernel)
 
 The retiree-headcount kernel (eqs 7a–7c) is **parametric**, not actuarial. `T_extinct = 45` years aligns with COR June 2025 central-scenario mortality tables (youngest 2027 retiree at 60 exits by ~2072). Three profiles capture the scenario space:
 
@@ -215,13 +215,13 @@ The retiree-headcount kernel (eqs 7a–7c) is **parametric**, not actuarial. `T_
 | `realistic` | Pessimistic — lower TFR, lower migration, higher longevity pressure |
 | `reformed` | Optimistic — demographic reform package assumed (immigration, TFR) |
 
-### Implemented — actuarial table-driven kernel (v2.0, opt-in)
+### Actuarial table-driven kernel (v2.1+ **default**: `demoMode: 'actuarial'`)
 
 `demoMode: 'actuarial'` replaces the three parametric kernel functions with table-driven equivalents (`activePopFactor_actuarial` 7d′, `retireeIdx_actuarial` 7c′, `cohIdx_actuarial` 7e′) sourced from COR June 2025 and INSEE T60 2023, plus the §6.5 per-cohort population mask for `legacyShareAvg_t`. All replacements produce normalised indices (ratio to t=0) so downstream equations are structurally unchanged. Selected via the **Démographie & travail** panel (mode radio + COR scenario dropdown + Tier-B female-mortality-mix slider). Full specification: `DemographicKernel_plan.md`.
 
 The most important improvement is `cohIdx_actuarial`: the parametric `1 − smoothstep(t, 0, 45)` is symmetric around t=22, overstating late-horizon `transitionalPaygExp_t` by accumulating ~45 % bias relative to peak debt by t=69 (conservative direction). Real T60 mortality is concave — most 2027 retirees survive to 80 but few reach 90+. The T60-based replacement corrects this without any downstream equation change. Male and female `qx` are blended at the **survival-curve level** (not at `qx`), so the increasingly-female surviving cohort is represented correctly.
 
-**Data status:** the arrays in `src/demographic-tables.js` are currently synthetic placeholders (Makeham mortality, Gaussian age pyramid) calibrated to the right qualitative shape. They must be replaced with primary-source COR juin 2025 / INSEE T60 transcriptions — a data-only change with no engine impact — before actuarial mode becomes the default.
+**Data status:** the arrays in `src/demographic-tables.js` now contain primary-source transcriptions (INSEE-2026 projections / COR RA2026, with sheet-and-column provenance comments in the file) — the earlier synthetic placeholders (Makeham mortality, Gaussian age pyramid) are gone, and `demoMode: 'actuarial'` is the engine default. **This June-2026 re-anchoring ("PR B") flipped the headline result**: under the 2026-vintage demographics the minimal balanced cascade (`v1_default`) tips into a debt spiral (peak = final D_t ≈ 164 000 Md€, never declining), and only the financed variant `v1_finance` ("Transition financée": tauK sweep + budget transfers) stays solvent (peak ≈ 1 272 Md€ in 2065, debt-free 2074). The public-facing pedagogy is based on `v1_finance` accordingly. See `CapiModel_overview.md` for the regenerated results tables.
 
 Backward compatibility: `demoMode: 'parametric'` reproduces bit-identical v1.x output. The existing `v1.1-default-trace.json` fixture remains the parametric regression contract; `v2.0-actuarial-cor-central-trace.json` locks the actuarial engine path. Monte Carlo scenario alignment (§9.5 of the spec) is not applicable to the active root build, which has no Monte Carlo module.
 
@@ -230,7 +230,7 @@ Backward compatibility: `demoMode: 'parametric'` reproduces bit-identical v1.x o
 ## Engineering philosophy
 
 - **Spec-driven implementation.** All semantics live in `cdc_legacy_fund_model.md`. Every non-trivial engine line carries a `// eq (N)` comment mapping to the spec. Implementers navigate the engine and spec together.
-- **Test invariants enforce §6.** Five conservation/non-negativity/boundary invariants are asserted at every `t` for every canned scenario and over 1000 randomly-sampled configurations. A failed invariant fails the test run. Currently 239 tests, all passing.
+- **Test invariants enforce §6.** Five conservation/non-negativity/boundary invariants are asserted at every `t` for every canned scenario and over 1000 randomly-sampled configurations. A failed invariant fails the test run. Currently 359 tests, all passing.
 - **Reference-trace regression.** The default-preset 70-year × every-field trace is captured to a JSON fixture as a contract. Engine changes that alter default output fail loudly and require explicit per-field fixture-update justification.
 - **Public-facing-page data contract.** The Introduction page (`#/intro`, Direction-D landing) computes every KPI and chart value live from `runSimulation(PRESETS.v1_default.params)` rather than embedding pre-computed numbers, so the headline narrative drifts in lockstep with the engine. `tests/introPage-data.test.js` pins the displayed values (knobs, KPIs, counterfactual ratio) so prose-versus-numbers contradictions — e.g. a "3 % réel" risk panel against a 4.5 % engine default — are caught at test time instead of in production.
 - **Dual-LLM review process.** Each task PR is reviewed by a separate independent LLM in addition to the human reviewer before merge.
@@ -255,14 +255,14 @@ Backward compatibility: `demoMode: 'parametric'` reproduces bit-identical v1.x o
 - **Six redundant levers removed from UI** (alpha, lambda, Tlambda, phiF, thetaBuffer, tauK): their effects are now structural in the cascade or hardcoded to their natural values.
 
 ### v2.1
-- **Balanced cascade waterfall (§5.13).** The new UI default. Adds K_retirees_bal state variable tracking only retirees' accumulated stake; prevents cross-subsidisation between worker savings and pension payouts. Key invariant: capi payout is monotonically non-decreasing after capi cohort first retires.
+- **Balanced cascade waterfall (§5.13).** The new UI default. Adds K_retirees_bal state variable tracking only retirees' accumulated stake; prevents cross-subsidisation between worker savings and pension payouts. Key invariant (scoped): capi payout is monotonically non-decreasing after the capi cohort first retires **while the system is solvent** — it holds on the financed base case (`v1_finance`) but is violated in spiral regimes (under post-PR-B demographics, `v1_default`'s capi payout erodes ~0.1–1.2 %/yr over 2080–2096 as the GE penalty compresses returns while debt spirals). No test currently enforces the solvent-case invariant.
 - **Actuarial bonus cap.** Bonus bounded by `K_retirees_bal × (annuityRate_t − annuityFloorRate) − capiDebtRepaid_t × retireeFrac_t`. This was the root cause of the late-horizon capi payout decline observed in v2.0: without a cap tied to the annuity rate, the bonus could over-distribute from the real-return cascade, depleting K_retirees_bal.
 - **75 % surplus sweep cap** (`debtSweepSurplusFrac`). Prevents debt repayment from crowding out the capi bonus when D_t > 0. The remaining 25 % of surplus above floor is preserved for capi retirees regardless of debt level.
 - **GE recalibration.** UI_CONFIG uses geKneeRatio = 3.0 / geFloorRatio = 8.0 (Norway SWF precedent); DEFAULT_CONFIG unchanged (2.0/4.0) for test-fixture backward-compatibility. The v1.x 4× floor created an implausible scenario where a fund at K/GDP = 4 earned 0 % real return.
 - **Fiscal transfers** (`fiscalTransfer_t`). ~40 Md€/yr CSG/FSV/État transfers taper to zero as `legacyFrac_t → 0`. Bug discovered and fixed: toggling transfers on with default GE params (2.0/4.0) caused the GE floor to trigger early, suppressing r_c_eff to near zero and depleting K_retirees_bal. Fix: initial App.jsx state now explicitly overrides to recalibrated GE params (3.0/8.0).
 - **Canonical mode UI.** Three toggle groups (Diversification / Mode Chilien / Mode Suédois) in the Modes canoniques panel.
 - **Recognition bonds** (`chileMode: true`, PR21b/c). Accrued PAYG rights of transitional workers converted to state-issued bonds indexed to French inflation (iota), zero redemption value. Bond sizing: `bondIssuance_t = transitionalPaygExpGross_t / annuityRate_t`; credited to K_t at retirement (D_t↑, K_t↑ by same); `transitionalPaygExp_t = 0` in chileMode. Annual coupon service: `bondCouponService_t = BR_t × iota` (debt-financed, appears in UI table, CSV, and debt chart). `BR_t` is a cumulative non-decreasing tracker. Key pedagogical question: does front-loading bond issuance combined with funded K_t growth produce a lower total long-term obligation than PAYG?
-- **232 tests**, all passing.
+- **359 tests**, all passing (count at v2.1 close was 232; kept live since).
 
 ---
 

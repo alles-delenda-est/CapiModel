@@ -6,7 +6,9 @@
 //   - employer contribution-rate cut mechanics (§5.3);
 //   - optional actuarial demographic kernel (demoMode='actuarial');
 //   - overlapping cash-flow cascade (cashFlowMode='overlapping', v2.0 default).
-// Spec source of truth: cdc_legacy_fund_model.md.
+// Spec: cdc_legacy_fund_model.md for eqs (1)-(33); the spec is partially
+// superseded (no §§5.13/5.15/5.16/5.9a sections) — for those, the `// eq (N)`
+// comments below and THEORY.md are the ground truth.
 // Every non-trivial line of the simulation loop carries a `// eq (N)` comment.
 //
 // §4 (v2.0) actuarial demographic data — see DemographicKernel_plan.md.
@@ -1499,7 +1501,7 @@ export function runSimulation(userConfig = {}) {
       // identification
       t, year: cfg.Y0 + t,
       // §5.1 growth factors
-      w_n, iota, r_f_portfolio_n, g_h_eff, delta_eff,
+      w_n, iota, r_f_portfolio_n, g_h_eff, delta_eff, pi: cfg.pi,
       Omega_t, I_factor_t, H_factor_t,
       // §5.2 demography
       retireeIdx: retireeIdx_t,

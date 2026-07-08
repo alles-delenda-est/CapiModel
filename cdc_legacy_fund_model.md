@@ -4,6 +4,15 @@
 **Date:** March 2026  
 **Purpose:** Technical reference for independent replication
 
+> **Status (2026-07): partially superseded.** This spec stops at equation (33)
+> + annexe, while the engine at HEAD implements 60 numbered equations —
+> §§5.13 (balanced cascade), 5.15 (recognition bonds), 5.16 (Sweden/ABM) and
+> 5.9a (fiscal transfers) have no section here. The engine's `// eq (N)`
+> comments in `src/simulation-engine.js` and `THEORY.md` are the current
+> ground truth; this document remains authoritative only for eqs (1)–(33) as
+> originally specified. A consolidated respec (absorbing the missing
+> sections) is an open item.
+
 ---
 
 ## 1. Reform Architecture

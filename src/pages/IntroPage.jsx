@@ -894,7 +894,7 @@ export default function IntroPage({ navigateTo }) {
 
       <footer className="cc-footer">
         <span>Capi · Mai 2026</span>
-        <span>Sources · OCDE, INSEE, COR · v1.2 engine</span>
+        <span>Sources · OCDE, INSEE, COR · v2.1 engine</span>
       </footer>
     </div>
   )

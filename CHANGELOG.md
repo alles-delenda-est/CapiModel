@@ -5,6 +5,46 @@ All notable changes to CapiModel are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to semantic versioning where appropriate.
 
+## [Unreleased] — Review fixes: KPI defects + documentation truth-reconciliation
+
+Fixes from the 2026-07 external review (weekend-review, CapiModel BUGS.md).
+
+- **PR B recalibration finally written down** (B1). The June-2026 re-anchoring
+  of the demographic tables on INSEE-2026 / COR-RA2026 vintages flipped the
+  headline result: `v1_default` (minimal balanced cascade) went from
+  "manageable transition deficit, peak ≈ 7 573 Md€ (2064), declining" to an
+  unambiguous **debt spiral** (peak = final D_t ≈ 164 355 Md€ in 2096, r_d
+  pinned at the 20 % cap, min spread −13.5 %); only `v1_finance`
+  ("Transition financée") stays solvent (peak 1 272 Md€ in 2065, debt-free
+  2074). Until now the only account of this flip was a docstring in
+  `presets.js`. The results tables in `CapiModel_overview.md` are regenerated
+  from the live engine, THEORY.md's demographic-kernel and invariant sections
+  are updated, and the stale walkthrough table is flagged as pre-PR-B.
+- **`extractKPIs` real-terms deflator fixed** (B7). Was a dead ternary that
+  always deflated at 2 % regardless of configured π; rows now carry `pi` and
+  all real KPIs deflate with it (latent bug — π is not UI-adjustable).
+  Fixtures regenerated for the additive `pi` row field (values unchanged).
+- **`debtFreeYear` means permanently debt-free** (B8). Previously reported
+  the first year with D_t < 1 even if debt exploded afterwards
+  (`equinoxeAndLabour` reported "debt-free 2034" while ending at
+  13 326 Md€). Now: the year after the last indebted year; null if indebted
+  at horizon end.
+- **Broken root scripts repaired** (B10). `test_payg_baseline.mjs` and
+  `scenario_cutoff_analysis.mjs` had rotted against the current module layout
+  (PRESETS moved to `presets.js`) and row/param schema; both run again, with
+  retired v0.x parameters defaulted and documented.
+- **Doc drift cluster** (B9): THEORY.md indexed-retirement-age text now
+  states the 0.92 life-expectancy indexation fraction (the ½-rule rationale
+  was stale), the demographic "synthetic placeholders" paragraph replaced
+  with the real primary-source data status, test counts corrected (now 359),
+  `cdc_legacy_fund_model.md` marked partially superseded (stops at eq 33 of
+  60), `INTRO_LADDER_MAPPING.md` updated for the dropped unfunded
+  "Mode Chilien" rung, and CLAUDE.md rewritten against the actual repo state
+  (60 equations, presets in `presets.js`, no Monte Carlo module, Supabase
+  feedback backend, orphaned TransitionWalkthrough).
+- **New tests**: `tests/kpi-fixes.test.js` (8 tests) locks the π deflator and
+  the permanent-debt-free semantics.
+
 ## [v2.0] — Demographic kernel
 
 Opt-in actuarial demographic kernel (`demoMode: 'actuarial'`), per

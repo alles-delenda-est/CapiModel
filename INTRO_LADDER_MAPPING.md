@@ -13,8 +13,15 @@ UI_CONFIG = `{ ...DEFAULT_CONFIG, cashFlowMode: 'balanced', geKneeRatio: 3.0, ge
 | 1 | Système actuel                 | *(aucun)* — dérivation du contrefactuel + `fiscalTransferMode:'full'` | `useEquinoxe:false`, `enableCapi:false`, `hlmDiscount:false`, `delta/rho/lambda=0`, `employmentRateTarget=0.69`, démographie réaliste |
 | 2 | Rééquilibrage Équinoxe         | `equinoxeOnly`                                                        | Phasing 10 ans (`phased-10y`) au lieu d'immediate ; `fiscalTransferMode:'full'` conservé |
 | 3 | Mode Suédois                   | `v1_default` + `swedenMode:true` (toggle canonique App.jsx l.400)    | `swedenABM:true`, `swedenCapiRate:0.04`, Équinoxe phasée, `fiscalTransferMode:'none'` (le système redevient autonome) |
-| 4 | Mode Chilien                   | `v1_default` + `chileMode:true` (toggle canonique App.jsx l.366)     | `cutoffAge:50`, HLM liquidation active (`delta:0.3, rho:0.05`), Équinoxe phasée, `lambda:0`, `tauK:0`, `fiscalTransferMode:'none'` (pas de financement BG → la dette explose et révèle le coût de transition) |
-| 5 | Chili + transition financée    | `v1_default` + `chileMode:true` + `fiscalTransferMode:'no-debt'`     | Identique au #4 + leviers de financement (`lambda:0.30`, `tauK:0.025`, plein-emploi target 0.759), et surtout `fiscalTransferMode:'no-debt'` qui transforme le déficit en transfert BG plutôt qu'en dette nouvelle |
+| 4 | Chili + transition financée    | `v1_default` + `chileMode:true` + `fiscalTransferMode:'full'`        | Bascule chilienne dont la dette de transition est affichée et financée (`tauK:0.025` prélevé sur la croissance du fonds + transferts BG existants) — voir `REFORMS.chili_finance.paramOverrides` dans `src/reforms.js` (source de vérité) |
+| 5 | Capitalisation pure            | `pureCapi`                                                            | Bascule totale immédiate, obligations de reconnaissance, aucun financement — voir `REFORMS.capi_pur.paramOverrides` |
+
+> **Note (post-commit `7eb1789`)** : le barreau « Mode Chilien » *non financé*
+> a été retiré de l'échelle (il faisait doublon pédagogique avec le
+> contrefactuel et le Chili financé). L'échelle actuelle est : Système actuel →
+> Équinoxe → Mode Suédois → Chili financé → Capitalisation pure. En cas de
+> divergence entre ce document et `src/pages/IntroLadderRungs.js` /
+> `src/reforms.js`, le code fait foi.
 
 ## Champs du moteur utilisés pour le graphique 3-panneaux
 

@@ -169,57 +169,73 @@ A 4.5 % real expected return on a long-horizon public fund is defensible as a di
 - **Introduction page** (`#/intro`) — Direction-D landing aimed at general-public readers: hero, read-only sidebar of central-scenario parameters, debt-trajectory chart with peak-debt marker, 4-cell KPI strip (peak debt, cumulative interest, final capi pot in real €, minimum spread), `Approfondir` row linking to the deeper pages, four cardinal virtues and four major risks. All KPI and chart values are computed live from `runSimulation(PRESETS.v1_default.params)` and `extractKPIs` — the page does not embed pre-computed numbers, so engine drift surfaces immediately. See `tests/introPage-data.test.js` for the contract.
 - **Simplified view** (`#/simple`) — 3 scenarios, 5 sliders, narrative cards for lay audiences.
 - **Hypotheses page** (`#/hypotheses`) — every §3 parameter with default, kind, and rationale.
-- **232 tests** — unit invariants, fiscal-transfer invariants, recognition bond invariants (coupon service + issuance), reference-trace regression against `tests/fixtures/v1.1-default-trace.json`, and 1000-config property-based suite (all passing).
+- **359 tests** — unit invariants, fiscal-transfer invariants, recognition bond invariants (coupon service + issuance), reference-trace regression against `tests/fixtures/v1.1-default-trace.json`, and 1000-config property-based suite (all passing).
 
 ---
 
 ## Default scenario results (`v1_default` preset, v2.1 balanced cascade, `fiscalTransferMode: 'none'`)
 
-Under the UI default — balanced cascade *without* fiscal transfers — the model surfaces a real but bounded transition deficit: peak `D_t ≈ 7 600 Md€` reached in 2064, with debt declining but not reaching zero by horizon end. The actuarial bonus cap and 75 % surplus sweep cap shape the descent. All values from the live engine at current `HEAD`; reproducible via `node scripts/intropage-snapshot.mjs`.
+> **June-2026 recalibration ("PR B") — read this first.** Re-anchoring the
+> demographic tables on the INSEE-2026 / COR-RA2026 vintages (working-age
+> population 42.6M → 37.2M by horizon end; retirees rising to 22.3M) flipped
+> this model's headline result. Before PR B, the minimal balanced cascade
+> (`v1_default`) showed a *manageable* transition deficit (peak ≈ 7 573 Md€
+> in 2064, declining thereafter). Under the 2026-vintage demographics the
+> same preset is an **unambiguous debt spiral**: debt never declines, the
+> endogenous borrowing rate pins at its 20 % cap, and carry inverts
+> (min spread −13.5 %). The honest headline is now: *an unfinanced switch is
+> a debt spiral; only the financed variant (`v1_finance`, "Transition
+> financée") survives* — which is why the public-facing pedagogy is based on
+> `v1_finance`. Earlier revisions of this document reported the pre-PR-B
+> numbers while claiming they were live at HEAD; the tables below are
+> regenerated from the live engine.
+
+Under the UI default — balanced cascade *without* fiscal transfers — the model now surfaces a debt spiral: `D_t` grows monotonically to the horizon end, with the borrowing rate pinned at the 20 % cap for decades. All values from the live engine at current `HEAD`; reproducible via `node scripts/intropage-snapshot.mjs`.
 
 | KPI | Value | Notes |
 |---|---|---|
-| Peak sovereign transition debt | **7 573 Md€** (2064) | Real deficit shows through with transfers disabled |
-| Debt-free year (transition) | **never** | `D_t` declines to ~5 000 Md€ by Y69 but stays positive |
-| Final transition debt `D_t[69]` | **4 997 Md€** | Tail not cleared within the 70-yr horizon |
-| Cumulative interest cost (70 yr) | **13 874 Md€** | Endogenous-rate compounding on a 5–7 k Md€ stock |
-| Capitalisation pot, nominal, Y69 | **132 500 Md€** | `K_t[69]` |
-| Capitalisation pot, real (2027 €), Y69 | **33 791 Md€** | `K_t[69] / (1+π)^69` |
+| Peak sovereign transition debt | **164 355 Md€** (2096) | Peak = horizon end: the debt never declines |
+| Debt-free year (transition) | **never** | Debt spiral — see PR B note above |
+| Final transition debt `D_t[69]` | **164 355 Md€** | ≈ 1 045 % of GDP — far beyond model validity |
+| Cumulative interest cost (70 yr) | **185 802 Md€** | Endogenous rate pinned at the 20 % cap |
+| Capitalisation pot, nominal, Y69 | **106 455 Md€** | `K_t[69]` |
+| Capitalisation pot, real (2027 €), Y69 | **27 149 Md€** | `K_t[69] / (1+π)^69` |
 | Final legacy fund balance | **1 360 Md€** | `F_t[69]` |
 | Cumulative capi state guarantee calls | **0 Md€** | `CK_t[69]` — floor structurally covered |
-| Sovereign rate range | **3.50 % → 4.99 %** | Endogenous premium rises with combined debt/GDP |
-| Équinoxe brackets effect at t=0 | **17.68 Md€/yr** | Pre-phasing |
-| CSG/CRDS restoration at t=0 | **5.00 Md€/yr** | Pre-phasing |
-| Peak combined debt `D_ext + D` | **24 310 Md€** (2096) | Background sovereign debt dominates |
-| `capiAssetShare_t` at Y69 | **0.339** | Accounting identity (contributions/K_t) |
-| Minimum spread `σ_t` | **+1.51 %** | Always positive — carry diagnostic stays in the safe band |
+| Sovereign rate range | **3.50 % → 20.00 %** | Endogenous premium hits the hard cap |
+| Équinoxe aggregate effect at t=0 | **27.68 Md€/yr** | `S0_total` pre-phasing |
+| Peak combined debt `D_ext + D` | **182 087 Md€** (2096) | Transition debt now dominates the background stock |
+| `capiAssetShare_t` at Y69 | **0.242** | Accounting identity (contributions/K_t) |
+| Minimum spread `σ_t` | **−13.50 %** | Carry inverts: borrowing cost far exceeds portfolio return |
 
-*`D^{ext}_t` grows with GDP throughout — the peak combined-debt figure reflects background sovereign debt growth, not transition failure.*
+*The solvent base case is `v1_finance` ("Transition financée"): peak `D_t` 1 272 Md€ (2065), debt-free 2074, min spread +3.00 % — see the preset summary below.*
 
-*Note for users comparing prior versions of this document:* earlier revisions reported peak `D_t = 0` and `K_t Y69 ≈ 49 420 Md€`. Those figures assumed `fiscalTransferMode: 'full'`, which was at one point the documented UI default but was reverted in code to `'none'` (see presets.js `UI_CONFIG`). Flipping the Diversification toggle to *Avec dette (full)* in the Simulateur reproduces the older numbers.
+*Note for users comparing prior versions of this document:* revisions before the June-2026 PR B recalibration reported peak `D_t` = 7 573 Md€ (2064), final debt 4 997 Md€ and min spread +1.51 % for this preset; still earlier revisions (with `fiscalTransferMode: 'full'`) reported peak `D_t = 0`. Neither describes the engine at HEAD.
 
 ---
 
 ## Preset summary (v2.1 balanced cascade, `fiscalTransferMode: 'none'`)
 
-All values from the live engine at current `HEAD` (re-extracted via `node scripts/intropage-snapshot.mjs`). K_t Y69 is nominal Md€.
+All values from the live engine at current `HEAD` (re-extracted via `node scripts/intropage-snapshot.mjs`, post-PR-B demographics). K_t Y69 is nominal Md€. `Debt-free` now means *permanently* cleared (a transient zero-debt window no longer counts — see `extractKPIs`).
 
 | Preset | Peak D_t (yr) | Debt-free | CI total | K_t Y69 nominal | Min spread | Disposition |
 |---|---|---|---|---|---|---|
-| `v1_default` | 7 573 (2064) | never | 13 874 | 132 500 | +1.51 % | Manageable |
-| `v1_optimiste` | 4 007 (2057) | never | 6 327 | 187 356 | +3.18 % | Manageable |
-| `v1_stress` | 19 670 415 (2096) | never | 19 687 955 | 70 743 | −15.50 % | Catastrophic |
-| `equinoxeOnly` | 15 679 (2096) | never | 12 416 | 0 | +1.47 % | Catastrophic (pedagogical) |
-| `labourHousingOnly` | 3 639 712 (2096) | never | 3 662 539 | 118 799 | −13.50 % | Catastrophic |
-| `equinoxeAndLabour` | 49 (2060) | 2033 | 20 | 0 | +3.00 % | Clean |
+| `v1_default` | 164 355 (2096) | never | 185 802 | 106 455 | −13.50 % | Debt spiral |
+| `v1_finance` | 1 272 (2065) | 2074 | 1 689 | 85 592 | +3.00 % | Solvent — the financed base case |
+| `v1_optimiste` | 4 780 (2058) | never | 7 628 | 192 444 | +2.96 % | Bounded deficit, tail not cleared |
+| `v1_stress` | 26 218 517 (2096) | never | 26 232 341 | 63 864 | −15.50 % | Catastrophic (beyond model validity) |
+| `equinoxeOnly` | 318 871 (2096) | never | 308 091 | 0 | −13.50 % | Catastrophic (pedagogical) |
+| `labourHousingOnly` | 9 457 092 (2096) | never | 9 475 671 | 106 268 | −13.50 % | Catastrophic |
+| `equinoxeAndLabour` | 13 326 (2096) | never | 8 305 | 0 | +1.84 % | Insolvent at horizon (pre-PR-B: "clean"; debt clears 2033–2040, then respirals) |
+| `pureCapi` | 6 299 296 (2096) | never | 6 325 596 | 47 932 | −13.50 % | Catastrophic |
 
-The 'catastrophic' / 'manageable' / 'clean' labels refer to cash-flow and debt-stock solvency only — not the five-dimension assessment described in `THEORY.md`. Negative `minSpread` rows indicate the endogenous borrowing rate exceeded the portfolio's real return at some point during the horizon, i.e. carry inverted.
+The disposition labels refer to cash-flow and debt-stock solvency only — not the five-dimension assessment described in `THEORY.md`. Negative `minSpread` rows indicate the endogenous borrowing rate exceeded the portfolio's real return at some point during the horizon, i.e. carry inverted. Values beyond a few hundred percent of GDP have no economic meaning — they mark *insolvency*, not a forecast (a uniform validity rule is an open item).
 
 ---
 
 ## Walkthrough — 5-stage transition narrative (`#/walkthrough`)
 
-Each stage builds on the previous against `realistic` demographics. All figures are from the v2.1 balanced cascade engine.
+Each stage builds on the previous against `realistic` demographics. **Stale (pre-PR-B):** the figures below predate the June-2026 INSEE-2026/COR-RA2026 recalibration and do not match the engine at HEAD (the walkthrough page itself is currently orphaned); they are retained for the narrative structure only, pending regeneration.
 
 | # | Stage | Peak transition D_t | Peak total debt¹ | Transition debt-free | K_t Y69 | Disposition |
 |---|---|---|---|---|---|---|

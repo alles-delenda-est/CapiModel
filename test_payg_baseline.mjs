@@ -7,7 +7,8 @@
  * Run:  node test_payg_baseline.mjs
  */
 
-import { PRESETS, runSimulation } from './src/simulation-engine.js'
+import { runSimulation } from './src/simulation-engine.js'
+import { PRESETS } from './src/presets.js'
 
 // ─── COR 2023 reference ───────────────────────────────────────────────────────
 // Scenario B (1.0%/an productivity), WITHOUT the 2023 reform (retirement age 64).
@@ -41,7 +42,7 @@ const COR_RATIO = {
 // Most comparable to COR: strip everything reform-specific, including the
 // CDC reserve fund returns (which COR does NOT include in the balance calc).
 const paygParams = {
-  ...PRESETS.default.params,
+  ...PRESETS.v1_default.params,
   cutoffAge: -100,   // shareWorkersCapi = 0 for all 70 years
   useEquinoxe: false,
   kappa: 0,          // no step-function reduction either
@@ -92,23 +93,24 @@ console.log('─────┼────────────────�
 for (const year of SNAP) {
   const rA = resultsA.find(x => x.year === year)
   const rB = resultsB.find(x => x.year === year)
+  if (!rA || !rB) continue   // engine now starts at Y0=2027; skip 2026 snapshot
   const ref = COR[year]
   const t = year - 2026
 
-  const contribA = rA.emplC_s + rA.emplC_e  // tauS+tauE contributions
-  const contribB = rB.emplC_s + rB.emplC_e
+  const contribA = rA.C_s_t + rA.C_e_t  // tauS+tauE contributions
+  const contribB = rB.C_s_t + rB.C_e_t
 
-  const expPctA   = (rA.legacyExp / rA.gdp) * 100
-  const expPctB   = (rB.legacyExp / rB.gdp) * 100
+  const expPctA   = (rA.totalLegacyOutflow_t / rA.GDP_t) * 100
+  const expPctB   = (rB.totalLegacyOutflow_t / rB.GDP_t) * 100
   const corAdj    = ref.expPct - SCOPE_GAP
 
   // Balance = contributions + (fund returns) – expenditure
   // Model A: no fund, so balance = contributions – expenditure
   // Model B: balance includes CDC fund returns
-  const balA = contribA - rA.legacyExp
-  const balB = contribB + rB.fundReturn - rB.legacyExp
-  const balPctA = (balA / rA.gdp) * 100
-  const balPctB = (balB / rB.gdp) * 100
+  const balA = contribA - rA.totalLegacyOutflow_t
+  const balB = contribB + rB.fundReturn_t - rB.totalLegacyOutflow_t
+  const balPctA = (balA / rA.GDP_t) * 100
+  const balPctB = (balB / rB.GDP_t) * 100
   const corBal  = ref.balance
   const dA = balPctA - corBal
   const dB = balPctB - corBal
