@@ -723,8 +723,8 @@ export default function IntroPage({ navigateTo }) {
               <li key={r.id}><strong>{r.label}</strong> — {r.short === 'Sans réforme' ? 'le système par répartition actuel, sous perfusion'
                 : r.short === 'Équinoxe' ? 'rééquilibrer côté prestations'
                 : r.short === 'Suède' ? 'compte notionnel + équilibrage automatique + petit pilier capi'
-                : r.short === 'Chili' ? 'capitalisation totale, dette de transition explicite'
-                : 'capitalisation totale, transition financée sans dette'}</li>
+                : r.short === 'Chili financé' ? 'capitalisation totale, dette de transition financée et remboursée'
+                : 'bascule totale immédiate, dette explicite, pari sur le rendement'}</li>
             ))}
           </ol>
         </aside>

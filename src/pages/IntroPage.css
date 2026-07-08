@@ -412,7 +412,7 @@ body { margin: 0; background: var(--bg-warm); color: var(--ink-1);
   font-family: var(--display);
   font-size: 28px;
   font-weight: 700;
-  color: var(--copper);
+  color: #e05c4e;   /* the hole is bad news: red, not the accent teal */
   grid-column: 1;
   grid-row: 2;
   white-space: nowrap;
