@@ -222,7 +222,7 @@ export default function SimplifiedView({ navigateTo }) {
       {/* ---- FOOTER ---- */}
       <footer className="sv-footer">
         <p>
-          Ce simulateur utilise le même moteur de calcul (34 équations
+          Ce simulateur utilise le même moteur de calcul (60 équations
           financières) que la{' '}
           <a href="#/simulateur" onClick={(e) => { e.preventDefault(); navigateTo('simulateur') }}>
             version experte

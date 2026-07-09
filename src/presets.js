@@ -236,13 +236,24 @@ export const PRESETS = {
 export function extractKPIs(rows) {
   const peakDebt = Math.max(...rows.map(r => r.D_t));
   const peakDebtYear = rows.find(r => r.D_t === peakDebt)?.year;
-  // "debt-free": small absolute threshold (engine output may have float noise)
-  const debtFreeYear = rows.find(r => r.D_t < 1 && r.t > 5)?.year ?? null;
+  // "debt-free" = PERMANENTLY cleared: the year after the last index where
+  // D_t ≥ 1 Md€ (float-noise threshold); null if still indebted at horizon
+  // end. A transient dip to zero followed by renewed debt does not count
+  // (equinoxeAndLabour is debt-free 2033-2040 then spirals — that is not
+  // "debt-free 2034").
+  let lastIndebted = -1;
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (rows[i].D_t >= 1) { lastIndebted = i; break; }
+  }
+  const debtFreeYear = lastIndebted === rows.length - 1
+    ? null
+    : rows[lastIndebted + 1].year;
   const last = rows[rows.length - 1];
   const totalInterest = last.CI_t;
   const finalCapi = last.K_t;
-  // Real terms: deflate by cumulative inflation. PI is constant per spec §5.1.
-  const realDeflator = Math.pow(1 + (rows[0].iota === undefined ? 0.02 : 0.02), last.t);
+  // Real terms: deflate by cumulative inflation. PI is constant per spec §5.1;
+  // each row carries the configured π (fallback 2 % for pre-π row shapes).
+  const realDeflator = Math.pow(1 + (rows[0].pi ?? 0.02), last.t);
   const finalCapiReal = finalCapi / realDeflator;
   const finalDebt = last.D_t;
   const netPosition = finalCapi - finalDebt;
@@ -286,9 +297,10 @@ export function extractKPIs(rows) {
   const abmYearsActive = rows.filter(r => (r.abmFactor_t ?? 1) < 0.999).length;
   // Cumulative budget-général transfers into the pension system — the "budget
   // sacrifice": resources diverted from education / justice / solidarity to
-  // pensions. Nominal cumul + deflated to constant-2027 € (π = 2 %).
+  // pensions. Nominal cumul + deflated to constant-2027 € at the configured π.
   const totalFiscalTransfer = rows.reduce((s, r) => s + (r.fiscalTransfer_t ?? 0), 0);
-  const totalFiscalTransferReal = rows.reduce((s, r) => s + (r.fiscalTransfer_t ?? 0) / Math.pow(1.02, r.t), 0);
+  const totalFiscalTransferReal = rows.reduce(
+    (s, r) => s + (r.fiscalTransfer_t ?? 0) / Math.pow(1 + (r.pi ?? 0.02), r.t), 0);
   return {
     peakDebt, peakDebtYear, debtFreeYear, totalInterest,
     finalCapi, finalCapiReal, finalDebt, finalDebtReal, netPosition, netPositionReal, minSpread, S0,

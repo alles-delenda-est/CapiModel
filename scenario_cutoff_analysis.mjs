@@ -2,7 +2,8 @@
 // Runs 4 variants: baseline, cutoff=60, cutoff=55, cutoff=50
 // Does NOT modify the production simulation-engine.js — standalone re-impl of the loop.
 
-import { PRESETS, equinoxeReductionRate } from './src/simulation-engine.js'
+import { equinoxeRate as equinoxeReductionRate } from './src/simulation-engine.js'
+import { PRESETS } from './src/presets.js'
 
 // --- DREES 2022 pension distribution (copy — not re-exported) ---
 const DREES_DECILES = [
@@ -46,12 +47,21 @@ function calcBorrowRate(debtRatio, base, extra) {
 // Modified simulation with optional age cutoff + hard delay.
 // cutoffAge=null → baseline behaviour (smooth ramp, no cutoff, Tlambda as configured)
 function runWithCutoff(params, cutoffAge) {
+  // NB: this standalone loop mirrors the v0.x parametric model. Some config
+  // keys were renamed or retired in the v1/v2 engine; map/fallback here so
+  // the script keeps running against current PRESETS (analysis is historical,
+  // not a reproduction of the current engine).
   const {
-    N, pi, w_r, r_f, r_c, r_d_base, endogenousRd, extraSpread,
-    W0, tauS, tauE, phiF, F0, E0, U0, P0, Pbook, rho, g_h,
-    hlmDiscount, delta, A0, R, kappa, threshold, useEquinoxe,
-    Tpk, Thl, alpha, lambda, Tlambda,
+    N, pi, w_r, r_c, r_d_base, extraSpread,
+    W0, phiF, F0, E0, U0, P0, Pbook, rho, g_h,
+    hlmDiscount, delta, A0, useEquinoxe,
+    alpha, lambda, Tlambda,
     existingDebt, baseGDP,
+    tau_s: tauS, tau_e: tauE,           // renamed tauS/tauE -> tau_s/tau_e
+    r_f_portfolio: r_f,                 // v1.0a split r_f -> portfolio/annuity
+    endogenousRd = true,                // retired: engine r_d is always endogenous
+    R = 17, kappa = 0.10, threshold = 2097,  // retired step-function params (v0.x)
+    Tpk = 8, Thl = 18,                  // retired parametric cohort-kernel constants
   } = params
 
   const w_n = pi + w_r + pi * w_r
@@ -198,7 +208,7 @@ function kpis(r) {
   return { peakDebt, peakYear, debtFree, totalInt, finalCapi, finalCapiReal, minSpread, maxDebtRatio }
 }
 
-const p = PRESETS.default.params
+const p = PRESETS.v1_default.params
 const variants = [
   { name: 'Baseline (actuel)',           cutoff: null },
   { name: 'Cutoff 60 ans  (T_start=6)',  cutoff: 60 },
