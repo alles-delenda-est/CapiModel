@@ -49,6 +49,26 @@ function Cite({ children, tooltip }) {
   )
 }
 
+// Uniform validity rule (mirrors IntroPage): a scenario is only meaningful up
+// to the point its debt path becomes economically impossible. Detect that
+// point — the "model-validity limit" — from the raw engine rows, using the
+// same thresholds as the pedagogical collapse overlay (GE acceleration above
+// 150 % GDP, forced restructuring at 250 % GDP or r_d ≥ 19.5 %). Returns
+// { collapseYear, debtRatioAtCollapse } or null (scenario stays solvent).
+// Applied to EVERY rung, not just the no-reform one, so the expert simulator
+// never displays an astronomically-large euro figure as if it meant something.
+function detectGreekCollapse(rows) {
+  let accel = 1
+  for (const r of rows) {
+    if (r.debtRatio_t > GREEK_GE_THRESHOLD_PCT_GDP) accel *= (1 + GREEK_GE_ACCEL_PER_YEAR)
+    const adjustedRatio = r.debtRatio_t * accel
+    if (adjustedRatio > GREEK_COLLAPSE_TRIGGER_PCT || r.r_d_t >= GREEK_R_D_RESTRUCTURE_TRIGGER) {
+      return { collapseYear: r.year, debtRatioAtCollapse: Math.round(adjustedRatio) }
+    }
+  }
+  return null
+}
+
 // Mirror of UI_CONFIG from src/presets.js
 const UI_BASE = {
   ...DEFAULT_CONFIG,
@@ -138,15 +158,16 @@ function ChartsTab({ rows, params, rung }) {
         capiPot: r.K_t,
       }
     })
-    // Greek-collapse pedagogical overlay — mirrors IntroPage rung 1. Per the
-    // PR #34 review (point F), only the no-reform scenario (rung 'actuel')
-    // gets the overlay; reform rungs show pure engine output.
-    const c = rung?.greekCollapse
-      ? applyGreekCollapseOverlay(data, {
-          debt: 'debt', debtRatio: 'debtRatio', rDeff: 'rDeff',
-          pension: 'perRetReal', solde: 'soldeExclBG',
-        })
-      : null
+    // Uniform validity rule (mirrors IntroPage): the collapse overlay applies
+    // to EVERY rung that crosses the thresholds, not just the no-reform one.
+    // Solvent trajectories are returned untouched (c === null). Without this,
+    // an insolvent reform run (e.g. Capi pur, or a stressed cascade) would
+    // display a raw six-digit-Md€ debt path while the statu quo showed a
+    // capped one — inverting the comparison. `rung` is no longer consulted.
+    const c = applyGreekCollapseOverlay(data, {
+      debt: 'debt', debtRatio: 'debtRatio', rDeff: 'rDeff',
+      pension: 'perRetReal', solde: 'soldeExclBG',
+    })
     return { chartData: data, collapse: c }
   }, [rows, params, rung])
 
@@ -161,9 +182,13 @@ function ChartsTab({ rows, params, rung }) {
 
   return (
     <div className="sim-charts-grid">
-      {rung?.greekCollapse && (
+      {collapse && (
         <div className="sim-callout sim-callout-warn is-wide">
-          <strong>Scénario sans réforme — présentation pédagogique :</strong>{' '}
+          <strong>
+            {rung?.greekCollapse
+              ? 'Scénario sans réforme — présentation pédagogique :'
+              : 'Ce scénario dépasse les limites de validité du modèle — présentation pédagogique :'}
+          </strong>{' '}
           au-delà de 150 % du PIB, et dans l'absence de réforme crédible engagée,
           les taux d'intérêt grimpent de 4 %/an. À 250 % du PIB, la France est contrainte à une{' '}
           <em>restructuration forcée</em>, avec plafonnement de la dette et des coupes
@@ -173,16 +198,18 @@ function ChartsTab({ rows, params, rung }) {
           <Cite tooltip="Reinhart, Carmen M. & Rogoff, Kenneth S. — This Time Is Different: Eight Centuries of Financial Folly (2009). Étude empirique de 800 ans de crises de dette souveraine dans 66 pays. Conclusion centrale : les pays qui laissent leur dette dépasser 90 % du PIB connaissent systématiquement une compression de croissance ; aucun n'a évité une restructuration ou un défaut au-delà de 300 %. Les règles budgétaires de l'UE (pacte de stabilité et de croissance) rendent toutefois ce seuil de 300 % irréaliste pour un État membre : le modèle déclenche donc la restructuration dès 250 %.">
             <sup className="fn-sup">1</sup>
           </Cite>.{' '}
-          Cela est, évidemment, sans tenir compte de toutes les autres parties de la société
-          sacrifiées pour financer les retraites que nous ne pouvons plus nous permettre :
-          des profs encore plus sous-payés et encore plus en sous-effectif, la justice encore
-          plus lente faute de moyens, les routes encore moins bien entretenues, et encore.
-          {collapse && (
-            <div style={{ marginTop: 6, fontWeight: 600 }}>
-              Restructuration déclenchée, au plus tard, en {collapse.collapseYear}
-              {' '}(vraisemblablement bien avant) — dette à {Math.round(collapse.debtRatioAtCollapse)} % du PIB.
-            </div>
+          Au-delà de ce point, les montants bruts du moteur (dette, intérêts) n'ont plus
+          de sens économique : ils marquent une insolvabilité, pas une prévision.
+          {rung?.greekCollapse && (
+            <>{' '}Cela est, évidemment, sans tenir compte de toutes les autres parties de la société
+            sacrifiées pour financer les retraites que nous ne pouvons plus nous permettre :
+            des profs encore plus sous-payés et encore plus en sous-effectif, la justice encore
+            plus lente faute de moyens, les routes encore moins bien entretenues, et encore.</>
           )}
+          <div style={{ marginTop: 6, fontWeight: 600 }}>
+            Restructuration déclenchée, au plus tard, en {collapse.collapseYear}
+            {' '}(vraisemblablement bien avant) — dette à {Math.round(collapse.debtRatioAtCollapse)} % du PIB.
+          </div>
         </div>
       )}
 
@@ -280,10 +307,25 @@ function ChartsTab({ rows, params, rung }) {
 }
 
 // ============================ KPIs tab ============================
-function KpisTab({ k }) {
+function KpisTab({ k, collapse }) {
+  // Uniform validity rule: once the scenario crosses the model-validity limit,
+  // the raw peak-debt / cumulative-interest figures are astronomical and
+  // meaningless. Lead with the year of forced restructuring instead, and flag
+  // the euro figures as beyond validity rather than presenting them as results.
+  const debtCard = collapse
+    ? {
+        label: 'Insolvable — restructuration',
+        value: String(collapse.collapseYear), unit: '', cls: 'is-bad',
+        sub: `Dette à ${collapse.debtRatioAtCollapse} % du PIB — montants bruts au-delà sans portée`,
+      }
+    : { label: 'Dette pic', value: fmt(k.peakDebt, 0), unit: 'Md€', sub: 'Atteinte en ' + k.peakDebtYear }
   const cards = [
-    { label: 'Dette pic', value: fmt(k.peakDebt, 0), unit: 'Md€', sub: 'Atteinte en ' + k.peakDebtYear },
-    { label: 'Intérêts cumulés', value: fmt(k.totalInterest, 0), unit: 'Md€', sub: 'Coût total de la transition' },
+    debtCard,
+    {
+      label: 'Intérêts cumulés', value: fmt(k.totalInterest, 0), unit: 'Md€',
+      cls: collapse ? 'is-bad' : '',
+      sub: collapse ? 'Au-delà de la limite de validité (insolvabilité)' : 'Coût total de la transition',
+    },
     {
       label: 'Sacrifices budgétaires', value: fmt(k.totalFiscalTransferReal, 0), unit: 'Md€',
       cls: k.totalFiscalTransferReal > 0 ? 'is-bad' : '',
@@ -1012,6 +1054,9 @@ export default function SimulatorPage({ navigateTo }) {
   const params  = useMemo(() => buildParams(rungIdx, conditions, tweaks), [rungIdx, conditions, tweaks])
   const rows    = useMemo(() => runSimulation(params), [params])
   const k       = useMemo(() => extractKPIs(rows), [rows])
+  // Model-validity limit for the ACTIVE rung (uniform rule): drives the KPI
+  // cards' insolvency marker, so no rung ever shows a raw astronomical figure.
+  const activeCollapse = useMemo(() => detectGreekCollapse(rows), [rows])
   const baselineRows = useMemo(() => runSimulation(buildCounterfactualParams(params)), [params])
 
   // Rung 1 (status quo) rows — used as the universal "sans réforme" baseline
@@ -1026,17 +1071,7 @@ export default function SimulatorPage({ navigateTo }) {
   //     retires after the collapse year → honest comparison for reform rungs.
   //   • PovTab reform side (rung 1 only, via rung.greekCollapse flag): same
   //     haircut on monthlyPensionTotal since the "reform" IS the status quo.
-  const statusQuoCollapse = useMemo(() => {
-    let accel = 1
-    for (const r of statusQuoRows) {
-      if (r.debtRatio_t > GREEK_GE_THRESHOLD_PCT_GDP) accel *= (1 + GREEK_GE_ACCEL_PER_YEAR)
-      const adjustedRatio = r.debtRatio_t * accel
-      if (adjustedRatio > GREEK_COLLAPSE_TRIGGER_PCT || r.r_d_t >= GREEK_R_D_RESTRUCTURE_TRIGGER) {
-        return { collapseYear: r.year, debtRatioAtCollapse: Math.round(adjustedRatio) }
-      }
-    }
-    return null
-  }, [statusQuoRows])
+  const statusQuoCollapse = useMemo(() => detectGreekCollapse(statusQuoRows), [statusQuoRows])
 
   const downloadCsv = () => {
     const header = Object.keys(rows[0]).join(',')
@@ -1124,12 +1159,12 @@ export default function SimulatorPage({ navigateTo }) {
         {tab === 'charts' && paramMode === 'simple' && (
           <div className="sim-inline-section sim-inline-kpis">
             <div className="sim-inline-section-header">Indicateurs clés</div>
-            <KpisTab k={k} />
+            <KpisTab k={k} collapse={activeCollapse} />
           </div>
         )}
         {tab === 'charts' && <ChartsTab rows={rows} params={params} rung={activeRung} />}
         {tab === 'params' && <ParamsTab params={params} setTweak={setTweak} mode={paramMode} />}
-        {tab === 'kpis'   && <KpisTab k={k} />}
+        {tab === 'kpis'   && <KpisTab k={k} collapse={activeCollapse} />}
         {tab === 'pov'    && <PovTab params={params} rows={rows} cfRows={statusQuoRows} collapse={statusQuoCollapse} rung={activeRung} />}
         {tab === 'diagnostics' && paramMode === 'advanced' && (
           <DiagnosticsTab params={params} rows={rows} baseRows={baselineRows} />
