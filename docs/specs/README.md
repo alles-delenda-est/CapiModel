@@ -11,6 +11,11 @@ maintainer, not committed roadmap.
 | 0003 | [Monte Carlo stochastic return paths](0003-monte-carlo.md) | P1 | 0001 (0002 helps) | Draft |
 | 0004 | [Collapse-overlay governance (docs/citation half)](0004-collapse-overlay-governance.md) | P1 | — (code half shipped) | Draft |
 
+**Design & strategic decisions** (the non-code choices around these specs) live
+in [STRATEGY.md](STRATEGY.md): fencing the normative frame, the calibration-
+constants register, the frozen `app/` duplicate, the stalled draft PR #22, the
+post-recalibration roadmap priority, and the feedback/privacy posture.
+
 **Sequencing.** 0001 first (so everything else lands gated). 0002 is cheap and
 high-leverage (the verdict hinges on r_c post-PR-B) — note r_c is *already*
 editable in the simulator; the work is bounding it + exposing r_d_base /
