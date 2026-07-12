@@ -1,5 +1,6 @@
 import { DEFAULT_CONFIG, DEMOGRAPHIC_PROFILES, DREES_DECILES, equinoxeRate, runSimulation } from '../simulation-engine.js'
 import { extractKPIs } from '../presets.js'
+import { CALIBRATION } from '../calibration.js'
 import './HypothesesPage.css'
 
 // Sample points illustrating the Équinoxe step function
@@ -80,7 +81,7 @@ export default function HypothesesPage() {
             </tr>
             <tr>
               <td>r_c</td><td>{fmtPct(d.r_c)}</td><td><Kind k="S" /></td>
-              <td>Norvège GPFG 1998–2025 (~6,64% nominal, ~4,5% réel) ; Ontario Teachers' 7% nominal cible long terme.</td>
+              <td>Norvège GPFG (NBIM) 1998–2025 : ~4,3 % réel/an (~6,6 % nominal) ; Ontario Teachers' ~7 % nominal cible long terme. La valeur du modèle (4,5 %) est légèrement au-dessus de ce repère — à exposer comme curseur.</td>
             </tr>
             <tr>
               <td>r_d_base</td><td>{fmtPct(d.r_d_base)}</td><td><Kind k="S" /></td>
@@ -96,7 +97,7 @@ export default function HypothesesPage() {
             </tr>
             <tr>
               <td>R0</td><td>{d.R0} M</td><td><Kind k="S" /></td>
-              <td>Retraités droits directs — DREES Édition 2025, projeté à fin 2026. Le COR recense 17,2 M retraités fin 2024 ; la croissance de ~150–200 k/an amène ~17,6–17,7 M fin 2026. La valeur de 18,0 M inclut les ayants-droit (pensions de réversion) dans le périmètre — à recalibrer si le périmètre est resserré aux droits propres uniquement.</td>
+              <td>Retraités droits directs — DREES Édition 2025, projeté à fin 2026. Le COR recense ~17,2 M retraités fin 2023 ; la croissance de ~150–200 k/an amène ~17,7–17,8 M fin 2026. La valeur de 18,0 M inclut les ayants-droit (pensions de réversion) dans le périmètre — à recalibrer si le périmètre est resserré aux droits propres uniquement.</td>
             </tr>
           </tbody>
         </table>
@@ -306,7 +307,7 @@ export default function HypothesesPage() {
           <thead><tr><th>Paramètre</th><th>Valeur</th><th>Type</th><th>Source / rationale</th></tr></thead>
           <tbody>
             <tr><td>F₀ (fonds initial)</td><td>{d.F0} Md€</td><td><Kind k="C" /></td>
-              <td>CDC propre (220) + FRR (~36) + Agirc-Arrco (~85).</td></tr>
+              <td>CDC (~170–220) + FRR (~20) + Agirc-Arrco (~85,6). L’allocation CDC exacte n’est pas indépendamment vérifiable ; voir le registre des constantes.</td></tr>
             <tr><td>A₀ (récup. abattements)</td><td>{d.A0} Md€/an</td><td><Kind k="C" /></td>
               <td>Année 0.</td></tr>
             <tr><td>demoProfile</td><td><code>{d.demoProfile}</code></td><td><Kind k="M" /></td>
@@ -365,6 +366,51 @@ export default function HypothesesPage() {
             <tr><td>Économies pension S₀ (t=0, pré-phasing)</td><td>{liveKPIs.S0.toFixed(2)} Md€/an</td></tr>
           </tbody>
         </table>
+      </section>
+
+      {/* --- Registre des constantes sourcées (S2) --- */}
+      <section className="hyp-section">
+        <h2>Registre des constantes sourcées</h2>
+        <p>
+          Chaque constante externe avec sa valeur, la clé du moteur qu'elle
+          alimente, et sa source documentée. Rendu en direct depuis{' '}
+          <code>src/calibration.js</code> (source de référence unique ; un test
+          vérifie l'accord avec <code>DEFAULT_CONFIG</code> du moteur).
+          <em> S</em> = sourcé, <em>C</em> = calibré, <em>M</em> = hypothèse de modélisation.
+        </p>
+        <table className="hyp-table">
+          <thead><tr><th>Constante</th><th>Valeur</th><th>Clé</th><th>Type</th><th>Source &amp; note</th></tr></thead>
+          <tbody>
+            {CALIBRATION.map((c, i) => (
+              <tr key={i}>
+                <td>{c.label}</td>
+                <td>{c.value}{c.unit ? ` ${c.unit}` : ''}</td>
+                <td><code>{c.key}</code></td>
+                <td><Kind k={c.kind} /></td>
+                <td><strong>{c.source}</strong>{c.note ? ` — ${c.note}` : ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      {/* --- Retours & confidentialité (S6) --- */}
+      <section className="hyp-section">
+        <h2>Retours &amp; confidentialité</h2>
+        <p>
+          Une erreur, une source à corriger, une hypothèse à discuter ? Ouvrez un
+          ticket sur le dépôt GitHub (gabarit « erreur de modèle » fourni) ou
+          utilisez le formulaire de retour du site.
+        </p>
+        <p className="hyp-footnote">
+          <strong>Confidentialité du formulaire de retour.</strong> Le formulaire
+          enregistre le message et, si vous les fournissez, un nom et un e-mail,
+          dans une base Supabase gérée par le projet, à seule fin de répondre et
+          de suivre les corrections. La politique d'accès est en insertion seule
+          (aucune lecture publique). Les données ne sont ni revendues ni
+          utilisées à d'autres fins ; demande de suppression possible via le
+          dépôt. Aucune donnée n'est requise pour utiliser le simulateur.
+        </p>
       </section>
 
       {/* --- Glossaire des sigles --- */}

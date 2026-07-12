@@ -20,7 +20,7 @@ const TOGGLES = [
   { key: 'retirementAgeMode', label: 'L’âge suit-il l’espérance de vie ?',
     on: 'indexed', off: 'fixed', onLabel: 'Indexé', offLabel: 'Fixe',
     cor: '~67,6 ans en 2070 sous indexation' },
-  { key: 'fiscalTransferMode', label: 'Sacrifices budgétaires',
+  { key: 'fiscalTransferMode', label: 'Transferts du budget général',
     on: 'full', off: 'none', onLabel: 'Oui', offLabel: 'Non',
     cor: 'couper le budget éducation / justice / solidarité' },
   { key: 'hlmBundle', label: 'Financement HLM + CDC',

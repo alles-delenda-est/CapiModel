@@ -288,14 +288,25 @@ Other calibrations could make different factors the binding constraint: return a
 - Monte Carlo stochastic return paths; headline KPIs as P50/P90/P95 distributions
 - Guarantee fair-value KPIs (expected PV, P95 annual maximum)
 
+### v3.1 — Distributional "who pays" view (prioritised next after v3.0)
+
+**Decision (2026-07):** distributional outputs by income decile are pulled
+**forward** of the rest of v4.0. Rationale: the burden of the Équinoxe package is
+already defined over the DREES decile table (`equinoxeRate` / `computeS0Brackets`
+operate decile by decile), so a per-decile "who pays / who gains" view is closer
+to shipping and more central to the project's argument than the ALM / balance-
+sheet machinery. It should follow Monte Carlo (v3.0) so each decile's outcome
+carries an uncertainty band rather than a false-precision point. Spec:
+`docs/specs/0005-distributional-by-decile.md`.
+
 ### v4.0 — Policy realism
 
-- Legal-feasibility toggles per lever (Agirc-Arrco included/partial/excluded; CDC net equity / gross / none; HLM pace)
+- Legal-feasibility toggles per lever (Agirc-Arrco included/partial/excluded; CDC net equity / gross / none; HLM pace) — the Agirc-Arrco/FRR/CDC component split is also forced by the F₀-provenance uncertainty (see the calibration register)
 - Duration-matched asset-liability framework
 - Contingent-liability balance sheet (explicit pension liability PV + guarantee fair value + transition debt)
 - Labour-market behavioural responses (retirement-age employment elasticity, contribution-cut hiring response)
 - GE completeness (wages, savings crowd-out, housing prices, tax-base feedback)
-- Distributional outputs by cohort and income decile
+- Distributional outputs by cohort (the income-decile half is pulled forward to v3.1 above)
 
 ---
 

@@ -17,7 +17,9 @@ A browser-based financial simulator modelling France's transition from pay-as-yo
 ## Build & test
 
 - **Root-level build** is the active one (`vite.config.js`, `package.json`, `index.html` all at repo root)
-- There is also an `app/` directory with a **frozen older duplicate** of the build — **do not use it** and do not trust its numbers (34 equations, Monte Carlo worker, old presets: all superseded); the root `src/` is canonical
+- The root `src/` is the single canonical build. (A stale `app/` duplicate that
+  used to shadow it — 34-equation engine, dead Monte Carlo worker, old presets —
+  was deleted; recover from git history if ever needed, do not re-add it.)
 - Stack: React 19 + Recharts + Vite 7
 - `npm install && npx vite build` from repo root; dev server: `npx vite`
 - **Tests: `npm test`** (vitest, `tests/` — 359 tests incl. reference-trace regressions against `tests/fixtures/` and a 1000-config property suite). After an intentional `DEFAULT_CONFIG`/row-schema change, regenerate fixtures with `node scripts/regen-fixtures.mjs` and justify the diff.

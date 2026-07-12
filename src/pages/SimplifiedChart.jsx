@@ -26,11 +26,11 @@ export default function SimplifiedChart({ results, collapseYear, reformLabel }) 
   })
   return (
     <div className="sv-chart-block">
-      <h3>D'où vient l'argent&nbsp;: cotisations, dette, sacrifices budgétaires{reformLabel ? ` · ${reformLabel}` : ''}</h3>
+      <h3>D'où vient l'argent&nbsp;: cotisations, dette, transferts du budget général{reformLabel ? ` · ${reformLabel}` : ''}</h3>
       <p className="sv-chart-explain">
         Les <strong>cotisations</strong> financent le système. Quand elles ne
         suffisent pas, on comble par la <strong>dette</strong> (emprunt) ou par
-        les <strong>sacrifices budgétaires</strong>&nbsp;— de l'argent pris au
+        les <strong>transferts du budget général</strong>&nbsp;— des ressources fiscales affectées au
         budget de l'État (écoles, justice, solidarité).
       </p>
       <p className="sv-chart-explain">
@@ -54,7 +54,7 @@ export default function SimplifiedChart({ results, collapseYear, reformLabel }) 
           )}
           <Area type="monotone" dataKey="dette" fill="#fecaca" stroke="#dc2626" strokeWidth={2} name="Dette de transition" />
           <Line type="monotone" dataKey="cotisations" stroke="#2563eb" strokeWidth={2} dot={false} name="Cotisations" />
-          <Line type="monotone" dataKey="sacrifices" stroke="#b45309" strokeWidth={2} dot={false} name="Sacrifices budgétaires" />
+          <Line type="monotone" dataKey="sacrifices" stroke="#b45309" strokeWidth={2} dot={false} name="Transferts du budget général" />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

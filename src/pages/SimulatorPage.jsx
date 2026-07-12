@@ -201,10 +201,9 @@ function ChartsTab({ rows, params, rung }) {
           Au-delà de ce point, les montants bruts du moteur (dette, intérêts) n'ont plus
           de sens économique : ils marquent une insolvabilité, pas une prévision.
           {rung?.greekCollapse && (
-            <>{' '}Cela est, évidemment, sans tenir compte de toutes les autres parties de la société
-            sacrifiées pour financer les retraites que nous ne pouvons plus nous permettre :
-            des profs encore plus sous-payés et encore plus en sous-effectif, la justice encore
-            plus lente faute de moyens, les routes encore moins bien entretenues, et encore.</>
+            <>{' '}À cela s'ajoute le coût d'opportunité : les ressources du budget général
+            affectées aux retraites ne financent pas d'autres politiques publiques
+            (éducation, santé, justice, investissement public).</>
           )}
           <div style={{ marginTop: 6, fontWeight: 600 }}>
             Restructuration déclenchée, au plus tard, en {collapse.collapseYear}
@@ -327,9 +326,9 @@ function KpisTab({ k, collapse }) {
       sub: collapse ? 'Au-delà de la limite de validité (insolvabilité)' : 'Coût total de la transition',
     },
     {
-      label: 'Sacrifices budgétaires', value: fmt(k.totalFiscalTransferReal, 0), unit: 'Md€',
+      label: 'Transferts du budget général', value: fmt(k.totalFiscalTransferReal, 0), unit: 'Md€',
       cls: k.totalFiscalTransferReal > 0 ? 'is-bad' : '',
-      sub: 'Investissements renoncés : éducation, justice, solidarité (€ 2027)',
+      sub: 'Ressources du budget général affectées aux retraites, indisponibles pour d\'autres politiques publiques (€ 2027)',
     },
     { label: 'Pot capi (final, réel)', value: fmt(k.finalCapiReal, 0), unit: 'Md€', sub: '€ constants 2027' },
     {

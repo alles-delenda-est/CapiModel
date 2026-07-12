@@ -85,7 +85,7 @@ export const FOOTNOTES = {
   },
   fn_2: {
     num: 2,
-    text: "Les logements sociaux font souvent l'actualité ces derniers temps, jamais pour des raisons flatteuses. Le système actuel est à bout de souffle : pendant que des proches de partis de gauche se voient octroyer les meilleures places pour y rester même en tant que député gagnant trois fois le SMIC, les gens en réel besoin attendent littéralement des années pour un foyer trop souvent vétuste, mal équipé, et encore heureux quand ce n'est pas tout simplement insalubre. Ici nous proposons du gagnant-gagnant : l'État, manifestement incapable de gérer le parc actuel, le liquide sur 10 ans, le concept du « logement social » est supprimé de la loi, et à la place la même partie du budget est donnée directement aux foyers les plus modestes pour se loger à leur guise.",
+    text: "Le modèle inclut une cession progressive du parc HLM sur ~10 ans comme levier de financement de la transition : le produit des ventes alimente le fonds, et l'aide au logement correspondante est versée directement aux ménages modestes sous forme de subvention plutôt qu'en logement en nature. Paramètres du moteur : rho = 5 %/an du parc cédé, décote de prix plafonnée à 30 %. L'ampleur et le rythme de cette cession sont un choix de politique publique, ajustable dans le simulateur ; ils ne sont pas nécessaires à la bascule et peuvent être mis à zéro.",
   },
   fn_tauk: {
     num: 3,

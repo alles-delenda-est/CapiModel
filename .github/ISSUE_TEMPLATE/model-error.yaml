@@ -1,0 +1,46 @@
+name: Erreur de modèle / donnée
+description: Signaler une erreur de calcul, une hypothèse contestable, ou une source à corriger.
+title: "[modèle] "
+labels: ["model-error"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci de nous aider à corriger le modèle. Plus votre signalement est
+        précis et sourcé, plus vite il peut être traité. Voir la feuille de
+        route et les hypothèses : `THEORY.md`, page « Hypothèses » du site,
+        et `src/calibration.js` (registre des constantes sourcées).
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Type
+      options:
+        - Constante / calibration (valeur ou source)
+        - Formule / équation du moteur
+        - Hypothèse de modélisation contestée
+        - Affichage / interface (chiffre incohérent)
+        - Autre
+    validations:
+      required: true
+  - type: textarea
+    id: where
+    attributes:
+      label: Où
+      description: Page/écran, scénario (rung), et si possible le fichier/équation concerné.
+      placeholder: "ex. page Simulateur, rung « Chili financé », eq 53 / r_f_annuity"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Attendu vs observé
+      description: Ce que le modèle affiche, et ce que vous pensez correct.
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Source officielle
+      description: Publication (titre, numéro, date, URL) qui étaie la correction. Indispensable pour les constantes.
+    validations:
+      required: false
