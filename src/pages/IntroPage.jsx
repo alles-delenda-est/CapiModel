@@ -809,8 +809,9 @@ export default function IntroPage({ navigateTo }) {
             {fmt(Math.abs(Math.round(cadrage.soldeResiduel)))} Md€ — mais seulement
             parce que {fmt(Math.round(cadrage.transferts))} Md€ d'impôts sont
             injectés chaque année pour combler le trou. Ce ne sont pas les
-            cotisations qui équilibrent le système, ce sont vos impôts : autant
-            d'argent qui ne va ni à l'école, ni à l'hôpital, ni à la justice.
+            cotisations qui équilibrent le système, ce sont des transferts du budget
+            général — des ressources fiscales qui, par construction, ne financent
+            pas d'autres politiques publiques (école, hôpital, justice).
           </p>
 
           <div className="cc-cadrage-traj">
@@ -848,13 +849,13 @@ export default function IntroPage({ navigateTo }) {
             </div>
             <p className="cc-cadrage-traj-diverted">
               <strong>≈ {fmt(Math.round(cadrage.cumTransferts))} Md€</strong> de déficit
-              financé par le budget général sur ces 25 ans — autant de
-              sacrifices budgétaires pour la justice, l'éducation et la santé.
+              financé par le budget général sur ces 25 ans — des transferts
+              indisponibles pour d'autres politiques publiques (justice, éducation, santé).
             </p>
             <p className="cc-cadrage-traj-note">
               Hypothèses macro centrales : inflation 2 %/an, démographie COR,
               salaires réels +0,4 %/an (la variante <em>prudente</em> du COR ; son
-              scénario central, contre toute évidence, retient 0,7 %). Ces montants sont des projections
+              scénario central retient 0,7 %). Ces montants sont des projections
               sous ce scénario — sensibles aux hypothèses, en premier lieu la
               productivité — et non des prévisions. Au-delà de {cadrage.year2050},
               l'horizon devient trop incertain pour des chiffres précis : on cadre

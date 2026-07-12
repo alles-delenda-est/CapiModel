@@ -129,7 +129,7 @@ export default function SimplifiedView({ navigateTo }) {
               </div>
             </div>
             <div className="sv-kpi-card">
-              <h3>Sacrifices budgétaires</h3>
+              <h3>Transferts du budget général</h3>
               <div className={`sv-kpi-value ${kpis.sacrificesReal > 500 ? 'sv-warn' : 'sv-ok'}`}>
                 {fmtMd(kpis.sacrificesReal)}
               </div>
@@ -176,7 +176,7 @@ export default function SimplifiedView({ navigateTo }) {
               <h3>Aujourd'hui</h3>
               <p>
                 Les actifs cotisent pour payer directement les retraites des
-                retraités actuels, complété par des sacrifices budgétaires. C'est le
+                retraités actuels, complété par des transferts du budget général. C'est le
                 système par <strong>répartition</strong>&nbsp;: l'argent ne fait que
                 transiter, il n'est pas épargné, plutôt le contraire puisque l'on
                 s'endette chaque année.
@@ -198,7 +198,7 @@ export default function SimplifiedView({ navigateTo }) {
               <p>
                 Pendant la transition, il faut continuer à payer les retraités
                 actuels. Le manque se comble par la <strong>dette</strong>, par des
-                <strong> sacrifices budgétaires</strong>, ou par plus de travail.
+                <strong> transferts du budget général</strong>, ou par plus de travail.
               </p>
             </div>
             <div className="sv-step">
