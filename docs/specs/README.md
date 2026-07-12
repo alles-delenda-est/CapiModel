@@ -10,6 +10,8 @@ maintainer, not committed roadmap.
 | 0002 | [Expose return/rate/life-exp sliders](0002-expose-return-rate-sliders.md) | P1 | 0001 | Draft |
 | 0003 | [Monte Carlo stochastic return paths](0003-monte-carlo.md) | P1 | 0001 (0002 helps) | Draft |
 | 0004 | [Collapse-overlay governance (docs/citation half)](0004-collapse-overlay-governance.md) | P1 | — (code half shipped) | Draft |
+| 0005 | [Distributional "who pays" by income decile](0005-distributional-by-decile.md) | P2 | 0003 | Draft *(file arrives via the strategy PR #61 branch)* |
+| 0006 | [Debt-profile optimisation](0006-debt-profile-optimisation.md) | P2 | 0001; 0003 for Phase B | Draft (issue #60) |
 
 **Design & strategic decisions** (the non-code choices around these specs) live
 in [STRATEGY.md](STRATEGY.md): fencing the normative frame, the calibration-
@@ -24,10 +26,15 @@ and builds on the same live engine (re-scope off the dead `app/` worker). 0004
 is mostly docs + citation + a dashed-segment chart change; the uniform-validity
 code half already shipped in PR #59.
 
-**Not specced here** (deferred per the review): guarantee fair-value KPIs
-(needs 0003 first), legal-feasibility toggles (v4.0), ALM / distributional-by-
-decile outputs, per-age employment tables, the R0 direct-rights/survivors split,
-the calibration-constants register, the normative-frame "parti pris" box, the
-stalled draft PR #22 (rebase-or-close decision), and repo hygiene (delete the
-frozen `app/`, archive `TransitionWalkthrough`). See
-`findings/CapiModel/PENDING_NEXT_STEPS.md` and `PROPOSED_NEXT_STEPS.md`.
+**Since resolved via the strategy execution (PR #61 + issue #60):** the
+normative frame (resolved as: neutral, loaded wording removed), the
+calibration-constants register (`src/calibration.js` + Hypothèses render +
+lock test), the frozen `app/` duplicate (deleted), the stalled draft PR #22
+(closed; idea captured in issue #60 → spec 0006), distributional-by-decile
+(prioritised as roadmap v3.1 → spec 0005), and the feedback/privacy surface.
+
+**Still not specced** (deferred per the review): guarantee fair-value KPIs
+(needs 0003 first), legal-feasibility toggles (v4.0), ALM, per-age employment
+tables, the R0 direct-rights/survivors split, and archiving
+`TransitionWalkthrough`. See `findings/CapiModel/PENDING_NEXT_STEPS.md` and
+`PROPOSED_NEXT_STEPS.md`.
